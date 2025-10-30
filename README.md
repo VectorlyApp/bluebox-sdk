@@ -1,4 +1,4 @@
-# web-hacker
+
 
 <p align="center">
   <a href="https://www.vectorly.app/"><img src="https://img.shields.io/badge/Website-Vectorly.app-0ea5e9?style=for-the-badge&logo=googlechrome&logoColor=white" /></a>
@@ -6,9 +6,11 @@
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-10b981?style=for-the-badge&logo=apache&logoColor=white" /></a>
 </p>
 
+# web-hacker
+
 REVERSE ENGINEER ANY WEB APP! ⚡️
 
-**You are in the right place if you ...** 
+**You are in the right place if you ...**
 
 * want your AI agent to take real actions on the web
 * never want to pay for an API (except for OpenAI... shouldn't piss them off...)
