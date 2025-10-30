@@ -1,10 +1,17 @@
-
-
-<p align="center">
-  <a href="https://www.vectorly.app/"><img src="https://img.shields.io/badge/Website-Vectorly.app-0ea5e9?style=for-the-badge&logo=googlechrome&logoColor=white" /></a>
-  <a href="https://www.youtube.com/@VectorlyAI"><img src="https://img.shields.io/badge/YouTube-@VectorlyAI-ff0000?style=for-the-badge&logo=youtube&logoColor=white" /></a>
-  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-10b981?style=for-the-badge&logo=apache&logoColor=white" /></a>
-</p>
+<table width="100%">
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://www.vectorly.app/"><img src="https://img.shields.io/badge/Website-Vectorly.app-0ea5e9?style=for-the-badge&logo=googlechrome&logoColor=white" /></a>
+    </td>
+    <td align="center" width="34%">
+      <a href="https://www.youtube.com/@VectorlyAI"><img src="https://img.shields.io/badge/YouTube-@VectorlyAI-ff0000?style=for-the-badge&logo=youtube&logoColor=white" /></a>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-10b981?style=for-the-badge&logo=apache&logoColor=white" /></a>
+    </td>
+  </tr>
+  
+</table>
 
 # web-hacker
 
@@ -31,26 +38,6 @@ Welcome to Vectorly's Web Hacker... **No API? No Problem!**
 3) Specify your task and run the routine discovery script; the agent reverse‑engineers the API flow.
 4) Review and run/test the generated routine JSON (locally).
 5) Go to [console.vectorly.app](https://console.vectorly.app) and productionize your routines!
-
-### TL;DR — Quickstart
-
-```bash
-# 1) Launch Chrome in debug mode (see below)
-# 2) Monitor a tab while you click through the flow
-python scripts/browser_monitor.py --url https://www.example.com
-
-# 3) Run the discovery agent
-python scripts/discover_routines.py --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --task-description "Discover the search API"
-
-# 4) Execute the discovered routine
-python scripts/execute_routine.py --routine-path routine_discovery_output/routine.json --parameters-dict '{"origin":"boston","destination":"new york","departureDate":"2026-03-22"}'
-```
-
-### Why Web Hacker?
-
-- No API? No Problem — automate from the real browser context
-- Works across auth walls via cookies/session storage resolution
-- Agent-guided discovery → runnable routines in minutes
 
 ## What is a *Routine*?
 
