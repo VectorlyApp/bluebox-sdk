@@ -119,7 +119,7 @@ This substitutes parameter values and injects `auth_token` from cookies. The JSO
 
 ```bash
 # 1) Clone and enter the repo
-git clone <repo-url>
+git clone https://github.com/VectorlyApp/web-hacker.git
 cd web-hacker
 
 # 2) Create & activate virtual environment (uv)
