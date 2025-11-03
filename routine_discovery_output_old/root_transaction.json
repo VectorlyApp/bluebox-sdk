@@ -1,8 +1,0 @@
-{
-  "transaction_id": "20251030_1761863992142_www.spirit.com_api_prod-availability_api_availability_v3_search",
-  "description": "Spirit Airlines Availability v3 search endpoint returning one-way flight options and prices.",
-  "url": "https://www.spirit.com/api/prod-availability/api/availability/v3/search",
-  "method": "POST",
-  "explanation": "This POST to the availability v3 search endpoint includes a single-day date window (beginDate and endDate both 2025-10-31) with origin BOS, destination MIA, and 1 adult, which corresponds to a one-way availability query that returns flight options and pricing, as captured in the request payload and 200 response . A separate low-fare calendar endpoint exists (v2/lowfare) used for calendar fare ranges rather than listing flight options, which is why v3/search is the direct match for one-way options and prices .",
-  "confidence_level": "high"
-}

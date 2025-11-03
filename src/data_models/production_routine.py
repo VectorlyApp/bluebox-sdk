@@ -464,7 +464,7 @@ class Routine(ResourceBase):
             # clean the match (already extracted the content between braces)
             match = match.strip()
             
-            # if the parameter name starts with a colon, it is a storage parameter
+            # if the parameter name contains a colon, it is a storage parameter
             if ":" in match:
                 kind, path = [p.strip() for p in match.split(":", 1)]
                 assert kind in ["sessionStorage", "localStorage", "cookie", "meta"], f"Invalid prefix in parameter name: {kind}"
