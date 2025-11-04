@@ -19,13 +19,14 @@ Why this fixes "200 but empty body":
   `Fetch.continueResponse`.
 """
 
+import logging
 import os
 import base64
 import time
 import json
-from typing import Any
-from fnmatch import fnmatch
 from datetime import datetime
+from fnmatch import fnmatch
+from typing import Any
 
 from src.utils.cdp_utils import (
     build_pair_dir,
@@ -34,6 +35,10 @@ from src.utils.cdp_utils import (
     write_jsonl,
 )
 from src.data_models.network import Stage
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class NetworkMonitor:
@@ -102,7 +107,7 @@ class NetworkMonitor:
         if method == "Page.frameNavigated":
             try:
                 url = msg["params"]["frame"].get("url")
-                print(f"Frame navigated to: {url}")
+                logger.info("Frame navigated to: %s", url)
             except Exception:
                 pass
             return True
@@ -132,10 +137,10 @@ class NetworkMonitor:
         if self._should_block_url(url):
             try:
                 cdp_session.send("Fetch.failRequest", {"requestId": rid, "errorReason": "Blocked"})
-                print(f"Blocked request: {url}")
+                logger.info("Blocked request: %s", url)
                 return True
             except Exception as e:
-                print(f"Failed to block request {url}: {e}")
+                logger.info("Failed to block request %s: %s", url, e)
                 # Fall through to continue normally if blocking fails
 
         # Only our target URL at RESPONSE stage
@@ -172,7 +177,7 @@ class NetworkMonitor:
                         return True
                     except Exception as e:
                         # If we can't fetch body, do NOT block the page.
-                        print(f"Fetch.getResponseBody failed for {url}: {e}")
+                        logger.info("Fetch.getResponseBody failed for %s: %s", url, e)
                         self._safe_continue_response(cdp_session, rid)
                         return True
             
@@ -188,10 +193,10 @@ class NetworkMonitor:
             if self._should_block_url(url):
                 try:
                     cdp_session.send("Fetch.failRequest", {"requestId": rid, "errorReason": "Blocked"})
-                    print(f"Blocked request: {url}")
+                    logger.info("Blocked request: %s", url)
                     return True
                 except Exception as e:
-                    print(f"Failed to block request {url}: {e}")
+                    logger.info("Failed to block request %s: %s", url, e)
                     
             self._safe_continue_request(cdp_session, rid)
         return True
@@ -264,7 +269,7 @@ class NetworkMonitor:
                     }
                     write_jsonl(self.cookies_log_path, cookie_log)
             except Exception as e:
-                print(f"Warning: Could not log cookie: {e}")
+                logger.info("Warning: Could not log cookie: %s", e)
             
         return True
 
@@ -370,7 +375,7 @@ class NetworkMonitor:
 
         # Save to disk (best effort)
         try:
-            with open(ctx["body_path"], "wb") as f:
+            with open(ctx["body_path"], mode="wb") as f:
                 if is_b64:
                     f.write(base64.b64decode(body))
                 else:
@@ -419,9 +424,9 @@ class NetworkMonitor:
         """
         if output_path is None:
             output_path = os.path.join(self.output_dir, "network.har")
-        
+
         har_data = self._create_har_structure(page_title)
-        
+
         # Convert network data to HAR entries
         entries = []
         for request_id, meta in self.req_meta.items():
@@ -429,17 +434,17 @@ class NetworkMonitor:
                 entry = self._create_har_entry(request_id, meta)
                 if entry:
                     entries.append(entry)
-        
+
         har_data["log"]["entries"] = entries
-        
+
         # Save HAR file
         try:
-            with open(output_path, 'w', encoding='utf-8') as f:
+            with open(output_path, mode='w', encoding='utf-8') as f:
                 json.dump(har_data, f, indent=2, ensure_ascii=False)
-            print(f"HAR file saved to: {output_path}")
+            logger.info("HAR file saved to: %s", output_path)
         except Exception as e:
-            print(f"Failed to save HAR file: {e}")
-        
+            logger.info("Failed to save HAR file: %s", e)
+
         return har_data
 
     def _create_har_structure(self, page_title):
@@ -499,7 +504,7 @@ class NetworkMonitor:
             return entry
             
         except Exception as e:
-            print(f"Error creating HAR entry for request {request_id}: {e}")
+            logger.info("Error creating HAR entry for request %s: %s", request_id, e)
             return None
 
     def _create_har_request(self, meta):
@@ -701,9 +706,9 @@ class NetworkMonitor:
             try:
                 with open(output_file_path, 'w', encoding='utf-8') as f:
                     json.dump(consolidated, f, indent=2, ensure_ascii=False)
-                print(f"Consolidated transactions saved to: {output_file_path}")
+                logger.info("Consolidated transactions saved to: %s", output_file_path)
             except Exception as e:
-                print(f"Failed to save consolidated transactions: {e}")
+                logger.info("Failed to save consolidated transactions: %s", e)
         
         return consolidated
 
@@ -728,7 +733,7 @@ class NetworkMonitor:
         transactions_dir = self.paths.get("transactions_dir", os.path.join(self.output_dir, "transactions"))
         
         if not os.path.exists(transactions_dir):
-            print(f"Transactions directory not found: {transactions_dir}")
+            logger.info("Transactions directory not found: %s", transactions_dir)
             return har_data
         
         # Convert transaction directories to HAR entries
@@ -748,9 +753,9 @@ class NetworkMonitor:
         try:
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(har_data, f, indent=2, ensure_ascii=False)
-            print(f"HAR file saved to: {output_path}")
+            logger.info("HAR file saved to: %s", output_path)
         except Exception as e:
-            print(f"Failed to save HAR file: {e}")
+            logger.info("Failed to save HAR file: %s", e)
         
         return har_data
 
@@ -762,14 +767,14 @@ class NetworkMonitor:
             if not os.path.exists(request_file):
                 return None
                 
-            with open(request_file, 'r', encoding='utf-8') as f:
+            with open(request_file, mode='r', encoding='utf-8') as f:
                 request_data = json.load(f)
             
             # Read response.json
             response_file = os.path.join(dir_path, "response.json")
             response_data = {}
             if os.path.exists(response_file):
-                with open(response_file, 'r', encoding='utf-8') as f:
+                with open(response_file, mode='r', encoding='utf-8') as f:
                     response_data = json.load(f)
             
             # Read full response body
@@ -782,7 +787,7 @@ class NetworkMonitor:
                     response_body_size = os.path.getsize(response_body_file)
                     file_ext = os.path.splitext(response_body_file)[1].lower()
                     if file_ext in ['.json', '.xml', '.html', '.txt', '.js', '.css']:
-                        with open(response_body_file, 'r', encoding='utf-8', errors='replace') as f:
+                        with open(response_body_file, mode='r', encoding='utf-8', errors='replace') as f:
                             full_response_body = f.read()
                     else:
                         full_response_body = f"[Binary content - {response_body_size} bytes]"
@@ -814,7 +819,7 @@ class NetworkMonitor:
             return entry
             
         except Exception as e:
-            print(f"Error creating HAR entry from directory {dir_name}: {e}")
+            logger.info("Error creating HAR entry from directory %s: %s", dir_name, e)
             return None
 
     def _create_har_entry_from_transaction(self, dir_name, transaction_data):
@@ -835,7 +840,7 @@ class NetworkMonitor:
                 "startedDateTime": datetime.now().isoformat() + "Z",
                 "time": duration,
                 "request": self._create_har_request_from_transaction(request_data),
-                "response": self._create_har_response_from_transaction(response_data, transaction_data.get("response_body")),
+                "response": self._create_har_response_from_transaction(response_data, transaction_data.get("response_body"), request_data),
                 "cache": {},
                 "timings": {
                     "blocked": -1,
@@ -851,7 +856,7 @@ class NetworkMonitor:
             return entry
             
         except Exception as e:
-            print(f"Error creating HAR entry from transaction {dir_name}: {e}")
+            logger.info("Error creating HAR entry from transaction %s: %s", dir_name, e)
             return None
 
     def _create_har_request_from_transaction(self, request_data):
@@ -899,7 +904,12 @@ class NetworkMonitor:
             "postData": post_data
         }
 
-    def _create_har_response_from_transaction(self, response_data, response_body_data):
+    def _create_har_response_from_transaction(
+        self, 
+        response_data: dict[str, Any], 
+        response_body_data: dict[str, Any] | str | None, 
+        request_data: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Create HAR response object from transaction response data."""
         response_headers = response_data.get("responseHeaders", {})
         headers = [{"name": k, "value": v} for k, v in response_headers.items()]
@@ -917,13 +927,15 @@ class NetworkMonitor:
                 "httpOnly": cookie.get("httpOnly", False),
                 "secure": cookie.get("secure", False)
             })
-        
+
         # Get response body content - read full content from file, not truncated data
         content_text = ""
         content_size = 0
 
         # Try to read the full response body file directly
-        transaction_dir = response_data.get("transactionDir") or request_data.get("transactionDir")
+        transaction_dir = response_data.get("transactionDir")
+        if not transaction_dir and request_data:
+            transaction_dir = request_data.get("transactionDir")
         if transaction_dir:
             response_body_file = self._find_response_body_file(transaction_dir)
             if response_body_file:
@@ -934,7 +946,7 @@ class NetworkMonitor:
                     # Read full content for HAR file (no truncation)
                     file_ext = os.path.splitext(response_body_file)[1].lower()
                     if file_ext in ['.json', '.xml', '.html', '.txt', '.js', '.css']:
-                        with open(response_body_file, 'r', encoding='utf-8', errors='replace') as f:
+                        with open(response_body_file, mode='r', encoding='utf-8', errors='replace') as f:
                             content_text = f.read()
                     else:
                         # For binary files, include a note that content is binary
@@ -1026,7 +1038,7 @@ class NetworkMonitor:
             
             # For text files (JSON, XML, HTML, etc.)
             if file_ext in ['.json', '.xml', '.html', '.txt', '.js', '.css']:
-                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                with open(file_path, mode='r', encoding='utf-8', errors='replace') as f:
                     content = f.read()
                     
                     # If content is 200 chars or less, return full content
@@ -1078,10 +1090,10 @@ class NetworkMonitor:
     def _write_body_file(path: str, data: str, is_b64: bool) -> int:
         if is_b64:
             raw = base64.b64decode(data or b"")
-            with open(path, "wb") as f:
+            with open(path, mode="wb") as f:
                 f.write(raw)
             return len(raw)
         else:
-            with open(path, "w", encoding="utf-8", errors="replace") as f:
+            with open(path, mode="w", encoding="utf-8", errors="replace") as f:
                 f.write(data or "")
             return len(data or "")
