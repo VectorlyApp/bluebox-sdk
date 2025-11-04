@@ -26,7 +26,7 @@ from src.data_models.production_routine import Routine as ProductionRoutine
 from src.data_models.dev_routine import Routine, RoutineFetchOperation
 from src.utils.exceptions import TransactionIdentificationFailedError
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -75,12 +75,13 @@ class RoutineDiscoveryAgent(BaseModel):
 
         # add the system prompt to the message history
         self._add_to_message_history("system", self.SYSTEM_PROMPT_IDENTIFY_TRANSACTIONS)
-        
+
         # add the user prompt to the message history
         self._add_to_message_history("user", f"Task description: {self.task}")
         self._add_to_message_history("user", f"These are the possible network transaction ids you can choose from: {self.context_manager.get_all_transaction_ids()}")
 
         logger.info("Identifying the network transaction that directly corresponds to the user's requested task...")
+        logger.debug(f"\n\nMessage history:\n{self.message_history}\n\n")
 
         identified_transaction = None
         while identified_transaction is None:
