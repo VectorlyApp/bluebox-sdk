@@ -263,7 +263,7 @@ cdp_captures/
 
 Tip: Keep Chrome focused while monitoring and perform the target flow (search, checkout, etc.). Press Ctrl+C to stop; the script will consolidate transactions and produce a HTTP Archive (HAR) automatically.
 
-### 2. Run Routine-Discovery Agent (Our Very Smart AI with Very Good Prompt🔮)🤖
+### 2. Run Routine-Discovery Agent (Our Very Smart AI with Very Good Prompts🔮)🤖
 
 Use the **routine-discovery pipeline** to analyze captured data and synthesize a reusable Routine (`navigate → fetch → return`).
 
