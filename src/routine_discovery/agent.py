@@ -283,7 +283,7 @@ class RoutineDiscoveryAgent(BaseModel):
         self.context_manager.add_transaction_to_vectorstore(
             transaction_id=identified_transaction.transaction_id, metadata=metadata
         )
-        
+
         # temporarily update the tools to specifically search through these transactions
         tools = [
             {

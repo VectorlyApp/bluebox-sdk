@@ -313,9 +313,7 @@ python scripts/discover_routines.py \
 **Windows (PowerShell):**
 ```powershell
 # Simple task (no quotes inside):
-python scripts/discover_routines.py --task "recover the api endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5
-
-python scripts/discover_routines.py --task "Recover API endpoints for searching an adddressin the Boston city assessor DB. Also recover the API endpoint for getting details on the return value of the DB search, searching by parcel ID." --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5
+python scripts/discover_routines.py --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5
 ```
 
 **Example tasks:**
