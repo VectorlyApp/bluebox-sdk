@@ -386,9 +386,9 @@ class RoutineDiscoveryAgent(BaseModel):
             "values_to_scan_for should be possible substrings that will likely be present in the response body of a network transaction or a storage entry value."
             "This is necessary to figure out where the variable is coming from."
         )
-        
+
         self._add_to_message_history("user", message)
-        
+
         # call to the LLM API for extraction of the variables
         response = self.client.responses.create(
             model=self.llm_model,
@@ -397,14 +397,14 @@ class RoutineDiscoveryAgent(BaseModel):
             tools=self.tools,
             tool_choice="required" if len(transactions) > 1 else "auto",
         )
-        
+
         # save the response id
         self.last_response_id = response.id
-        
+
         # collect the text from the response
         response_text = collect_text_from_response(response)
         self.message_history.append({"role": "assistant","content": response_text})
-        
+
         # TODO FIXME BUG
         # parse the response to the pydantic model
         parsed_response = llm_parse_text_to_model(
@@ -415,7 +415,7 @@ class RoutineDiscoveryAgent(BaseModel):
             llm_model="gpt-5-nano"
         )
         self._add_to_message_history("assistant", parsed_response.model_dump_json())
-        
+
         # override the transaction_id with the one passed in, since the LLM may return an incorrect format
         parsed_response.transaction_id = original_transaction_id
 
