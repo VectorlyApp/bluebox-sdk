@@ -476,6 +476,7 @@ class RoutineDiscoveryAgent(BaseModel):
             for value in variable.values_to_scan_for:
                 transaction_ids_found = self.context_manager.scan_transaction_responses(
                     value=value,
+                    max_timestamp=max_timestamp
                 )
                 transaction_ids.extend(transaction_ids_found)
 
