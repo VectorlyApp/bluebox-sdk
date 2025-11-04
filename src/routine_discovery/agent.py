@@ -4,6 +4,7 @@ src/routine_discovery/agent.py
 Agent for discovering routines from the network transactions.
 """
 
+import logging
 import json
 from uuid import uuid4
 import os
@@ -23,6 +24,10 @@ from src.data_models.llm_responses import (
 )
 from src.data_models.production_routine import Routine as ProductionRoutine
 from src.data_models.dev_routine import Routine, RoutineFetchOperation
+from src.utils.exceptions import TransactionIdentificationFailedError
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class RoutineDiscoveryAgent(BaseModel):
@@ -41,7 +46,7 @@ class RoutineDiscoveryAgent(BaseModel):
     current_transaction_identification_attempt: int = 0
 
     class Config:
-        arbitrary_types_allowed = True
+        arbitrary_types_allowed: bool = True
 
     SYSTEM_PROMPT_IDENTIFY_TRANSACTIONS: str = f"""
     You are a helpful assistant that is an expert in parsing network traffic.
@@ -54,13 +59,12 @@ class RoutineDiscoveryAgent(BaseModel):
         """
         Run the routine discovery agent.
         """
-        
         # make the output dir if specified
         os.makedirs(self.output_dir, exist_ok=True)
         
         # validate the context manager
         assert self.context_manager.vectorstore_id is not None, "Vectorstore ID is not set"
-        
+
         # construct the tools
         self.tools = [
             {
@@ -76,17 +80,17 @@ class RoutineDiscoveryAgent(BaseModel):
         self._add_to_message_history("user", f"Task description: {self.task}")
         self._add_to_message_history("user", f"These are the possible network transaction ids you can choose from: {self.context_manager.get_all_transaction_ids()}")
 
-        print("Identifying the network transaction that directly corresponds to the user's requested task...")
-        
+        logger.info("Identifying the network transaction that directly corresponds to the user's requested task...")
+
         identified_transaction = None
-        
         while identified_transaction is None:
             # identify the transaction
             identified_transaction = self.identify_transaction()
-            
+
             if identified_transaction.transaction_id is None:
+                logger.error("Failed to identify the network transactions that directly correspond to the user's requested task.")
                 raise Exception("Failed to identify the network transactions that directly correspond to the user's requested task.")
-            
+
             # confirm the identified transaction
             confirmation_response = self.confirm_indetified_transaction(identified_transaction)
             
@@ -96,14 +100,15 @@ class RoutineDiscoveryAgent(BaseModel):
                 self.current_transaction_identification_attempt += 1
                 
         if identified_transaction is None:
-            raise Exception("Failed to identify the network transactions that directly correspond to the user's requested task.")
+            logger.error("Failed to identify the network transactions that directly correspond to the user's requested task.")
+            raise TransactionIdentificationFailedError("Failed to identify the network transactions that directly correspond to the user's requested task.")
 
         # save the indentified transactions
         save_path = os.path.join(self.output_dir, "root_transaction.json")
         with open(save_path, mode="w", encoding="utf-8") as f:
-            json.dump(identified_transaction.model_dump(), f, ensure_ascii=False, indent=2)
+            json.dump(obj=identified_transaction.model_dump(), fp=f, ensure_ascii=False, indent=2)
 
-        print(f"Identified transaction: {identified_transaction.transaction_id} saved to: {save_path}")
+        logger.info(f"Identified transaction: {identified_transaction.transaction_id} saved to: {save_path}")
 
         # populating the transaction queue with the identified transaction
         transaction_queue = [identified_transaction.transaction_id]
@@ -119,23 +124,23 @@ class RoutineDiscoveryAgent(BaseModel):
 
             # dequeue the transaction
             transaction_id = transaction_queue.pop(0)
-            print(f"Processing transaction: {transaction_id}")
+            logger.info(f"Processing transaction: {transaction_id}")
 
             # get the transaction
             transaction = self.context_manager.get_transaction_by_id(transaction_id)
             
             # extract variables from the transaction
-            print("Extracting variables (args, cookies, tokens, browser variables) from the identified transaction...")
+            logger.info("Extracting variables (args, cookies, tokens, browser variables) from the identified transaction...")
             extracted_variables = self.extract_variables(transaction_id)
             
             # save the extracted variables
             save_path = os.path.join(self.output_dir, f"transaction_{len(routine_transactions)}", "extracted_variables.json")
             with open(save_path, mode="w", encoding="utf-8") as f:
                 json.dump(extracted_variables.model_dump(), f, ensure_ascii=False, indent=2)
-            print(f"Extracted variables saved to: {save_path}")
+            logger.info(f"Extracted variables saved to: {save_path}")
                 
             # resolve cookies and tokens
-            print("Resolving cookies and tokens...")
+            logger.info("Resolving cookies and tokens...")
             resolved_variables = self.resolve_variables(extracted_variables)
             resolved_variables_json = [resolved_variable.model_dump() for resolved_variable in resolved_variables]
             
@@ -143,7 +148,7 @@ class RoutineDiscoveryAgent(BaseModel):
             save_path = os.path.join(self.output_dir, f"transaction_{len(routine_transactions)}", "resolved_variables.json")
             with open(save_path, mode="w", encoding="utf-8") as f:
                 json.dump(resolved_variables_json, f, ensure_ascii=False, indent=2)
-            print(f"Resolved variables saved to: {save_path}")
+            logger.info(f"Resolved variables saved to: {save_path}")
 
             # adding transaction data to the routine transactions
             routine_transactions[transaction_id] = {
@@ -166,17 +171,17 @@ class RoutineDiscoveryAgent(BaseModel):
         save_path = os.path.join(self.output_dir, f"routine.json")
         with open(save_path, mode="w", encoding="utf-8") as f:
             json.dump(routine.model_dump(), f, ensure_ascii=False, indent=2) 
-        print(f"Routine saved to: {save_path}")
+        logger.info(f"Routine saved to: {save_path}")
         
         # productionize the routine
-        print(f"Productionizing the routine...")
+        logger.info(f"Productionizing the routine...")
         routine = self.productionize_routine(routine)
         with open(save_path, mode="w", encoding="utf-8") as f:
             json.dump(routine.model_dump(), f, ensure_ascii=False, indent=2) 
-        print(f"Routine saved to: {save_path}")
+        logger.info(f"Routine saved to: {save_path}")
     
         # get the test parameters
-        print(f"Getting test parameters...")
+        logger.info(f"Getting test parameters...")
         test_parameters = self.get_test_parameters(routine)
         test_parameters_dict = {value.name: value.value for value in test_parameters.parameters}
         
@@ -184,7 +189,7 @@ class RoutineDiscoveryAgent(BaseModel):
         save_path = os.path.join(self.output_dir, f"test_parameters.json")
         with open(save_path, mode="w", encoding="utf-8") as f:
             json.dump(test_parameters_dict, f, ensure_ascii=False, indent=2)
-        print(f"Test parameters saved to: {save_path}")
+        logger.info(f"Test parameters saved to: {save_path}")
 
     def identify_transaction(self) -> TransactionIdentificationResponse:
         """
@@ -253,7 +258,7 @@ class RoutineDiscoveryAgent(BaseModel):
         """
         Confirm the identified network transaction that directly corresponds to the user's requested task.
         """
-        
+
         # add the transaction to the vectorstore
         metadata = {"uuid": str(uuid4())}
         self.context_manager.add_transaction_to_vectorstore(
@@ -278,7 +283,7 @@ class RoutineDiscoveryAgent(BaseModel):
             f"{identified_transaction.transaction_id} have been added to the vectorstore in full (including response bodies)."
             "Please confirm that the identified transaction is correct and that it directly corresponds to the user's requested task:"
             f"{self.task}"
-            f"Please respond in the following format: {TransactionConfirmationResponse.model_json_schema()}"
+            f"Please respond in the following format:\n{TransactionConfirmationResponse.model_json_schema()}"
         )
         self._add_to_message_history("user", message)
         
@@ -412,24 +417,23 @@ class RoutineDiscoveryAgent(BaseModel):
                 VariableType.TOKEN
             ]
         ]
-        
+
         resolved_variable_responses = []
         
         # for each variable to resolve, try to find the source of the variable in the storage and transactions
         for variable in variables_to_resolve:
             
-            print(f"Resolving variable: {variable.name} with values to scan for: {variable.values_to_scan_for}")
+            logger.info(f"Resolving variable: {variable.name} with values to scan for: {variable.values_to_scan_for}")
             
             # get the storage objects that contain the value and are before the latest timestamp
-            storage_objects = []
             for value in variable.values_to_scan_for:
                 storage_sources = self.context_manager.scan_storage_for_value(
                     value=value
                 )
                 storage_sources.extend(storage_sources)
-                
+
             if len(storage_sources) > 0:
-                print(f"Found {len(storage_sources)} storage sources that contain the value")
+                logger.info(f"Found {len(storage_sources)} storage sources that contain the value")
             
             # get the transaction ids that contain the value and are before the latest timestamp
             transaction_ids = {}
@@ -442,7 +446,7 @@ class RoutineDiscoveryAgent(BaseModel):
             transaction_ids = list(set(transaction_ids))
                 
             if len(transaction_ids) > 0:
-                print(f"Found {len(transaction_ids)} transaction ids that contain the value: {transaction_ids}")
+                logger.info(f"Found {len(transaction_ids)} transaction ids that contain the value: {transaction_ids}")
 
             # add the transactions to the vectorstore
             uuid = str(uuid4())
@@ -451,7 +455,7 @@ class RoutineDiscoveryAgent(BaseModel):
                     transaction_id=transaction_id,
                     metadata={"uuid": uuid}
                 )
-            
+
             # construct the message to the LLM
             message = (
                 f"Please resolve the variable: {variable.observed_value}"
@@ -465,7 +469,7 @@ class RoutineDiscoveryAgent(BaseModel):
                 f"If the variable is found in both storage and transactions, you should indicate both sources and resolve them accordinly!"
             )
             self._add_to_message_history("user", message)
-            
+
             # custom tools to force the LLM to look at the newly added transactions to the vectorstore
             tools = [
                 {
@@ -508,10 +512,10 @@ class RoutineDiscoveryAgent(BaseModel):
             resolved_variable_responses.append(parsed_response)
             
             if not parsed_response.session_storage_source and not parsed_response.transaction_source:
-                print(f"[WARNING] Not able to resolve variable: {parsed_response.variable.name}. Harcoding to observed value: {parsed_response.variable.observed_value}")
+                logger.info(f"[WARNING] Not able to resolve variable: {parsed_response.variable.name}. Harcoding to observed value: {parsed_response.variable.observed_value}")
                 
             if parsed_response.session_storage_source and parsed_response.transaction_source:
-                print(f"[INFO] Variable: {parsed_response.variable.name} is resolved from both session storage and transaction. It is reasonable to use either source (fetch is slower but more stable)")
+                logger.info(f"[INFO] Variable: {parsed_response.variable.name} is resolved from both session storage and transaction. It is reasonable to use either source (fetch is slower but more stable)")
             
         return resolved_variable_responses
 
@@ -596,7 +600,13 @@ class RoutineDiscoveryAgent(BaseModel):
         raise Exception(f"Failed to construct the routine after {max_attempts} attempts")
 
     def productionize_routine(self, routine: Routine) -> Routine:
-        
+        """
+        Productionize the routine into a production routine.
+        Args:
+            routine (Routine): The routine to productionize.
+        Returns:
+            Routine: The productionized routine.
+        """
         message = (
             f"Please productionize the routine (from previosu step): {routine.model_dump_json()}"
             f"You need to clean up this routine to follow the following format: {ProductionRoutine.model_json_schema()}"
@@ -616,8 +626,7 @@ class RoutineDiscoveryAgent(BaseModel):
             f"The resulting JSON MUST be valid and parseable after all placeholder replacements are done."
         )
         self._add_to_message_history("user", message)
-    
-        
+
         # call to the LLM API for productionization of the routine
         response = self.client.responses.create(
             model=self.llm_model,
@@ -682,6 +691,9 @@ class RoutineDiscoveryAgent(BaseModel):
         return parsed_response
 
     def _add_to_message_history(self, role: str, content: str) -> None:
+        """
+        Add a message to the message history.
+        """
         self.message_history.append(
             {"role": role, "content": content}
         )

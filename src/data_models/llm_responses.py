@@ -27,9 +27,11 @@ class TransactionIdentificationResponse(BaseModel):
     url: str
     method: Method
     explanation: str
-    confidence_level: ConfidenceLevel
-    
-    
+    confidence_level: ConfidenceLevel = Field(
+        description="The confidence level of the identification. May be LOW, MEDIUM, or HIGH."
+    )
+
+
 class TransactionConfirmationResponse(BaseModel):
     """
     Response obejct for confirming the identified network transactions that directly correspond to
@@ -38,7 +40,9 @@ class TransactionConfirmationResponse(BaseModel):
     is_correct: bool
     confirmed_transaction_id: str
     explanation: str
-    confidence_level: ConfidenceLevel
+    confidence_level: ConfidenceLevel = Field(
+        description="The confidence level of the confirmation. May be LOW, MEDIUM, or HIGH."
+    )
 
 
 class VariableType(StrEnum):
@@ -60,7 +64,7 @@ class Variable(BaseModel):
     values_to_scan_for: list[str]
     description: str
 
-    
+
 class ExtractedVariableResponse(BaseModel):
     """
     Response from the LLM for extracting variables from the network transaction.
