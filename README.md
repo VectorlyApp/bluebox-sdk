@@ -307,7 +307,7 @@ Use the **routine-discovery pipeline** to analyze captured data and synthesize a
 **Linux/macOS (bash):**
 ```bash
 python scripts/discover_routines.py \
-  --task "recover the api endpoints for searching for trains and their prices" \
+  --task "Recover API endpoints for searching for trains and their prices" \
   --cdp-captures-dir ./cdp_captures \
   --output-dir ./routine_discovery_output \
   --llm-model gpt-5

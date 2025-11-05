@@ -1,3 +1,9 @@
+"""
+src/cdp/routine_execution.py
+
+Execute a routine using Chrome DevTools Protocol.
+"""
+
 import json
 import logging
 import random
@@ -19,7 +25,7 @@ from src.data_models.production_routine import (
     RoutineSleepOperation,
 )
 
-logging.basicConfig(level=Config.LOG_LEVEL)
+logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
 

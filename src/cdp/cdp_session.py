@@ -14,7 +14,7 @@ from src.config import Config
 from src.cdp.network_monitor import NetworkMonitor
 from src.cdp.storage_monitor import StorageMonitor
 
-logging.basicConfig(level=Config.LOG_LEVEL)
+logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
 

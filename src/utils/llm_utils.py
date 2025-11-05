@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from src.config import Config
 from src.utils.exceptions import LLMStructuredOutputError
 
-logging.basicConfig(level=Config.LOG_LEVEL)
+logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
 
