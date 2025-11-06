@@ -19,8 +19,8 @@ REVERSE ENGINEER ANY WEB APP! ⚡️
 Welcome to Vectorly's Web Hacker... **No API? No Problem!**
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=YFVQSuiaWmM">
-    <img src="https://img.youtube.com/vi/YFVQSuiaWmM/maxresdefault.jpg" alt="Web Hacker Demo Video" width="560" />
+  <a href="https://vectorlyapp.github.io/web-hacker/demo.html">
+    <img src="assets/thumbnail.png" alt="Web Hacker demo — click to play" width="760">
   </a>
 </p>
 
