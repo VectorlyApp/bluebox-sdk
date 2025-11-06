@@ -159,10 +159,13 @@ cd web-hacker
 uv venv --prompt web-hacker
 source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
 
-# 3) Install in editable mode via uv (pip-compatible interface)
+# 3) Install exactly what lockfile says
+uv sync
+
+# 4) Install in editable mode via uv (pip-compatible interface)
 uv pip install -e .
 
-# 4) Configure environment
+# 5) Configure environment
 cp .env.example .env  # then edit values
 # or set directly
 export OPENAI_API_KEY="sk-..."
@@ -304,7 +307,7 @@ Use the **routine-discovery pipeline** to analyze captured data and synthesize a
 **Linux/macOS (bash):**
 ```bash
 python scripts/discover_routines.py \
-  --task "recover the api endpoints for searching for trains and their prices" \
+  --task "Recover API endpoints for searching for trains and their prices" \
   --cdp-captures-dir ./cdp_captures \
   --output-dir ./routine_discovery_output \
   --llm-model gpt-5

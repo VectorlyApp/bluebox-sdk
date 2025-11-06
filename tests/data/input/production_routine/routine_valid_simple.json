@@ -1,0 +1,34 @@
+{
+  "name": "simple_search_routine",
+  "description": "A simple routine that searches for items",
+  "incognito": true,
+  "parameters": [
+    {
+      "name": "query",
+      "type": "string",
+      "required": true,
+      "description": "Search query"
+    }
+  ],
+  "operations": [
+    {
+      "type": "navigate",
+      "url": "https://example.com/search"
+    },
+    {
+      "type": "fetch",
+      "endpoint": {
+        "url": "https://api.example.com/search?q={{query}}",
+        "method": "GET",
+        "headers": {},
+        "body": {},
+        "credentials": "include"
+      },
+      "session_storage_key": "search_results"
+    },
+    {
+      "type": "return",
+      "session_storage_key": "search_results"
+    }
+  ]
+}

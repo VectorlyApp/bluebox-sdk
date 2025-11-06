@@ -1,3 +1,9 @@
+"""
+src/data_models/production_routine.py
+
+Production routine data models.
+"""
+
 import re
 import time
 import uuid
@@ -84,6 +90,7 @@ class BuiltinParameter(BaseModel):
         description="Function to generate the builtin parameter value"
     )
 
+
 BUILTIN_PARAMETERS = [
     BuiltinParameter(
         name="uuid",
@@ -101,7 +108,6 @@ BUILTIN_PARAMETERS = [
 class Parameter(BaseModel):
     """
     Parameter model with comprehensive validation and type information.
-    
     Fields:
         name (str): Parameter name (must be valid Python identifier)
         type (ParameterType): Parameter data type
@@ -117,13 +123,12 @@ class Parameter(BaseModel):
         enum_values (list[str] | None): Allowed values for enum type
         format (str | None): Format specification (e.g., 'YYYY-MM-DD')
     """
-    
+
     # reserved prefixes: names that cannot be used at the beginning of a parameter name
     RESERVED_PREFIXES: ClassVar[list[str]] = [
         "sessionStorage", "localStorage", "cookie", "meta", "uuid", "epoch_milliseconds"
     ]
-        
-    
+
     name: str = Field(..., description="Parameter name (must be valid Python identifier)")
     type: ParameterType = Field(
         default=ParameterType.STRING,
@@ -179,7 +184,7 @@ class Parameter(BaseModel):
         """Ensure parameter name is a valid Python identifier and not reserved."""
         if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', v):
             raise ValueError(f"Parameter name '{v}' is not a valid Python identifier")
-        
+
         # Check for reserved prefixes
         for prefix in cls.RESERVED_PREFIXES:
             if v.startswith(prefix):
@@ -187,16 +192,15 @@ class Parameter(BaseModel):
                     f"Parameter name '{v}' cannot start with '{prefix}'. "
                     f"Reserved prefixes: {cls.RESERVED_PREFIXES}"
                 )
-        
+
         return v
 
-    @field_validator('type')
-    @classmethod
-    def validate_type_consistency(cls, v, info):
+    @model_validator(mode='after')
+    def validate_type_consistency(self) -> 'Parameter':
         """Validate type-specific constraints are consistent."""
-        if v == ParameterType.ENUM and not info.data.get('enum_values'):
+        if self.type == ParameterType.ENUM and not self.enum_values:
             raise ValueError("enum_values must be provided for enum type")
-        return v
+        return self
 
     @field_validator('default')
     @classmethod
@@ -226,7 +230,6 @@ class Parameter(BaseModel):
                 else:
                     raise ValueError(f"Default value {v} is not a valid boolean value")
             raise ValueError(f"Default value {v} cannot be converted to boolean")
-
         return v
 
     @field_validator('examples')
@@ -265,7 +268,6 @@ class Parameter(BaseModel):
                 validated_examples.append(str(example))
 
         return validated_examples
-
 
 
 class HTTPMethod(StrEnum):
@@ -317,7 +319,6 @@ class RoutineOperationTypes(StrEnum):
     SLEEP = "sleep"
     FETCH = "fetch"
     RETURN = "return"
-
 
 
 class RoutineOperation(BaseModel):
@@ -441,31 +442,47 @@ class Routine(ResourceBase):
         and no undefined parameters are used.
         Raises ValueError if unused parameters are found or undefined parameters are used.
         """
+        # Check 0: Ensure name and description fields don't contain parameter placeholders
+        # These are metadata fields and should not have interpolation patterns
+        param_pattern = r'\{\{([^}]*)\}\}'
+        # check in Routine.name
+        name_matches = re.findall(param_pattern, self.name)
+        if name_matches:
+            raise ValueError(
+                f"Parameter placeholders found in routine name '{self.name}': {name_matches}. "
+                "The 'name' field is a metadata field and should not contain parameter placeholders like {{param}}."
+            )
+        # check in Routine.description
+        description_matches = re.findall(param_pattern, self.description)
+        if description_matches:
+            raise ValueError(
+                f"Parameter placeholders found in routine description: {description_matches}. "
+                "The 'description' field is a metadata field and should not contain parameter placeholders like {{param}}."
+            )
+
         # list of builtin parameter names
         builtin_parameter_names = [builtin_parameter.name for builtin_parameter in BUILTIN_PARAMETERS]
-        
+
         # Convert the entire routine to JSON string for searching
         routine_json = self.model_dump_json()
 
         # Extract all parameter names
         defined_parameters = {param.name for param in self.parameters}
 
-        # Find all parameter usages in the JSON: *"{{*}}"*
-        # Match quoted placeholders: "{{param}}" or \"{{param}}\" (escaped quotes in JSON strings)
-        # \"{{param}}\" in JSON string means "{{param}}" in actual value
-        # Pattern REQUIRES quotes (either " or \") immediately before {{ and after }}
-        param_pattern = r'(?:"|\\")\{\{([^}"]*)\}\}(?:"|\\")'
+        # Find all parameter usages in the JSON: {{*}}
+        # Match placeholders anywhere: {{param}}
+        # This matches parameters whether they're standalone quoted values or embedded in strings
+        param_pattern = r'\{\{([^}]*)\}\}'
         matches = re.findall(param_pattern, routine_json)
-        
+
         # track used parameters
         used_parameters = set()
-        
+
         # iterate over all parameter usages
         for match in matches:
-            
             # clean the match (already extracted the content between braces)
             match = match.strip()
-            
+
             # if the parameter name contains a colon, it is a storage parameter
             if ":" in match:
                 kind, path = [p.strip() for p in match.split(":", 1)]
@@ -484,7 +501,7 @@ class Routine(ResourceBase):
         if unused_parameters:
             raise ValueError(
                 f"Unused parameters found in routine '{self.name}': {list(unused_parameters)}. "
-                f"All defined parameters must be used somewhere in the routine operations."
+                "All defined parameters must be used somewhere in the routine operations."
             )
 
         # Check 2: No undefined parameters should be used
@@ -492,7 +509,7 @@ class Routine(ResourceBase):
         if undefined_parameters:
             raise ValueError(
                 f"Undefined parameters found in routine '{self.name}': {list(undefined_parameters)}. "
-                f"All parameters used in the routine must be defined in parameters."
+                "All parameters used in the routine must be defined in parameters."
             )
 
         return self

@@ -1,0 +1,9 @@
+{
+  "name": "status",
+  "type": "enum",
+  "required": true,
+  "description": "Status of the item",
+  "default": "active",
+  "examples": ["active", "pending"],
+  "enum_values": ["active", "pending", "completed", "cancelled"]
+}

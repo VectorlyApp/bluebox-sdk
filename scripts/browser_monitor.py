@@ -12,11 +12,12 @@ import time
 import shutil
 import sys
 
+from src.config import Config
 from src.cdp.cdp_session import CDPSession
 from src.data_models.network import ResourceType
 from src.cdp.tab_managements import cdp_new_tab, dispose_context
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
 # ---- Configuration ----
@@ -381,7 +382,7 @@ def main():
             logger.info(f"│           └── response_body.[ext]")
             logger.info(f"└── storage/")
             logger.info(f"    └── events.jsonl")
-            logger.info()
+            logger.info("\n")
             logger.info(f"Session complete! Check {args.output_dir} for all outputs.")
 
         except Exception as e:

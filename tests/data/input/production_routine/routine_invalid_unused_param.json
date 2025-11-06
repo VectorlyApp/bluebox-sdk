@@ -1,0 +1,32 @@
+{
+  "name": "routine_with_unused_param",
+  "description": "This routine should fail because it has an unused parameter",
+  "incognito": true,
+  "parameters": [
+    {
+      "name": "used_param",
+      "type": "string",
+      "required": true,
+      "description": "This is used"
+    },
+    {
+      "name": "unused_param",
+      "type": "string",
+      "required": true,
+      "description": "This is NOT used and should cause validation error"
+    }
+  ],
+  "operations": [
+    {
+      "type": "fetch",
+      "endpoint": {
+        "url": "https://api.example.com/search?q={{used_param}}",
+        "method": "GET",
+        "headers": {},
+        "body": {},
+        "credentials": "include"
+      },
+      "session_storage_key": "results"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "name": "sessionStorage_data",
+  "type": "string",
+  "required": true,
+  "description": "This should fail due to reserved prefix"
+}

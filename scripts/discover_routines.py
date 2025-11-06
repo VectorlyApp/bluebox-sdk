@@ -1,4 +1,6 @@
 """
+src/scripts/discover_routines.py
+
 Script for discovering routines from the network transactions.
 """
 
@@ -13,7 +15,7 @@ from src.utils.exceptions import ApiKeyNotFoundError
 from src.routine_discovery.agent import RoutineDiscoveryAgent
 from src.routine_discovery.context_manager import ContextManager
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
 

@@ -41,5 +41,5 @@ jobs:
       - name: Lint
         run: uv run pylint $(git ls-files '*.py')
 
-      #- name: Run tests
-      #  run: uv run pytest tests/ -v
+      - name: Run tests
+        run: uv run pytest tests/ -v

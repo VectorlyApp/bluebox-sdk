@@ -4,6 +4,12 @@ src/utils/exceptions.py
 Custom exceptions for the project.
 """
 
+class UnsupportedFileFormat(Exception):
+    """
+    Raised when encountering an unsupported file type for some opertation.
+    """
+
+
 class ApiKeyNotFoundError(Exception):
     """
     Raised when an API key is not found in the environment variables.

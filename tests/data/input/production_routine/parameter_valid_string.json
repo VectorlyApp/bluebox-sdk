@@ -1,0 +1,11 @@
+{
+  "name": "user_name",
+  "type": "string",
+  "required": true,
+  "description": "The username for authentication",
+  "default": "guest",
+  "examples": ["john_doe", "jane_smith"],
+  "min_length": 3,
+  "max_length": 50,
+  "pattern": "^[a-zA-Z0-9_]+$"
+}

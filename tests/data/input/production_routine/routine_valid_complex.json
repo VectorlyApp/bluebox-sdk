@@ -1,0 +1,57 @@
+{
+  "name": "complex_routine",
+  "description": "A complex routine with multiple parameters and operations",
+  "incognito": false,
+  "parameters": [
+    {
+      "name": "user_id",
+      "type": "string",
+      "required": true,
+      "description": "User ID"
+    },
+    {
+      "name": "api_token",
+      "type": "string",
+      "required": true,
+      "description": "API authentication token"
+    },
+    {
+      "name": "limit",
+      "type": "integer",
+      "required": false,
+      "description": "Result limit",
+      "default": 10
+    }
+  ],
+  "operations": [
+    {
+      "type": "navigate",
+      "url": "https://example.com/user/{{user_id}}"
+    },
+    {
+      "type": "sleep",
+      "timeout_seconds": 2.5
+    },
+    {
+      "type": "fetch",
+      "endpoint": {
+        "url": "https://api.example.com/users/{{user_id}}/data?limit={{limit}}",
+        "method": "POST",
+        "headers": {
+          "Authorization": "Bearer {{api_token}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "user_id": "{{user_id}}",
+          "timestamp": "{{epoch_milliseconds}}"
+        },
+        "credentials": "include"
+      },
+      "session_storage_key": "user_data"
+    },
+    {
+      "type": "return",
+      "session_storage_key": "user_data"
+    }
+  ]
+}

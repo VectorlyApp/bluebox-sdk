@@ -4,6 +4,7 @@ src/config.py
 Centralized environment variable configuration.
 """
 
+import logging
 import os
 from typing import Any
 
@@ -11,12 +12,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# configure httpx logger to suppress verbose HTTP logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 class Config():
     """
     Centralized configuration for environment variables.
     """
 
+    # logging configuration
+    LOG_LEVEL: int = logging.getLevelNamesMapping().get(
+        os.getenv("LOG_LEVEL", "INFO").upper(),
+        logging.INFO
+    )
+    LOG_DATE_FORMAT: str = os.getenv("LOG_DATE_FORMAT", "%Y-%m-%d %H:%M:%S")
+    LOG_FORMAT: str = os.getenv("LOG_FORMAT", "[%(asctime)s] %(levelname)s:%(name)s:%(message)s")
+
+    # API keys
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 
     @classmethod

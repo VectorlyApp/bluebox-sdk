@@ -1,0 +1,6 @@
+{
+  "name": "choice",
+  "type": "enum",
+  "required": true,
+  "description": "This should fail because enum_values is missing"
+}
