@@ -20,7 +20,7 @@ Welcome to Vectorly's Web Hacker... **No API? No Problem!**
 
 <p align="center">
   <a href="https://vectorlyapp.github.io/web-hacker/demo.html">
-    <img src="assets/thumbnail.png" alt="Web Hacker demo — click to play" width="760">
+    <img src="assets/thumbnail.png" alt="Web Hacker demo: https://youtu.be/YFVQSuiaWmM" width="760">
   </a>
 </p>
 
