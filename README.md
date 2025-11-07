@@ -41,6 +41,13 @@ Each Routine includes:
 Example:
 > Navigate to a dashboard, search based on keywords, and return results — all as a reusable Routine.
 
+### Quickstart
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/ec47cfb2-5fb8-4726-b136-cb51df3c1b83" width="760" controls autoplay loop muted>
+    Video not supported? Watch the demo on YouTube: https://youtu.be/YFVQSuiaWmM
+  </video>
+</p>
+
 ### Parameters
 
 - Defined as typed inputs (see [`Parameter`](https://github.com/VectorlyApp/web-hacker/blob/main/src/data_models/production_routine.py) class).
