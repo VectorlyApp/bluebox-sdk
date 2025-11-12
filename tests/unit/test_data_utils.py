@@ -36,10 +36,7 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Visible text" in result
-        assert "More visible text" in result
-        assert "console.log" not in result
-        assert "hidden" not in result
+        assert result == "Visible text\nMore visible text"
 
     def test_removes_style_tags(self):
         """Test that style tags are removed."""
@@ -56,9 +53,7 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Visible text" in result
-        assert "color: red" not in result
-        assert "body {" not in result
+        assert result == "Visible text"
 
     def test_removes_noscript_tags(self):
         """Test that noscript tags are removed."""
@@ -72,10 +67,7 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Visible text" in result
-        assert "More text" in result
-        assert "Please enable JavaScript" not in result
-        assert "noscript" not in result
+        assert result == "Visible text\nMore text"
 
     def test_removes_all_non_visible_tags(self):
         """Test that script, style, and noscript are all removed."""
@@ -93,9 +85,6 @@ class TestGetTextFromHtml:
         """
         result = get_text_from_html(html)
         assert result == "Content"
-        assert "margin" not in result
-        assert "var x" not in result
-        assert "No JS" not in result
 
     def test_normalizes_whitespace(self):
         """Test that extra whitespace is normalized."""
@@ -103,7 +92,6 @@ class TestGetTextFromHtml:
         result = get_text_from_html(html)
         # BeautifulSoup converts multiple spaces to newlines, which are then normalized
         assert result == "Text\nwith\nmultiple\nspaces"
-        assert "    " not in result  # No multiple spaces
 
     def test_normalizes_consecutive_newlines(self):
         """Test that consecutive newlines are normalized to single newline."""
@@ -119,14 +107,12 @@ class TestGetTextFromHtml:
         """
         result = get_text_from_html(html)
         # Should have single newline between First and Second
-        assert "\n\n" not in result
         assert result == "First\nSecond"
 
     def test_handles_carriage_return_line_endings(self):
         """Test that \\r\\n line endings are handled correctly."""
         html = "<html><body><p>Line 1</p>\r\n\r\n<p>Line 2</p></body></html>"
         result = get_text_from_html(html)
-        assert "\r\n" not in result
         assert result == "Line 1\nLine 2"
 
     def test_removes_leading_trailing_whitespace(self):
@@ -144,7 +130,6 @@ class TestGetTextFromHtml:
         """
         result = get_text_from_html(html)
         assert result == "Content"
-        assert result.strip() == result  # No leading/trailing whitespace
 
     def test_empty_html(self):
         """Test empty HTML string."""
@@ -181,10 +166,8 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Title" in result
-        assert "Paragraph with" in result
-        assert "bold" in result
-        assert "text" in result
+        # BeautifulSoup separates inline elements with newlines
+        assert result == "Title\nParagraph with\nbold\ntext"
 
     def test_complex_html_structure(self):
         """Test complex HTML with various elements."""
@@ -213,16 +196,7 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Main Title" in result
-        assert "Article Title" in result
-        assert "Article content goes here" in result
-        assert "Item 1" in result
-        assert "Item 2" in result
-        assert "display: none" not in result
-        assert "function test" not in result
-        assert "JavaScript disabled" not in result
-        # Check that newlines are normalized
-        assert "\n\n" not in result
+        assert result == "Main Title\nArticle Title\nArticle content goes here.\nItem 1\nItem 2"
 
     def test_html_with_attributes(self):
         """Test HTML with various attributes."""
@@ -235,12 +209,7 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Text content" in result
-        assert "Link text" in result
-        # Attributes should not appear in text
-        assert "id=" not in result
-        assert "class=" not in result
-        assert "href=" not in result
+        assert result == "Text content\nLink text"
 
     def test_html_with_comments(self):
         """Test HTML with comments (should be removed by BeautifulSoup)."""
@@ -255,7 +224,6 @@ class TestGetTextFromHtml:
         """
         result = get_text_from_html(html)
         assert result == "Visible text"
-        assert "comment" not in result
 
     def test_multiple_spaces_in_text(self):
         """Test that multiple spaces within text are normalized."""
@@ -263,7 +231,6 @@ class TestGetTextFromHtml:
         result = get_text_from_html(html)
         # BeautifulSoup converts multiple spaces to newlines
         assert result == "Word1\nWord2\nWord3"
-        assert "    " not in result  # No multiple spaces
 
     def test_html_with_forms(self):
         """Test HTML with form elements."""
@@ -279,10 +246,7 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Name:" in result
-        assert "Submit" in result
-        # Input value shouldn't appear (empty input)
-        # But label and button text should
+        assert result == "Name:\nSubmit"
 
     def test_html_with_tables(self):
         """Test HTML with table elements."""
@@ -303,20 +267,13 @@ class TestGetTextFromHtml:
         </html>
         """
         result = get_text_from_html(html)
-        assert "Header 1" in result
-        assert "Header 2" in result
-        assert "Data 1" in result
-        assert "Data 2" in result
+        assert result == "Header 1\nHeader 2\nData 1\nData 2"
 
     def test_html_with_mixed_line_endings(self):
         """Test HTML with mixed \\n and \\r\\n line endings."""
         html = "<html><body><p>Line 1</p>\n\r\n<p>Line 2</p>\r\n<p>Line 3</p></body></html>"
         result = get_text_from_html(html)
-        assert "\r" not in result
-        assert "\n\n" not in result
-        assert "Line 1" in result
-        assert "Line 2" in result
-        assert "Line 3" in result
+        assert result == "Line 1\nLine 2\nLine 3"
 
     def test_html_with_only_whitespace(self):
         """Test HTML with only whitespace characters."""
@@ -337,5 +294,5 @@ class TestGetTextFromHtml:
         """
         result = get_text_from_html(html)
         # Should have newlines between elements
-        assert "Title\nParagraph 1\nParagraph 2" in result or result == "Title\nParagraph 1\nParagraph 2"
+        assert result == "Title\nParagraph 1\nParagraph 2"
 
