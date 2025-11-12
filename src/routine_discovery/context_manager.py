@@ -1,9 +1,11 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from openai import OpenAI
 import os
 import json
 import time
 import shutil
+
+from src.utils.data_utils import get_text_from_html
 
 
 class ContextManager(BaseModel):
@@ -14,10 +16,19 @@ class ContextManager(BaseModel):
     consolidated_transactions_path: str
     storage_jsonl_path: str
     vectorstore_id: str | None = None
+    supported_file_extensions: list[str] = Field(default_factory=lambda: [
+        ".txt",
+        ".json",
+        ".js",
+        ".html",
+        ".xml",
+    ])
+    cached_transaction_ids: list[str] | None = Field(default=None, exclude=True)
+    uploaded_transaction_ids: set[str] = Field(default_factory=set, exclude=True)
 
     class Config:
         arbitrary_types_allowed = True
-
+        
 
     @field_validator('transactions_dir', 'consolidated_transactions_path', 'storage_jsonl_path')
     @classmethod
@@ -70,11 +81,22 @@ class ContextManager(BaseModel):
     def get_all_transaction_ids(self) -> list[str]:
         """
         Get all transaction ids from the context manager.
+        Cached per instance to avoid repeated filesystem operations.
         """
-        return os.listdir(self.transactions_dir)
+        if self.cached_transaction_ids is not None:
+            return self.cached_transaction_ids
+        
+        all_transaction_ids = os.listdir(self.transactions_dir)
+        supported_transaction_ids = []
+        for transaction_id in all_transaction_ids:
+            if self.get_response_body_file_extension(transaction_id) in self.supported_file_extensions:
+                supported_transaction_ids.append(transaction_id)
+        
+        self.cached_transaction_ids = supported_transaction_ids
+        return supported_transaction_ids
 
 
-    def get_transaction_by_id(self, transaction_id: str) -> dict:
+    def get_transaction_by_id(self, transaction_id: str, clean_response_body: bool = False) -> dict:
         """
         Get a transaction by id from the context manager.
         {
@@ -90,41 +112,40 @@ class ContextManager(BaseModel):
             with open(os.path.join(self.transactions_dir, transaction_id, "request.json"), mode="r") as f:
                 result["request"] = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
-            result["request"] = "No request found for transaction {transaction_id}"
+            result["request"] = f"No request found for transaction {transaction_id}"
 
         try:
             with open(os.path.join(self.transactions_dir, transaction_id, "response.json"), mode="r") as f:
                 result["response"] = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
-            result["response"] = "No response found for transaction {transaction_id}"
+            result["response"] = f"No response found for transaction {transaction_id}"
 
-        try:
-            response_body_path = os.path.join(self.transactions_dir, transaction_id, "response_body.json")
-            with open(response_body_path, mode="r") as f:
-                result["response_body"] = json.load(f)
-
-        except (json.JSONDecodeError, FileNotFoundError):
-            # get the the response body filename and read as text
-            response_body_file_name = None
-            files = os.listdir(os.path.join(self.transactions_dir, transaction_id))
-            for file in files:
-                if "response_body" in file:
-                    response_body_file_name = file
-                    break
-            if response_body_file_name is None:
-                result["response_body"] = "No response body found for transaction {transaction_id}"
-            else:
-                result["response_body"] = open(
-                    os.path.join(
-                        self.transactions_dir, transaction_id, response_body_file_name
-                    ),
-                    mode="r",
-                    encoding='utf-8',
-                    errors='replace'
-                ).read()
+        # Get the response body file extension to determine how to read it
+        response_body_extension = self.get_response_body_file_extension(transaction_id)
+        
+        if response_body_extension is None:
+            result["response_body"] = f"No response body found for transaction {transaction_id}"
             
+        else:
+            response_body_path = os.path.join(self.transactions_dir, transaction_id, f"response_body{response_body_extension}")
+            # If it's a JSON file, try to parse as JSON; otherwise read as text
+            if response_body_extension == ".json":
+                try:
+                    with open(response_body_path, mode="r", encoding="utf-8") as f:
+                        result["response_body"] = json.load(f)
+                except json.JSONDecodeError:
+                    # Fallback to text if JSON parsing fails
+                    with open(response_body_path, mode="r", encoding='utf-8', errors='replace') as f:
+                        result["response_body"] = f.read()
+            else:
+                # Read as text for .txt, .js, .html, .xml, etc.
+                with open(response_body_path, mode="r", encoding='utf-8', errors='replace') as f:
+                    result["response_body"] = f.read()
+                    
+                    # sanitize the response body if it's an html file
+                    if response_body_extension == ".html" and clean_response_body:
+                        result["response_body"] = get_text_from_html(result["response_body"])
         return result
-
 
     def delete_vectorstore(self) -> None:
         """
@@ -148,13 +169,16 @@ class ContextManager(BaseModel):
         """
         if self.vectorstore_id is None:
             raise ValueError("Vectorstore ID is not set")
+        
+        if transaction_id in self.uploaded_transaction_ids:
+            return
 
         # make the tmp directory
         os.makedirs(self.tmp_dir, exist_ok=True)
 
         try:
             # get the entire transaction data
-            transaction_data = self.get_transaction_by_id(transaction_id)
+            transaction_data = self.get_transaction_by_id(transaction_id, clean_response_body=True)
             transaction_file_path = os.path.join(self.tmp_dir, f"{transaction_id}.json")
 
             with open(transaction_file_path, mode="w", encoding="utf-8") as f:
@@ -165,6 +189,9 @@ class ContextManager(BaseModel):
         finally:
             # delete the tmp directory
             shutil.rmtree(self.tmp_dir)
+            
+            # add the transaction id to the uploaded transaction ids
+            self.uploaded_transaction_ids.add(transaction_id)
 
 
     def add_file_to_vectorstore(self, file_path: str, metadata: dict) -> None:
@@ -302,3 +329,18 @@ class ContextManager(BaseModel):
                 if value in line and timestamp_check:
                     results.append(line)
         return results
+
+    def get_response_body_file_extension(self, transaction_id: str) -> str:
+        """
+        Get the extension of the response body file for a transaction.
+        Args:
+            transaction_id: The id of the transaction.
+        Returns:
+            The extension of the response body file.
+        """
+        # get all files in the transaction directory
+        files = os.listdir(os.path.join(self.transactions_dir, transaction_id))
+        for file in files:
+            if file.startswith("response_body"):
+                return os.path.splitext(file)[1].lower()
+        return None

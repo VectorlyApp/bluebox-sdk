@@ -6,9 +6,11 @@ Utility functions for loading data.
 
 import datetime
 import json
+import re
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from bs4 import BeautifulSoup
 
 from src.utils.exceptions import UnsupportedFileFormat
 
@@ -80,3 +82,32 @@ def serialize_datetime(obj: Any) -> Any:
     if isinstance(obj, datetime.datetime):
         return obj.isoformat()
     return obj
+
+
+def get_text_from_html(html: str) -> str:
+    """
+    Sanitize the HTML data.
+    """
+    
+    # Use the built-in html parser for robustness
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Remove non-visible elements
+    for tag in soup(["script", "style", "noscript"]):
+        tag.decompose()
+
+    # Get visible text
+    text = soup.get_text(separator="\n")
+
+    # Normalize whitespace
+    lines = (line.strip() for line in text.splitlines())
+    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+    clean_text = "\n".join(chunk for chunk in chunks if chunk)
+    
+    # Remove ALL consecutive newlines - replace any sequence of 2+ newlines with single newline
+    # Handle both \n and \r\n line endings
+    clean_text = re.sub(r'[\r\n]+', '\n', clean_text)
+    # Remove leading and trailing whitespace
+    clean_text = clean_text.strip()
+
+    return clean_text

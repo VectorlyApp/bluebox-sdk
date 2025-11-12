@@ -52,6 +52,17 @@ def main() -> None:
         storage_jsonl_path=os.path.join(args.cdp_captures_dir, "storage/events.jsonl")
     )
     logger.info("Context manager initialized.")
+    
+    # TODO: REMOVE
+    for transaction_id in context_manager.get_all_transaction_ids():
+        print(f"Transaction ID: {transaction_id}, Response body file extension: {context_manager.get_response_body_file_extension(transaction_id)}")
+   
+    transaction_id = "20251112_1762976977343_www.amtrak.com_home.html"
+    transaction = context_manager.get_transaction_by_id(transaction_id, clean_response_body=True)
+    print(transaction)
+    exit()
+    
+    
 
     # make the vectorstore
     context_manager.make_vectorstore()

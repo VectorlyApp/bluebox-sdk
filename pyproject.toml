@@ -20,6 +20,7 @@ dependencies = [
     "requests>=2.31.0",
     "websockets>=15.0.1",
     "websocket-client>=1.6.0",
+    "beautifulsoup4>=4.14.2",
 ]
 
 [tool.hatch.build.targets.wheel]
