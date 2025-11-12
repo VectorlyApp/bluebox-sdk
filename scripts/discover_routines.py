@@ -52,7 +52,7 @@ def main() -> None:
         storage_jsonl_path=os.path.join(args.cdp_captures_dir, "storage/events.jsonl")
     )
     logger.info("Context manager initialized.")
-    
+
     # make the vectorstore
     context_manager.make_vectorstore()
     logger.info("Vectorstore created: %s", context_manager.vectorstore_id)
