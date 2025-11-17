@@ -18,9 +18,9 @@ import argparse
 import json
 import logging
 
-from src.config import Config
-from src.cdp.routine_execution import execute_routine
-from src.data_models.production_routine import Routine
+from web_hacker.config import Config
+from web_hacker.cdp.routine_execution import execute_routine
+from web_hacker.data_models.production_routine import Routine
 
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)

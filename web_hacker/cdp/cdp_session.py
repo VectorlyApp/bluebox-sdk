@@ -1,5 +1,5 @@
 """
-src/cdp/cdp_session.py
+web_hacker/cdp/cdp_session.py
 
 CDP Session management for web scraping with Chrome DevTools Protocol.
 """
@@ -11,10 +11,10 @@ import websocket
 import threading
 import time
 
-from src.config import Config
-from src.cdp.network_monitor import NetworkMonitor
-from src.cdp.storage_monitor import StorageMonitor
-from src.cdp.interaction_monitor import InteractionMonitor
+from web_hacker.config import Config
+from web_hacker.cdp.network_monitor import NetworkMonitor
+from web_hacker.cdp.storage_monitor import StorageMonitor
+from web_hacker.cdp.interaction_monitor import InteractionMonitor
 
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)

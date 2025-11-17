@@ -148,10 +148,76 @@ This substitutes parameter values and injects `auth_token` from cookies. The JSO
 
 - Python 3.12+
 - Google Chrome (stable)
-- [uv (Python package manager)](https://github.com/astral-sh/uv)
+- [uv (Python package manager)](https://github.com/astral-sh/uv) (optional, for development)
   - macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
   - Windows (PowerShell): `iwr https://astral.sh/uv/install.ps1 -UseBasicParsing | iex`
 - OpenAI API key
+
+## Installation
+
+### From PyPI (Recommended)
+
+```bash
+pip install web-hacker
+```
+
+### From Source
+
+```bash
+git clone https://github.com/VectorlyApp/web-hacker.git
+cd web-hacker
+pip install -e .
+```
+
+## Quick Start (SDK)
+
+The easiest way to use web-hacker is through the SDK:
+
+```python
+from web_hacker import WebHacker
+
+# Initialize the SDK
+hacker = WebHacker(openai_api_key="sk-...")
+
+# Monitor browser activity
+with hacker.monitor_browser(output_dir="./captures"):
+    # Navigate to your target website and perform actions
+    # The SDK will capture all network traffic, storage, and interactions
+    pass
+
+# Discover a routine from captured data
+routine = hacker.discover_routine(
+    task="Search for flights and get prices",
+    cdp_captures_dir="./captures"
+)
+
+# Execute the discovered routine
+result = hacker.execute_routine(
+    routine=routine,
+    parameters={
+        "origin": "NYC",
+        "destination": "LAX",
+        "departureDate": "2026-03-22"
+    }
+)
+
+print(result)
+```
+
+## CLI Usage
+
+The SDK also provides CLI commands:
+
+```bash
+# Monitor browser
+web-hacker-monitor --output-dir ./captures
+
+# Discover routines
+web-hacker-discover --task "Search for flights" --cdp-captures-dir ./captures
+
+# Execute routine
+web-hacker-execute --routine-path routine.json --parameters-path params.json
+```
 
 ## Set up Your Environment 🔧
 
@@ -277,7 +343,7 @@ Use the CDP browser monitor to block trackers and capture network, storage, and 
 **Run this command to start monitoring:**
 
 ```bash
-python scripts/browser_monitor.py --host 127.0.0.1 --port 9222 --output-dir ./cdp_captures --url about:blank --incognito
+web-hacker-monitor --host 127.0.0.1 --port 9222 --output-dir ./cdp_captures --url about:blank --incognito
 ```
 
 The script will open a new tab (starting at `about:blank`). Navigate to your target website, then manually perform the actions you want to automate (e.g., search, login, export report). Keep Chrome focused during this process. Press `Ctrl+C` and the script will consolidate transactions and produce a HAR automatically.
@@ -313,7 +379,7 @@ Use the **routine-discovery pipeline** to analyze captured data and synthesize a
 
 **Linux/macOS (bash):**
 ```bash
-python scripts/discover_routines.py \
+web-hacker-discover \
   --task "Recover API endpoints for searching for trains and their prices" \
   --cdp-captures-dir ./cdp_captures \
   --output-dir ./routine_discovery_output \
@@ -323,7 +389,7 @@ python scripts/discover_routines.py \
 **Windows (PowerShell):**
 ```powershell
 # Simple task (no quotes inside):
-python scripts/discover_routines.py --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5
+web-hacker-discover --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5
 ```
 
 **Example tasks:**
@@ -372,13 +438,13 @@ Run the example routine:
 ```bash
 # Using a parameters file:
 
-python scripts/execute_routine.py \
+web-hacker-execute \
   --routine-path example_routines/amtrak_one_way_train_search_routine.json \
   --parameters-path example_routines/amtrak_one_way_train_search_input.json
 
 # Or pass parameters inline (JSON string):
 
-python scripts/execute_routine.py \
+web-hacker-execute \
   --routine-path example_routines/amtrak_one_way_train_search_routine.json \
   --parameters-dict '{"origin": "BOS", "destination": "NYP", "departureDate": "2026-03-22"}'
 ```
@@ -386,7 +452,7 @@ python scripts/execute_routine.py \
 Run a discovered routine:
 
 ```bash
-python scripts/execute_routine.py \
+web-hacker-execute \
   --routine-path routine_discovery_output/routine.json \
   --parameters-path routine_discovery_output/test_parameters.json
 ```
