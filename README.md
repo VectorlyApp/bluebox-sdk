@@ -183,62 +183,26 @@ python -m ensurepip --upgrade  # Install pip in the venv
 pip install web-hacker
 ```
 
-### From Source
+### From Source (Development)
+
+For development or if you want the latest code:
 
 ```bash
+# Clone the repository
 git clone https://github.com/VectorlyApp/web-hacker.git
 cd web-hacker
+
+# Create and activate virtual environment
+python3 -m venv web-hacker-env
+source web-hacker-env/bin/activate  # On Windows: web-hacker-env\Scripts\activate
+
+# Install in editable mode
 pip install -e .
-```
 
-## Quick Start (SDK)
-
-The easiest way to use web-hacker is through the SDK:
-
-```python
-from web_hacker import WebHacker
-
-# Initialize the SDK
-hacker = WebHacker(openai_api_key="sk-...")
-
-# Monitor browser activity
-with hacker.monitor_browser(output_dir="./captures"):
-    # Navigate to your target website and perform actions
-    # The SDK will capture all network traffic, storage, and interactions
-    pass
-
-# Discover a routine from captured data
-routine = hacker.discover_routine(
-    task="Search for flights and get prices",
-    cdp_captures_dir="./captures"
-)
-
-# Execute the discovered routine
-result = hacker.execute_routine(
-    routine=routine,
-    parameters={
-        "origin": "NYC",
-        "destination": "LAX",
-        "departureDate": "2026-03-22"
-    }
-)
-
-print(result)
-```
-
-## CLI Usage
-
-The SDK also provides CLI commands:
-
-```bash
-# Monitor browser
-web-hacker-monitor --output-dir ./captures
-
-# Discover routines
-web-hacker-discover --task "Search for flights" --cdp-captures-dir ./captures
-
-# Execute routine
-web-hacker-execute --routine-path routine.json --parameters-path params.json
+# Or using uv (faster)
+uv venv web-hacker-env
+source web-hacker-env/bin/activate
+uv pip install -e .
 ```
 
 ## Quickstart (Easiest Way) 🚀
@@ -257,117 +221,78 @@ export OPENAI_API_KEY="sk-..."
 ```
 
 The quickstart script will:
-0. ✅ Automatically launch Chrome in debug mode
-1. 📊 Start browser monitoring (you perform actions)
-2. 🤖 Discover routines from captured data
-3. 📝 Show you how to execute the discovered routine
+1. ✅ Automatically launch Chrome in debug mode
+2. 📊 Start browser monitoring (you perform actions)
+3. 🤖 Discover routines from captured data
+4. 📝 Show you how to execute the discovered routine
 
 **Note:** The quickstart script is included in the repository. If you installed from PyPI, you can download it from the [GitHub repository](https://github.com/VectorlyApp/web-hacker/blob/main/scripts/quickstart.sh).
 
-## Set up Your Environment 🔧
+## Launch Chrome in Debug Mode 🐞
 
-### Linux
+> 💡 **Tip:** The [quickstart script](#quickstart-easiest-way-🚀) automatically launches Chrome for you. You only need these manual instructions if you're not using the quickstart script.
+
+### macOS
 
 ```bash
-# 1) Clone and enter the repo
-git clone https://github.com/VectorlyApp/web-hacker.git
-cd web-hacker
+# Create temporary Chrome user directory
+mkdir -p $HOME/tmp/chrome
 
-# 2) Create & activate virtual environment (uv)
-uv venv --prompt web-hacker
-source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
+# Launch Chrome in debug mode
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/tmp/chrome" \
+  --remote-allow-origins=* \
+  --no-first-run \
+  --no-default-browser-check
 
-# 3) Install exactly what lockfile says
-uv sync
-
-# 4) Install in editable mode via uv (pip-compatible interface)
-uv pip install -e .
-
-# 5) Configure environment
-cp .env.example .env  # then edit values
-# or set directly
-export OPENAI_API_KEY="sk-..."
+# Verify Chrome is running
+curl http://127.0.0.1:9222/json/version
 ```
 
 ### Windows
 
 ```powershell
-# 1) Clone and enter the repo
-git clone https://github.com/VectorlyApp/web-hacker.git
-cd web-hacker
-
-# 2) Install uv (if not already installed)
-iwr https://astral.sh/uv/install.ps1 -UseBasicParsing | iex
-
-# 3) Create & activate virtual environment (uv)
-uv venv --prompt web-hacker
-.venv\Scripts\activate
-
-# 4) Install in editable mode via uv (pip-compatible interface)
-uv pip install -e .
-
-# 5) Configure environment
-copy .env.example .env  # then edit values
-# or set directly
-$env:OPENAI_API_KEY="sk-..."
-```
-
-## Launch Chrome in Debug Mode 🐞
-
-> 💡 **Tip:** The [quickstart script](#quickstart-easiest-way-🚀) automatically launches Chrome for you. You only need to follow these manual instructions if you're not using the quickstart script.
-
-### Instructions for MacOS
-
-```
-# You should see JSON containing a webSocketDebuggerUrl like:
-# ws://127.0.0.1:9222/devtools/browser/*************************************# Create temporary chrome user directory
-mkdir $HOME/tmp
-mkdir $HOME/tmp/chrome
-
-# Launch Chrome app in debug mode (this exposes websocket for controlling and monitoring the browser)
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --remote-debugging-address=127.0.0.1 \
-  --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/tmp/chrome" \
-  '--remote-allow-origins=*' \
-  --no-first-run \
-  --no-default-browser-check
-
-
-# Verify chrome is running in debug mode
-curl http://127.0.0.1:9222/json/version
-
-# You should see JSON containing a webSocketDebuggerUrl like:
-# ws://127.0.0.1:9222/devtools/browser/*************************************
-```
-
-### Instructions for Windows
-
-```
 # Create temporary Chrome user directory
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\\tmp\\chrome" | Out-Null
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\tmp\chrome" | Out-Null
 
-# Locate Chrome (adjust path if Chrome is installed elsewhere)
-$chrome = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+# Locate Chrome
+$chrome = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 if (!(Test-Path $chrome)) {
-  $chrome = "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+  $chrome = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 }
 
-# Launch Chrome in debug mode (exposes DevTools WebSocket)
+# Launch Chrome in debug mode
 & $chrome `
   --remote-debugging-address=127.0.0.1 `
   --remote-debugging-port=9222 `
-  --user-data-dir="$env:USERPROFILE\\tmp\\chrome" `
+  --user-data-dir="$env:USERPROFILE\tmp\chrome" `
   --remote-allow-origins=* `
   --no-first-run `
   --no-default-browser-check
 
-
-# Verify Chrome is running in debug mode
+# Verify Chrome is running
 (Invoke-WebRequest http://127.0.0.1:9222/json/version).Content
+```
 
-# You should see JSON containing a webSocketDebuggerUrl like:
-# ws://127.0.0.1:9222/devtools/browser/*************************************
+### Linux
+
+```bash
+# Create temporary Chrome user directory
+mkdir -p $HOME/tmp/chrome
+
+# Launch Chrome in debug mode (adjust path if needed)
+google-chrome \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/tmp/chrome" \
+  --remote-allow-origins=* \
+  --no-first-run \
+  --no-default-browser-check
+
+# Verify Chrome is running
+curl http://127.0.0.1:9222/json/version
 ```
 
 ## HACK (reverse engineer) WEB APPS 👨🏻‍💻
@@ -380,9 +305,9 @@ The reverse engineering process follows a simple three-step workflow:
 
 ### Quick Start (Recommended)
 
-**Easiest way:** Use the quickstart script (see [Quickstart](#quickstart-easiest-way-🚀) above) which automates everything.
+**Easiest way:** Use the [quickstart script](#quickstart-easiest-way-🚀) which automates the entire workflow.
 
-### Manual Workflow
+### Manual Workflow (Step-by-Step)
 
 Each step is detailed below. Start by ensuring Chrome is running in debug mode (see [Launch Chrome in Debug Mode](#launch-chrome-in-debug-mode-🐞) above).
 
