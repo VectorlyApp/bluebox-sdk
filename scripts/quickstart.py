@@ -175,7 +175,7 @@ def run_command(cmd: list[str], description: str) -> bool:
 def main():
     """Main workflow."""
     print_colored("╔════════════════════════════════════════════════════════════╗", BLUE)
-    print_colored("║          Web Hacker - Quickstart Workflow                ║", BLUE)
+    print_colored("║         Web Hacker - Quickstart Workflow                   ║", BLUE)
     print_colored("╚════════════════════════════════════════════════════════════╝", BLUE)
     print()
     
