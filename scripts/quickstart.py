@@ -12,6 +12,7 @@ import subprocess
 import shutil
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 try:
     import requests
@@ -42,6 +43,136 @@ def check_chrome_running(port: int) -> bool:
         response = requests.get(f"http://127.0.0.1:{port}/json/version", timeout=1)
         return response.status_code == 200
     except (requests.RequestException, requests.Timeout):
+        return False
+
+
+def open_url_in_chrome(port: int, url: str) -> bool:
+    """Navigate the existing Chrome tab to a URL using CDP."""
+    try:
+        # Get list of existing tabs
+        tabs_response = requests.get(f"http://127.0.0.1:{port}/json", timeout=2)
+        if tabs_response.status_code != 200:
+            return False
+        
+        tabs = tabs_response.json()
+        if not tabs:
+            return False
+        
+        # Use the first available tab
+        first_tab = tabs[0]
+        target_id = first_tab.get("id")
+        if not target_id:
+            return False
+        
+        # Navigate the existing tab using WebSocket
+        try:
+            import websocket
+            import json
+            
+            # Get browser WebSocket URL (not the tab's)
+            version_response = requests.get(f"http://127.0.0.1:{port}/json/version", timeout=2)
+            if version_response.status_code != 200:
+                return False
+            
+            browser_ws_url = version_response.json().get("webSocketDebuggerUrl")
+            if not browser_ws_url:
+                return False
+            
+            ws = websocket.create_connection(browser_ws_url, timeout=5)
+            try:
+                next_id = 1
+                
+                # Attach to the target
+                attach_id = next_id
+                attach_msg = {
+                    "id": attach_id,
+                    "method": "Target.attachToTarget",
+                    "params": {"targetId": target_id, "flatten": True}
+                }
+                ws.send(json.dumps(attach_msg))
+                next_id += 1
+                
+                # Read attach response (may need to skip event messages)
+                ws.settimeout(5)
+                session_id = None
+                while True:
+                    try:
+                        msg = json.loads(ws.recv())
+                        # Look for the response with matching ID
+                        if msg.get("id") == attach_id:
+                            if "error" in msg:
+                                print_colored(f"⚠️  Attach error: {msg.get('error')}", YELLOW)
+                                return False
+                            if "result" in msg:
+                                session_id = msg["result"].get("sessionId")
+                                if session_id:
+                                    break
+                                else:
+                                    print_colored(f"⚠️  No sessionId in attach response: {msg}", YELLOW)
+                                    return False
+                    except websocket.WebSocketTimeoutException:
+                        print_colored("⚠️  Timeout waiting for attach response", YELLOW)
+                        return False
+                
+                if not session_id:
+                    print_colored("⚠️  Failed to get session ID", YELLOW)
+                    return False
+                
+                # Enable Page domain
+                enable_msg = {
+                    "id": next_id,
+                    "method": "Page.enable",
+                    "sessionId": session_id
+                }
+                ws.send(json.dumps(enable_msg))
+                next_id += 1
+                
+                # Read enable response (skip if timeout)
+                ws.settimeout(1)
+                try:
+                    while True:
+                        msg = json.loads(ws.recv())
+                        if msg.get("id") == next_id - 1:
+                            break
+                except websocket.WebSocketTimeoutException:
+                    pass  # Continue anyway
+                
+                # Navigate to URL
+                navigate_msg = {
+                    "id": next_id,
+                    "method": "Page.navigate",
+                    "params": {"url": url},
+                    "sessionId": session_id
+                }
+                ws.send(json.dumps(navigate_msg))
+                
+                # Wait briefly for navigate response
+                ws.settimeout(1)
+                try:
+                    while True:
+                        msg = json.loads(ws.recv())
+                        if msg.get("id") == next_id:
+                            return True
+                        if msg.get("error"):
+                            return False
+                except websocket.WebSocketTimeoutException:
+                    # Timeout is okay, navigation was sent
+                    return True
+            finally:
+                ws.close()
+        except ImportError:
+            # websocket library not available - this shouldn't happen if web-hacker is installed
+            print_colored("⚠️  websocket library not available. Cannot navigate tab.", YELLOW)
+            return False
+        except Exception as e:
+            # Print error for debugging
+            print_colored(f"⚠️  Error navigating tab: {e}", YELLOW)
+            return False
+    except (requests.RequestException, requests.Timeout) as e:
+        print_colored(f"⚠️  Error connecting to Chrome: {e}", YELLOW)
+        return False
+    except Exception as e:
+        print_colored(f"⚠️  Unexpected error: {e}", YELLOW)
         return False
 
 
@@ -128,6 +259,15 @@ def launch_chrome(port: int) -> Optional[subprocess.Popen]:
         for _ in range(10):
             if check_chrome_running(port):
                 print_colored("✅ Chrome is ready!", GREEN)
+                # Give Chrome a moment to fully initialize tabs
+                time.sleep(0.5)
+                # Open documentation page explaining what's happening
+                doc_url = "https://github.com/VectorlyApp/web-hacker/blob/main/scripts/chrome-debug-mode-explanation.md"
+                print("📖 Opening documentation page...")
+                if open_url_in_chrome(port, doc_url):
+                    print_colored("✅ Documentation page opened", GREEN)
+                else:
+                    print_colored("⚠️  Could not open documentation page automatically. You can manually navigate to it.", YELLOW)
                 return process
             time.sleep(1)
         
@@ -185,6 +325,13 @@ def main():
     chrome_process = None
     if check_chrome_running(PORT):
         print_colored(f"✅ Chrome is already running in debug mode on port {PORT}", GREEN)
+        # Still open the documentation page if Chrome was already running
+        doc_url = "https://github.com/VectorlyApp/web-hacker/blob/main/scripts/chrome-debug-mode-explanation.md"
+        print("📖 Opening documentation page...")
+        if open_url_in_chrome(PORT, doc_url):
+            print_colored("✅ Documentation page opened", GREEN)
+        else:
+            print_colored("⚠️  Could not open documentation page automatically. You can manually navigate to it.", YELLOW)
     else:
         chrome_process = launch_chrome(PORT)
     
