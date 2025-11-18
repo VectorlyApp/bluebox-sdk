@@ -217,7 +217,7 @@ pip install web-hacker
 export OPENAI_API_KEY="sk-..."
 
 # Run the quickstart script
-./scripts/quickstart.sh
+python scripts/quickstart.py
 ```
 
 The quickstart script will:
@@ -226,7 +226,7 @@ The quickstart script will:
 3. 🤖 Discover routines from captured data
 4. 📝 Show you how to execute the discovered routine
 
-**Note:** The quickstart script is included in the repository. If you installed from PyPI, you can download it from the [GitHub repository](https://github.com/VectorlyApp/web-hacker/blob/main/scripts/quickstart.sh).
+**Note:** The quickstart script is included in the repository. If you installed from PyPI, you can download it from the [GitHub repository](https://github.com/VectorlyApp/web-hacker/blob/main/scripts/quickstart.py).
 
 ## Launch Chrome in Debug Mode 🐞
 
