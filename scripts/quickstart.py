@@ -367,11 +367,18 @@ def main():
     print_colored("Step 3: Discovering routine from captured data...", GREEN)
     print_colored("📋 Enter a description of what you want to automate:", YELLOW)
     print("   Example: 'Search for flights and get prices'")
-    task = input("   Task: ").strip()
+    print("   (Press Ctrl+C to exit)")
     
-    if not task:
-        print_colored("⚠️  No task provided. Skipping discovery.", YELLOW)
-        return
+    task = ""
+    while not task:
+        try:
+            task = input("   Task: ").strip()
+            if not task:
+                print_colored("⚠️  Task cannot be empty. Please enter a description (or Ctrl+C to exit).", YELLOW)
+        except KeyboardInterrupt:
+            print()
+            print_colored("⚠️  Discovery cancelled by user.", YELLOW)
+            return
     
     print()
     print("🤖 Running routine discovery agent...")
