@@ -322,12 +322,6 @@ def main():
     chrome_process = None
     if check_chrome_running(PORT):
         print_colored(f"✅ Chrome is already running in debug mode on port {PORT}", GREEN)
-        # Still open the documentation page if Chrome was already running
-        doc_url = "https://github.com/VectorlyApp/web-hacker/blob/main/scripts/chrome-debug-mode-explanation.md"
-        if open_url_in_chrome(PORT, doc_url):
-            print_colored("✅ Documentation page opened", GREEN)
-        else:
-            print_colored("⚠️  Could not navigate Chrome tab. There may be an issue with the Chrome connection.", YELLOW)
     else:
         chrome_process = launch_chrome(PORT)
     
