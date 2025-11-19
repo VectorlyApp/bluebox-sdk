@@ -308,6 +308,9 @@ def run_command(cmd: list[str], description: str) -> bool:
 
 def main():
     """Main workflow."""
+    # Use local variable that can be updated
+    cdp_captures_dir = CDP_CAPTURES_DIR
+    
     print_colored("╔════════════════════════════════════════════════════════════╗", BLUE)
     print_colored("║         Web Hacker - Quickstart Workflow                   ║", BLUE)
     print_colored("╚════════════════════════════════════════════════════════════╝", BLUE)
@@ -333,68 +336,118 @@ def main():
     
     # Step 2: Monitor
     print_colored("Step 2: Starting browser monitoring...", GREEN)
-    print_colored("📋 Instructions:", YELLOW)
-    print("   1. A new Chrome tab will open")
-    print("   2. Navigate to your target website")
-    print("   3. Perform the actions you want to automate (search, login, etc.)")
-    print("   4. Press Ctrl+C when you're done")
-    print()
-    input("Press Enter to open a new tab and start monitoring...")
     
-    print()
-    print("🚀 Starting monitor (press Ctrl+C when done)...")
-    
-    monitor_cmd = [
-        "web-hacker-monitor",
-        "--host", "127.0.0.1",
-        "--port", str(PORT),
-        "--output-dir", str(CDP_CAPTURES_DIR),
-        "--url", "about:blank",
-        "--incognito",
-    ]
-    
-    run_command(monitor_cmd, "monitoring")
-    print()
+    skip = input("   Skip monitoring step? (y/n): ").strip().lower()
+    if skip == 'y':
+        new_dir = input(f"   Enter CDP captures directory path [Press Enter to use: {CDP_CAPTURES_DIR.resolve()}]: ").strip()
+        if new_dir:
+            cdp_captures_dir = Path(new_dir)
+            print_colored(f"✅ Using CDP captures directory: {cdp_captures_dir}", GREEN)
+        print_colored("⏭️  Skipping monitoring step.", GREEN)
+        print()
+    else:
+        print_colored("📋 Instructions:", YELLOW)
+        print("   1. A new Chrome tab will open")
+        print("   2. Navigate to your target website")
+        print("   3. Perform the actions you want to automate (search, login, etc.)")
+        print("   4. Press Ctrl+C when you're done")
+        print()
+        input("Press Enter to open a new tab and start monitoring...")
+        
+        print()
+        print("🚀 Starting monitor (press Ctrl+C when done)...")
+        
+        monitor_cmd = [
+            "web-hacker-monitor",
+            "--host", "127.0.0.1",
+            "--port", str(PORT),
+            "--output-dir", str(cdp_captures_dir),
+            "--url", "about:blank",
+            "--incognito",
+        ]
+        
+        run_command(monitor_cmd, "monitoring")
+        print()
     
     # Step 3: Discover
-    transactions_dir = CDP_CAPTURES_DIR / "network" / "transactions"
-    if not CDP_CAPTURES_DIR.exists() or not transactions_dir.exists() or not any(transactions_dir.iterdir()):
+    transactions_dir = cdp_captures_dir / "network" / "transactions"
+    if not cdp_captures_dir.exists() or not transactions_dir.exists() or not any(transactions_dir.iterdir()):
         print_colored("⚠️  No capture data found. Skipping discovery step.", YELLOW)
         print("   Make sure you performed actions during monitoring.")
         return
     
-    print_colored("Step 3: Discovering routine from captured data...", GREEN)
-    print_colored("📋 Enter a description of what you want to automate:", YELLOW)
-    print("   Example: 'Search for flights and get prices'")
-    print("   (Press Ctrl+C to exit)")
+    # Check if routine already exists
+    routine_file = DISCOVERY_OUTPUT_DIR / "routine.json"
+    has_existing_routine = routine_file.exists()
     
-    task = ""
-    while not task:
-        try:
-            task = input("   Task: ").strip()
-            if not task:
-                print_colored("⚠️  Task cannot be empty. Please enter a description (or Ctrl+C to exit).", YELLOW)
-        except KeyboardInterrupt:
+    if has_existing_routine:
+        print_colored(f"📁 Found existing routine at {routine_file}", YELLOW)
+        skip = input("   Skip discovery? (y/n): ").strip().lower()
+        if skip == 'y':
+            print_colored("⏭️  Skipping discovery step.", GREEN)
             print()
-            print_colored("⚠️  Discovery cancelled by user.", YELLOW)
-            return
-    
-    print()
-    print("🤖 Running routine discovery agent...")
-    
-    discover_cmd = [
-        "web-hacker-discover",
-        "--task", task,
-        "--cdp-captures-dir", str(CDP_CAPTURES_DIR),
-        "--output-dir", str(DISCOVERY_OUTPUT_DIR),
-        "--llm-model", "gpt-5",
-    ]
-    
-    run_command(discover_cmd, "discovery")
-    print()
+        else:
+            print_colored("Step 3: Discovering routine from captured data...", GREEN)
+            print_colored("📋 Enter a description of what you want to automate:", YELLOW)
+            print("   Example: 'Search for flights and get prices'")
+            print("   (Press Ctrl+C to exit)")
+            
+            task = ""
+            while not task:
+                try:
+                    task = input("   Task: ").strip()
+                    if not task:
+                        print_colored("⚠️  Task cannot be empty. Please enter a description (or Ctrl+C to exit).", YELLOW)
+                except KeyboardInterrupt:
+                    print()
+                    print_colored("⚠️  Discovery cancelled by user.", YELLOW)
+                    return
+            
+            print()
+            print("🤖 Running routine discovery agent...")
+            
+            discover_cmd = [
+                "web-hacker-discover",
+                "--task", task,
+                "--cdp-captures-dir", str(cdp_captures_dir),
+                "--output-dir", str(DISCOVERY_OUTPUT_DIR),
+                "--llm-model", "gpt-5",
+            ]
+            
+            run_command(discover_cmd, "discovery")
+            print()
+    else:
+        print_colored("Step 3: Discovering routine from captured data...", GREEN)
+        print_colored("📋 Enter a description of what you want to automate:", YELLOW)
+        print("   Example: 'Search for flights and get prices'")
+        print("   (Press Ctrl+C to exit)")
+        
+        task = ""
+        while not task:
+            try:
+                task = input("   Task: ").strip()
+                if not task:
+                    print_colored("⚠️  Task cannot be empty. Please enter a description (or Ctrl+C to exit).", YELLOW)
+            except KeyboardInterrupt:
+                print()
+                print_colored("⚠️  Discovery cancelled by user.", YELLOW)
+                return
+        
+        print()
+        print("🤖 Running routine discovery agent...")
+        
+        discover_cmd = [
+            "web-hacker-discover",
+            "--task", task,
+            "--cdp-captures-dir", str(cdp_captures_dir),
+            "--output-dir", str(DISCOVERY_OUTPUT_DIR),
+            "--llm-model", "gpt-5",
+        ]
+        
+        run_command(discover_cmd, "discovery")
+        print()
     
     # Step 4: Execute (optional)
-    routine_file = DISCOVERY_OUTPUT_DIR / "routine.json"
     if not routine_file.exists():
         print_colored(f"⚠️  Routine not found at {routine_file}", YELLOW)
         return
