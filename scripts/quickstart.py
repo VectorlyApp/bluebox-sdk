@@ -12,7 +12,6 @@ import subprocess
 import shutil
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote
 import requests
 
 # Colors for output (ANSI codes work on modern Windows 10+ terminals)
