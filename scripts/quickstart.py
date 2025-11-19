@@ -340,7 +340,7 @@ def main():
     print("   3. Perform the actions you want to automate (search, login, etc.)")
     print("   4. Press Ctrl+C when you're done")
     print()
-    input("Press Enter to start monitoring...")
+    input("Press Enter to open a new tab and start monitoring...")
     
     print()
     print("🚀 Starting monitor (press Ctrl+C when done)...")
