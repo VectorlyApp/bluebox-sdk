@@ -1,0 +1,15 @@
+{
+  "property_name": "speechSynthesis",
+  "className": "SpeechSynthesis",
+  "description": "SpeechSynthesis",
+  "objectId": "3290802516498786405.1.1188",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "3290802516498786405.1.2205",
+        "className": "SpeechSynthesis"
+      }
+    ]
+  }
+}

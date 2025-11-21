@@ -1,0 +1,15 @@
+{
+  "property_name": "runtime",
+  "className": "o",
+  "description": "o",
+  "objectId": "-8799355714042909497.1.1242",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "-8799355714042909497.1.2826",
+        "className": "Object"
+      }
+    ]
+  }
+}

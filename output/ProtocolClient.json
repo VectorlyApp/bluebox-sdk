@@ -1,0 +1,61 @@
+{
+  "property_name": "ProtocolClient",
+  "className": "Object",
+  "description": "Object",
+  "objectId": "-8799355714042909497.1.1245",
+  "resolved_data": {
+    "test": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Object",
+      "description": "Object",
+      "objectId": "-8799355714042909497.1.2871",
+      "nested": {
+        "dumpProtocol": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": null
+        },
+        "suppressRequestErrors": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "onMessageSent": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": null
+        },
+        "onMessageReceived": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": null
+        },
+        "_internalProperties": [
+          {
+            "name": "[[Prototype]]",
+            "objectId": "-8799355714042909497.1.2875",
+            "className": "Object"
+          }
+        ]
+      }
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "-8799355714042909497.1.2872",
+        "className": "Object"
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "property_name": "toolbar",
+  "className": "BarProp",
+  "description": "BarProp",
+  "objectId": "3290802516498786405.1.1117",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "3290802516498786405.1.2188",
+        "className": "BarProp"
+      }
+    ]
+  }
+}

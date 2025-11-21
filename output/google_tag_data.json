@@ -1,0 +1,932 @@
+{
+  "property_name": "google_tag_data",
+  "className": "Object",
+  "description": "Object",
+  "objectId": "3290802516498786405.1.1202",
+  "resolved_data": {
+    "tidr": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Sj",
+      "description": "Sj",
+      "objectId": "3290802516498786405.1.3379",
+      "nested": {
+        "container": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3386",
+          "nested": {
+            "GTM-PC9B6M3": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3393",
+              "nested": {
+                "canonicalContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "47342615"
+                },
+                "scriptContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "GTM-PC9B6M3"
+                },
+                "state": {
+                  "type": "number",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": 2
+                },
+                "scriptSource": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "https://www.googletagmanager.com/gtm.js?id=GTM-PC9B6M3&l=pingerDataLayer"
+                },
+                "htmlLoadOrder": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "0"
+                },
+                "loadScriptType": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "2"
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3401",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "G-DP2X732JSX": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3394",
+              "nested": {
+                "state": {
+                  "type": "number",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": 2
+                },
+                "context": {
+                  "type": "object",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "className": "Object",
+                  "description": "Object",
+                  "objectId": "3290802516498786405.1.3402",
+                  "nested": {
+                    "source": {
+                      "type": "number",
+                      "writable": true,
+                      "configurable": true,
+                      "enumerable": true,
+                      "value": 6
+                    },
+                    "fromContainerExecution": {
+                      "type": "boolean",
+                      "writable": true,
+                      "configurable": true,
+                      "enumerable": true,
+                      "value": true
+                    },
+                    "_internalProperties": [
+                      {
+                        "name": "[[Prototype]]",
+                        "objectId": "3290802516498786405.1.3409",
+                        "className": "Object"
+                      }
+                    ]
+                  }
+                },
+                "parent": {
+                  "type": "object",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "className": "Object",
+                  "description": "Object",
+                  "objectId": "3290802516498786405.1.3403",
+                  "nested": {
+                    "ctid": {
+                      "type": "string",
+                      "writable": true,
+                      "configurable": true,
+                      "enumerable": true,
+                      "value": "GTM-PC9B6M3"
+                    },
+                    "isDestination": {
+                      "type": "boolean",
+                      "writable": true,
+                      "configurable": true,
+                      "enumerable": true,
+                      "value": false
+                    },
+                    "_internalProperties": [
+                      {
+                        "name": "[[Prototype]]",
+                        "objectId": "3290802516498786405.1.3410",
+                        "className": "Object"
+                      }
+                    ]
+                  }
+                },
+                "canonicalContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "84263385"
+                },
+                "scriptContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "G-DP2X732JSX"
+                },
+                "scriptSource": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "https://www.googletagmanager.com/gtag/js?id=G-DP2X732JSX&l=pingerDataLayer&cx=c&gtm=4e5bi1"
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3407",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "G-CSLL4ZEK4L": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3395",
+              "nested": {
+                "canonicalContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "131934939"
+                },
+                "scriptContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "G-CSLL4ZEK4L"
+                },
+                "state": {
+                  "type": "number",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": 2
+                },
+                "scriptSource": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "https://www.googletagmanager.com/gtag/js?id=G-CSLL4ZEK4L"
+                },
+                "htmlLoadOrder": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "2"
+                },
+                "loadScriptType": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "3"
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3414",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "GT-TWZC7CH": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3396",
+              "nested": {
+                "canonicalContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "131934939"
+                },
+                "scriptContainerId": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "G-CSLL4ZEK4L"
+                },
+                "state": {
+                  "type": "number",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": 2
+                },
+                "scriptSource": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "https://www.googletagmanager.com/gtag/js?id=G-CSLL4ZEK4L"
+                },
+                "htmlLoadOrder": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "2"
+                },
+                "loadScriptType": {
+                  "type": "string",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": "3"
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3418",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3397",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "destination": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3387",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3419",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "destinationArray": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3388",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3422",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "canonical": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3389",
+          "nested": {
+            "47342615": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3423",
+              "nested": {
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3427",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "84263385": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3424",
+              "nested": {
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3428",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "131934939": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3425",
+              "nested": {
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3429",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3426",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "injectedFirstPartyContainers": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3391",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3430",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "_internalProperties": [
+          {
+            "name": "[[Prototype]]",
+            "objectId": "3290802516498786405.1.3392",
+            "className": "Object"
+          }
+        ]
+      }
+    },
+    "xcd": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Object",
+      "description": "Object",
+      "objectId": "3290802516498786405.1.3380",
+      "nested": {
+        "cookie_deprecation_label": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3431",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3442",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "page_experiment_ids": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3432",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3448",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "ip_geo_data_cache": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3433",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3454",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "eab": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3434",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3460",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "em_registry": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3435",
+          "nested": {
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3466",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "_internalProperties": [
+          {
+            "name": "[[Prototype]]",
+            "objectId": "3290802516498786405.1.3436",
+            "className": "Object"
+          }
+        ]
+      }
+    },
+    "uach_promise": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Promise",
+      "description": "Promise",
+      "objectId": "3290802516498786405.1.3381",
+      "nested": {
+        "_skipped": "Native API"
+      }
+    },
+    "ics": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Jl",
+      "description": "Jl",
+      "objectId": "3290802516498786405.1.3382",
+      "nested": {
+        "entries": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3467",
+          "nested": {
+            "ad_storage": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3470",
+              "nested": {
+                "implicit": {
+                  "type": "boolean",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": true
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3475",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "analytics_storage": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3471",
+              "nested": {
+                "implicit": {
+                  "type": "boolean",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": true
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3476",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "ad_user_data": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3472",
+              "nested": {
+                "implicit": {
+                  "type": "boolean",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": true
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3477",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "ad_personalization": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3473",
+              "nested": {
+                "implicit": {
+                  "type": "boolean",
+                  "writable": true,
+                  "configurable": true,
+                  "enumerable": true,
+                  "value": true
+                },
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3478",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3474",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "active": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "usedDeclare": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "usedDefault": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "usedUpdate": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "usedImplicit": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": true
+        },
+        "accessedDefault": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "accessedAny": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": true
+        },
+        "wasSetLate": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "waitPeriodTimedOut": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "_internalProperties": [
+          {
+            "name": "[[Prototype]]",
+            "objectId": "3290802516498786405.1.3469",
+            "className": "Object"
+          }
+        ]
+      }
+    },
+    "uach": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Object",
+      "description": "Object",
+      "objectId": "3290802516498786405.1.3383",
+      "nested": {
+        "architecture": {
+          "type": "string",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": "arm"
+        },
+        "bitness": {
+          "type": "string",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": "64"
+        },
+        "mobile": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "model": {
+          "type": "string",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": ""
+        },
+        "platform": {
+          "type": "string",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": "macOS"
+        },
+        "platformVersion": {
+          "type": "string",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": "13.1.0"
+        },
+        "uaFullVersion": {
+          "type": "string",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": "142.0.7444.176"
+        },
+        "wow64": {
+          "type": "boolean",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "value": false
+        },
+        "_internalProperties": [
+          {
+            "name": "[[Prototype]]",
+            "objectId": "3290802516498786405.1.3481",
+            "className": "Object"
+          }
+        ]
+      }
+    },
+    "gl": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Object",
+      "description": "Object",
+      "objectId": "3290802516498786405.1.3384",
+      "nested": {
+        "data": {
+          "type": "object",
+          "writable": true,
+          "configurable": true,
+          "enumerable": true,
+          "className": "Object",
+          "description": "Object",
+          "objectId": "3290802516498786405.1.3483",
+          "nested": {
+            "query": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3485",
+              "nested": {
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3488",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "fragment": {
+              "type": "object",
+              "writable": true,
+              "configurable": true,
+              "enumerable": true,
+              "className": "Object",
+              "description": "Object",
+              "objectId": "3290802516498786405.1.3486",
+              "nested": {
+                "_internalProperties": [
+                  {
+                    "name": "[[Prototype]]",
+                    "objectId": "3290802516498786405.1.3489",
+                    "className": "Object"
+                  }
+                ]
+              }
+            },
+            "_internalProperties": [
+              {
+                "name": "[[Prototype]]",
+                "objectId": "3290802516498786405.1.3487",
+                "className": "Object"
+              }
+            ]
+          }
+        },
+        "_internalProperties": [
+          {
+            "name": "[[Prototype]]",
+            "objectId": "3290802516498786405.1.3484",
+            "className": "Object"
+          }
+        ]
+      }
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "3290802516498786405.1.3385",
+        "className": "Object"
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "property_name": "launchQueue",
+  "className": "LaunchQueue",
+  "description": "LaunchQueue",
+  "objectId": "3290802516498786405.1.1187",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "3290802516498786405.1.2204",
+        "className": "LaunchQueue"
+      }
+    ]
+  }
+}

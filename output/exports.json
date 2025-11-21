@@ -1,0 +1,29 @@
+{
+  "property_name": "exports",
+  "className": "Object",
+  "description": "Object",
+  "objectId": "3290802516498786405.1.1197",
+  "resolved_data": {
+    "CollectionsButton": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "class b{constructor(e,t=\"collections-dialog-overlay\"){this.container=e,this.trigger=this.container.find(\".collections-dialog-trigger\"),this.articleID=this.container.data(\"article-id\"),this.databaseId=this.container.data(\"article-db\"),this.cssClass=t,this.initCollectionsDialog(),this.toggleInCollections()}toggleInCollections(){let e=this.trigger.data(\"in-collections\");const t=e?\"collections-button-empty\":\"collections-button-full\",n=e?\"collections-button-full\":\"collections-button-empty\";this.trigger.removeClass(t).addClass(n)}initCollectionsDialog(){const e=this.container.find(\".collections-dialog\"),t=this.container.find(\".collections-dialog-trigger\");e[0]&&t[0]&&(this.collectionsDialog=new y({container:e,triggers:t,cssClass:this.cssClass,articleId:this.articleID,databaseId:this.databaseId,collectionsButton:this}))}}"
+    },
+    "__esModule": {
+      "type": "boolean",
+      "writable": false,
+      "configurable": false,
+      "enumerable": false,
+      "value": true
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "3290802516498786405.1.3268",
+        "className": "Object"
+      }
+    ]
+  }
+}

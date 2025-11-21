@@ -1,0 +1,2324 @@
+{
+  "connection": "ws://localhost:9222/devtools/page/42948E71BB747E2CAA1DF50D531FD54F",
+  "window_objectId": "3290802516498786405.1.1",
+  "properties": {
+    "name": {
+      "type": "string",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": ""
+    },
+    "customElements": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1109",
+      "className": "CustomElementRegistry",
+      "description": "CustomElementRegistry"
+    },
+    "locationbar": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1112",
+      "className": "BarProp",
+      "description": "BarProp"
+    },
+    "menubar": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1113",
+      "className": "BarProp",
+      "description": "BarProp"
+    },
+    "personalbar": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1114",
+      "className": "BarProp",
+      "description": "BarProp"
+    },
+    "scrollbars": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1115",
+      "className": "BarProp",
+      "description": "BarProp"
+    },
+    "statusbar": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1116",
+      "className": "BarProp",
+      "description": "BarProp"
+    },
+    "toolbar": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1117",
+      "className": "BarProp",
+      "description": "BarProp"
+    },
+    "status": {
+      "type": "string",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": ""
+    },
+    "closed": {
+      "type": "boolean",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": false
+    },
+    "length": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 0
+    },
+    "opener": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "frameElement": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "origin": {
+      "type": "string",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": "https://pubmed.ncbi.nlm.nih.gov"
+    },
+    "external": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1122",
+      "className": "External",
+      "description": "External"
+    },
+    "innerWidth": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 1387
+    },
+    "innerHeight": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 857
+    },
+    "scrollX": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 0
+    },
+    "pageXOffset": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 0
+    },
+    "scrollY": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 0
+    },
+    "pageYOffset": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 0
+    },
+    "visualViewport": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1124",
+      "className": "VisualViewport",
+      "description": "VisualViewport"
+    },
+    "screenX": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 88
+    },
+    "screenY": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 38
+    },
+    "outerWidth": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 1387
+    },
+    "outerHeight": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 944
+    },
+    "devicePixelRatio": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 2
+    },
+    "event": {
+      "type": "undefined",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "screenLeft": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 88
+    },
+    "screenTop": {
+      "type": "number",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": 38
+    },
+    "styleMedia": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1126",
+      "className": "StyleMedia",
+      "description": "StyleMedia"
+    },
+    "onsearch": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "trustedTypes": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1127",
+      "className": "TrustedTypePolicyFactory",
+      "description": "TrustedTypePolicyFactory"
+    },
+    "onappinstalled": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onbeforeinstallprompt": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "sessionStorage": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1131",
+      "className": "Storage",
+      "description": "Storage"
+    },
+    "localStorage": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1132",
+      "className": "Storage",
+      "description": "Storage"
+    },
+    "onbeforexrselect": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onabort": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onbeforeinput": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onbeforematch": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onbeforetoggle": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onblur": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncancel": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncanplay": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncanplaythrough": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onchange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onclick": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onclose": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncommand": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncontentvisibilityautostatechange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncontextlost": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncontextmenu": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncontextrestored": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oncuechange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondblclick": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondrag": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondragend": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondragenter": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondragleave": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondragover": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondragstart": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondrop": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondurationchange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onemptied": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onended": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onfocus": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onformdata": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oninput": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "oninvalid": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onkeydown": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onkeypress": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onkeyup": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onload": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onloadeddata": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onloadedmetadata": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onloadstart": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmousedown": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmouseenter": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmouseleave": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmousemove": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmouseout": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmouseover": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmouseup": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmousewheel": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpause": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onplay": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onplaying": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onprogress": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onratechange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onreset": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onresize": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onscroll": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onscrollend": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onsecuritypolicyviolation": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onseeked": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onseeking": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onselect": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onslotchange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onstalled": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onsubmit": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onsuspend": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ontimeupdate": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ontoggle": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onvolumechange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onwaiting": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onwebkitanimationend": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onwebkitanimationiteration": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onwebkitanimationstart": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onwebkittransitionend": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onwheel": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onauxclick": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ongotpointercapture": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onlostpointercapture": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointerdown": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointermove": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointerup": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointercancel": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointerover": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointerout": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointerenter": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointerleave": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onselectstart": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onselectionchange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onanimationend": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onanimationiteration": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onanimationstart": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ontransitionrun": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ontransitionstart": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ontransitionend": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ontransitioncancel": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onafterprint": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onbeforeprint": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onbeforeunload": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onhashchange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onlanguagechange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmessage": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onmessageerror": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onoffline": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ononline": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpagehide": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpageshow": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpopstate": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onrejectionhandled": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onstorage": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onunhandledrejection": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onunload": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "isSecureContext": {
+      "type": "boolean",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": true
+    },
+    "crossOriginIsolated": {
+      "type": "boolean",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": false
+    },
+    "scheduler": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1134",
+      "className": "Scheduler",
+      "description": "Scheduler"
+    },
+    "chrome": {
+      "type": "object",
+      "writable": true,
+      "configurable": false,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1175",
+      "className": "Object",
+      "description": "Object"
+    },
+    "cookieStore": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1177",
+      "className": "CookieStore",
+      "description": "CookieStore"
+    },
+    "ondevicemotion": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondeviceorientation": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "ondeviceorientationabsolute": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpointerrawupdate": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "sharedStorage": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1179",
+      "className": "SharedStorage",
+      "description": "SharedStorage"
+    },
+    "originAgentCluster": {
+      "type": "boolean",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": true
+    },
+    "viewport": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1186",
+      "className": "Viewport",
+      "description": "Viewport"
+    },
+    "onpageswap": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onpagereveal": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "credentialless": {
+      "type": "boolean",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": false
+    },
+    "fence": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "launchQueue": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1187",
+      "className": "LaunchQueue",
+      "description": "LaunchQueue"
+    },
+    "speechSynthesis": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1188",
+      "className": "SpeechSynthesis",
+      "description": "SpeechSynthesis"
+    },
+    "onscrollsnapchange": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "onscrollsnapchanging": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": null
+    },
+    "nwds_version": {
+      "type": "string",
+      "writable": true,
+      "configurable": false,
+      "enumerable": true,
+      "_source": "window",
+      "value": "1.2.5"
+    },
+    "alertsUrl": {
+      "type": "string",
+      "writable": true,
+      "configurable": false,
+      "enumerable": true,
+      "_source": "window",
+      "value": "/core/alerts/alerts.js"
+    },
+    "uswds": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1195",
+      "className": "Object",
+      "description": "Object"
+    },
+    "ncbi": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1196",
+      "className": "Object",
+      "description": "Object"
+    },
+    "exports": {
+      "type": "object",
+      "writable": true,
+      "configurable": false,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1197",
+      "className": "Object",
+      "description": "Object"
+    },
+    "pingerDataLayer": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1199",
+      "className": "Array",
+      "description": "Array(8)"
+    },
+    "google_tag_manager": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1201",
+      "className": "Object",
+      "description": "Object"
+    },
+    "google_tag_data": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1202",
+      "className": "Object",
+      "description": "Object"
+    },
+    "_fullParams": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": "agency=HHS&subagency=NCBI%20-%20ncbi.nlm.nih.gov&sitetopic=NCBI%20Pinger%200.39.3&siteplatform=NCBI%20Pinger%200.39.3"
+    },
+    "_keyValuePair": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": "siteplatform=ncbi pinger 0.39.3"
+    },
+    "_key": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": "siteplatform"
+    },
+    "_value": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": "ncbi pinger 0.39.3"
+    },
+    "dataLayer": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1203",
+      "className": "Array",
+      "description": "Array(5)"
+    },
+    "_isRedacted": {
+      "type": "boolean",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "value": true
+    },
+    "gaGlobal": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1206",
+      "className": "Object",
+      "description": "Object"
+    },
+    "QSI": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1207",
+      "className": "Object",
+      "description": "Object"
+    },
+    "_qsie": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1209",
+      "className": "e",
+      "description": "e"
+    },
+    "Infinity": {
+      "type": "number",
+      "writable": false,
+      "configurable": false,
+      "enumerable": false,
+      "_source": "window",
+      "value": null
+    },
+    "NaN": {
+      "type": "number",
+      "writable": false,
+      "configurable": false,
+      "enumerable": false,
+      "_source": "window",
+      "value": null
+    },
+    "undefined": {
+      "type": "undefined",
+      "writable": false,
+      "configurable": false,
+      "enumerable": false,
+      "_source": "window",
+      "value": null
+    },
+    "Atomics": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1235",
+      "className": "Atomics",
+      "description": "Atomics"
+    },
+    "DataView": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function DataView() { [native code] }"
+    },
+    "console": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1267",
+      "className": "console",
+      "description": "console"
+    },
+    "VisibilityStateEntry": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function VisibilityStateEntry() { [native code] }"
+    },
+    "ValidityState": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function ValidityState() { [native code] }"
+    },
+    "SVGMetadataElement": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function SVGMetadataElement() { [native code] }"
+    },
+    "RTCDataChannelEvent": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function RTCDataChannelEvent() { [native code] }"
+    },
+    "PopStateEvent": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function PopStateEvent() { [native code] }"
+    },
+    "NavigatorUAData": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function NavigatorUAData() { [native code] }"
+    },
+    "ImageData": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function ImageData() { [native code] }"
+    },
+    "IDBObjectStore": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function IDBObjectStore() { [native code] }"
+    },
+    "IDBDatabase": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function IDBDatabase() { [native code] }"
+    },
+    "HTMLOptionsCollection": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function HTMLOptionsCollection() { [native code] }"
+    },
+    "HTMLDataListElement": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function HTMLDataListElement() { [native code] }"
+    },
+    "HTMLDataElement": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function HTMLDataElement() { [native code] }"
+    },
+    "FormDataEvent": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function FormDataEvent() { [native code] }"
+    },
+    "FormData": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function FormData() { [native code] }"
+    },
+    "DataTransferItemList": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function DataTransferItemList() { [native code] }"
+    },
+    "DataTransferItem": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function DataTransferItem() { [native code] }"
+    },
+    "DataTransfer": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function DataTransfer() { [native code] }"
+    },
+    "CustomStateSet": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function CustomStateSet() { [native code] }"
+    },
+    "ContentVisibilityAutoStateChangeEvent": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function ContentVisibilityAutoStateChangeEvent() { [native code] }"
+    },
+    "CharacterData": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function CharacterData() { [native code] }"
+    },
+    "CSSLayerStatementRule": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function CSSLayerStatementRule() { [native code] }"
+    },
+    "CSS": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1843",
+      "className": "CSS",
+      "description": "CSS"
+    },
+    "AudioData": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function AudioData() { [native code] }"
+    },
+    "offscreenBuffering": {
+      "type": "boolean",
+      "writable": false,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "value": true
+    },
+    "WebAssembly": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1883",
+      "className": "WebAssembly",
+      "description": "WebAssembly"
+    },
+    "CookieStore": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function CookieStore() { [native code] }"
+    },
+    "CookieStoreManager": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function CookieStoreManager() { [native code] }"
+    },
+    "GPUBufferUsage": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1911",
+      "className": "GPUBufferUsage",
+      "description": "GPUBufferUsage"
+    },
+    "GPUColorWrite": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1913",
+      "className": "GPUColorWrite",
+      "description": "GPUColorWrite"
+    },
+    "GPUMapMode": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1925",
+      "className": "GPUMapMode",
+      "description": "GPUMapMode"
+    },
+    "GPUShaderStage": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1937",
+      "className": "GPUShaderStage",
+      "description": "GPUShaderStage"
+    },
+    "GPUTextureUsage": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.1941",
+      "className": "GPUTextureUsage",
+      "description": "GPUTextureUsage"
+    },
+    "NavigatorManagedData": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function NavigatorManagedData() { [native code] }"
+    },
+    "WebTransportDatagramDuplexStream": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function WebTransportDatagramDuplexStream() { [native code] }"
+    },
+    "XRDOMOverlayState": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function XRDOMOverlayState() { [native code] }"
+    },
+    "FontData": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function FontData() { [native code] }"
+    },
+    "NotRestoredReasonDetails": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function NotRestoredReasonDetails() { [native code] }"
+    },
+    "NotRestoredReasons": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function NotRestoredReasons() { [native code] }"
+    },
+    "USBConfiguration": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function USBConfiguration() { [native code] }"
+    },
+    "XRRenderState": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function XRRenderState() { [native code] }"
+    },
+    "FencedFrameConfig": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function FencedFrameConfig() { [native code] }"
+    },
+    "MediaMetadata": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function MediaMetadata() { [native code] }"
+    },
+    "PushSubscriptionOptions": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function PushSubscriptionOptions() { [native code] }"
+    },
+    "RTCDataChannel": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function RTCDataChannel() { [native code] }"
+    },
+    "SharedStorageAppendMethod": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "description": "function SharedStorageAppendMethod() { [native code] }"
+    },
+    "__core-js_shared__": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.2177",
+      "className": "Object",
+      "description": "Object"
+    },
+    "jQuery361053639817415354451": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.2178",
+      "className": "Object",
+      "description": "Object"
+    },
+    "jQuery371053269243926709651": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "objectId": "3290802516498786405.1.2179",
+      "className": "Object",
+      "description": "Object"
+    },
+    "TEMPORARY": {
+      "type": "number",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": 0
+    },
+    "PERSISTENT": {
+      "type": "number",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": 1
+    },
+    "$_": {
+      "type": "undefined",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": null
+    },
+    "$0": {
+      "type": "undefined",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": null
+    },
+    "$1": {
+      "type": "undefined",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": null
+    },
+    "$2": {
+      "type": "undefined",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": null
+    },
+    "$3": {
+      "type": "undefined",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": null
+    },
+    "$4": {
+      "type": "undefined",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "value": null
+    }
+  },
+  "object_files": [
+    {
+      "name": "customElements",
+      "filename": "customElements.json",
+      "className": "CustomElementRegistry"
+    },
+    {
+      "name": "locationbar",
+      "filename": "locationbar.json",
+      "className": "BarProp"
+    },
+    {
+      "name": "menubar",
+      "filename": "menubar.json",
+      "className": "BarProp"
+    },
+    {
+      "name": "personalbar",
+      "filename": "personalbar.json",
+      "className": "BarProp"
+    },
+    {
+      "name": "scrollbars",
+      "filename": "scrollbars.json",
+      "className": "BarProp"
+    },
+    {
+      "name": "statusbar",
+      "filename": "statusbar.json",
+      "className": "BarProp"
+    },
+    {
+      "name": "toolbar",
+      "filename": "toolbar.json",
+      "className": "BarProp"
+    },
+    {
+      "name": "external",
+      "filename": "external.json",
+      "className": "External"
+    },
+    {
+      "name": "visualViewport",
+      "filename": "visualViewport.json",
+      "className": "VisualViewport"
+    },
+    {
+      "name": "styleMedia",
+      "filename": "styleMedia.json",
+      "className": "StyleMedia"
+    },
+    {
+      "name": "trustedTypes",
+      "filename": "trustedTypes.json",
+      "className": "TrustedTypePolicyFactory"
+    },
+    {
+      "name": "sessionStorage",
+      "filename": "sessionStorage.json",
+      "className": "Storage"
+    },
+    {
+      "name": "localStorage",
+      "filename": "localStorage.json",
+      "className": "Storage"
+    },
+    {
+      "name": "scheduler",
+      "filename": "scheduler.json",
+      "className": "Scheduler"
+    },
+    {
+      "name": "chrome",
+      "filename": "chrome.json",
+      "className": "Object"
+    },
+    {
+      "name": "cookieStore",
+      "filename": "cookieStore.json",
+      "className": "CookieStore"
+    },
+    {
+      "name": "sharedStorage",
+      "filename": "sharedStorage.json",
+      "className": "SharedStorage"
+    },
+    {
+      "name": "viewport",
+      "filename": "viewport.json",
+      "className": "Viewport"
+    },
+    {
+      "name": "launchQueue",
+      "filename": "launchQueue.json",
+      "className": "LaunchQueue"
+    },
+    {
+      "name": "speechSynthesis",
+      "filename": "speechSynthesis.json",
+      "className": "SpeechSynthesis"
+    },
+    {
+      "name": "uswds",
+      "filename": "uswds.json",
+      "className": "Object"
+    },
+    {
+      "name": "ncbi",
+      "filename": "ncbi.json",
+      "className": "Object"
+    },
+    {
+      "name": "exports",
+      "filename": "exports.json",
+      "className": "Object"
+    },
+    {
+      "name": "pingerDataLayer",
+      "filename": "pingerDataLayer.json",
+      "className": "Array"
+    },
+    {
+      "name": "google_tag_manager",
+      "filename": "google_tag_manager.json",
+      "className": "Object"
+    },
+    {
+      "name": "google_tag_data",
+      "filename": "google_tag_data.json",
+      "className": "Object"
+    },
+    {
+      "name": "dataLayer",
+      "filename": "dataLayer.json",
+      "className": "Array"
+    },
+    {
+      "name": "gaGlobal",
+      "filename": "gaGlobal.json",
+      "className": "Object"
+    },
+    {
+      "name": "QSI",
+      "filename": "QSI.json",
+      "className": "Object"
+    },
+    {
+      "name": "_qsie",
+      "filename": "_qsie.json",
+      "className": "e"
+    },
+    {
+      "name": "Atomics",
+      "filename": "Atomics.json",
+      "className": "Atomics"
+    },
+    {
+      "name": "console",
+      "filename": "console.json",
+      "className": "console"
+    },
+    {
+      "name": "CSS",
+      "filename": "CSS.json",
+      "className": "CSS"
+    },
+    {
+      "name": "WebAssembly",
+      "filename": "WebAssembly.json",
+      "className": "WebAssembly"
+    },
+    {
+      "name": "GPUBufferUsage",
+      "filename": "GPUBufferUsage.json",
+      "className": "GPUBufferUsage"
+    },
+    {
+      "name": "GPUColorWrite",
+      "filename": "GPUColorWrite.json",
+      "className": "GPUColorWrite"
+    },
+    {
+      "name": "GPUMapMode",
+      "filename": "GPUMapMode.json",
+      "className": "GPUMapMode"
+    },
+    {
+      "name": "GPUShaderStage",
+      "filename": "GPUShaderStage.json",
+      "className": "GPUShaderStage"
+    },
+    {
+      "name": "GPUTextureUsage",
+      "filename": "GPUTextureUsage.json",
+      "className": "GPUTextureUsage"
+    },
+    {
+      "name": "__core-js_shared__",
+      "filename": "__core-js_shared__.json",
+      "className": "Object"
+    },
+    {
+      "name": "jQuery361053639817415354451",
+      "filename": "jQuery361053639817415354451.json",
+      "className": "Object"
+    },
+    {
+      "name": "jQuery371053269243926709651",
+      "filename": "jQuery371053269243926709651.json",
+      "className": "Object"
+    }
+  ],
+  "additional_global_variable_names": [
+    "TEMPORARY",
+    "PERSISTENT",
+    "addEventListener",
+    "dispatchEvent",
+    "removeEventListener",
+    "when",
+    "dir",
+    "dirxml",
+    "profile",
+    "profileEnd",
+    "clear",
+    "table",
+    "keys",
+    "values",
+    "debug",
+    "undebug",
+    "monitor",
+    "unmonitor",
+    "inspect",
+    "copy",
+    "queryObjects",
+    "$_",
+    "$0",
+    "$1",
+    "$2",
+    "$3",
+    "$4",
+    "getEventListeners",
+    "getAccessibleName",
+    "getAccessibleRole",
+    "monitorEvents",
+    "unmonitorEvents",
+    "$$",
+    "$x"
+  ],
+  "lexical_scope_variable_names": [],
+  "variable_counts_by_source": {
+    "window": 238,
+    "additional_globals": 8
+  },
+  "storage_contents": {
+    "cookies": {
+      "ncbi_pinger": "N4IgDgTgpgbg+mAFgSwCYgFwgCIFEBi2ADCQIx66kBsAnFQKwkkDMALAIL67usDs9HGgDpSQgLZxmIAL5A==",
+      "_ga_DP2X732JSX": "GS2.1.s1763758701$o1$g0$t1763758701$j60$l0$h0",
+      "_ga": "GA1.1.811243661.1763758702",
+      "_ga_CSLL4ZEK4L": "GS2.1.s1763758701$o1$g0$t1763758701$j60$l0$h0"
+    },
+    "sessionStorage": {
+      "ncbi_pinger": "N4IgDgTgpgbg+mAFgSwCYgFwgCIFEBi2ADCQIx66kBsAnFQKwkkDMALAIL67usDs9HGgDpSQgLZxmIAL5A==",
+      "QSI_HistorySession": "https%3A%2F%2Fpubmed.ncbi.nlm.nih.gov%2F32845321%2F~1763758702085"
+    },
+    "localStorage": {}
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "property_name": "DevToolsHost",
+  "className": "DevToolsHost",
+  "description": "DevToolsHost",
+  "objectId": "-8799355714042909497.1.1209",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "-8799355714042909497.1.2243",
+        "className": "DevToolsHost"
+      }
+    ]
+  }
+}

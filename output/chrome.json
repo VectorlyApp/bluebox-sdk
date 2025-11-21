@@ -1,0 +1,36 @@
+{
+  "property_name": "chrome",
+  "className": "Object",
+  "description": "Object",
+  "objectId": "3290802516498786405.1.1175",
+  "resolved_data": {
+    "loadTimes": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "csi": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "app": {
+      "type": "unknown",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "value": null
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "3290802516498786405.1.2200",
+        "className": "Object"
+      }
+    ]
+  }
+}

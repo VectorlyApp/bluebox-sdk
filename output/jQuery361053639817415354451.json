@@ -1,0 +1,32 @@
+{
+  "property_name": "jQuery361053639817415354451",
+  "className": "Object",
+  "description": "Object",
+  "objectId": "3290802516498786405.1.2178",
+  "resolved_data": {
+    "events": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Object",
+      "description": "Object",
+      "objectId": "3290802516498786405.1.4427",
+      "nested": {}
+    },
+    "handle": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function(t){return void 0!==k&&k.event.triggered!==t.type?k.event.dispatch.apply(e,arguments):void 0}"
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "3290802516498786405.1.4429",
+        "className": "Object"
+      }
+    ]
+  }
+}

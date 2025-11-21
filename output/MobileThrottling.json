@@ -1,0 +1,27 @@
+{
+  "property_name": "MobileThrottling",
+  "className": "Object",
+  "description": "Object",
+  "objectId": "-8799355714042909497.1.1246",
+  "resolved_data": {
+    "networkPresets": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "className": "Array",
+      "description": "Array(4)",
+      "objectId": "-8799355714042909497.1.2876",
+      "nested": {
+        "_skipped": "Native API"
+      }
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "-8799355714042909497.1.2877",
+        "className": "Object"
+      }
+    ]
+  }
+}

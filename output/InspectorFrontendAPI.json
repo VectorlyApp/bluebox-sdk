@@ -1,0 +1,211 @@
+{
+  "property_name": "InspectorFrontendAPI",
+  "className": "k",
+  "description": "k",
+  "objectId": "-8799355714042909497.1.1217",
+  "resolved_data": {
+    "appendedToURL": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "canceledSaveURL": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "colorThemeChanged": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "contextMenuCleared": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "contextMenuItemSelected": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "deviceCountUpdated": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "devicesDiscoveryConfigChanged": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "devicesPortForwardingStatusChanged": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "devicesUpdated": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "dispatchMessage": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "dispatchMessageChunk": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "enterInspectElementMode": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "eyeDropperPickedColor": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "fileSystemsLoaded": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "fileSystemRemoved": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "fileSystemAdded": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "fileSystemFilesChangedAddedRemoved": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "indexingTotalWorkCalculated": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "indexingWorked": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "indexingDone": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "keyEventUnhandled": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "reloadInspectedPage": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "revealSourceLine": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "savedURL": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "searchCompleted": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "setInspectedTabId": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "setUseSoftMenu": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "showPanel": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "description": "function () { [native code] }"
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "-8799355714042909497.1.2284",
+        "className": "Object"
+      }
+    ]
+  }
+}
