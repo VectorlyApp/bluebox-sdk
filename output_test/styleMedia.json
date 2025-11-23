@@ -1,0 +1,15 @@
+{
+  "property_name": "styleMedia",
+  "className": "StyleMedia",
+  "description": "StyleMedia",
+  "objectId": "9000349586401721920.2.1125",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "9000349586401721920.2.2189",
+        "className": "StyleMedia"
+      }
+    ]
+  }
+}

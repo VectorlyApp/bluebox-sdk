@@ -1,0 +1,15 @@
+{
+  "property_name": "trustedTypes",
+  "className": "TrustedTypePolicyFactory",
+  "description": "TrustedTypePolicyFactory",
+  "objectId": "9000349586401721920.2.1126",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "9000349586401721920.2.2190",
+        "className": "TrustedTypePolicyFactory"
+      }
+    ]
+  }
+}

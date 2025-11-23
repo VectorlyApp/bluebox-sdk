@@ -1,0 +1,15 @@
+{
+  "property_name": "visualViewport",
+  "className": "VisualViewport",
+  "description": "VisualViewport",
+  "objectId": "9000349586401721920.2.1123",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "9000349586401721920.2.2188",
+        "className": "VisualViewport"
+      }
+    ]
+  }
+}

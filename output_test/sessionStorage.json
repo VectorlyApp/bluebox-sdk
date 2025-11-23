@@ -1,0 +1,43 @@
+{
+  "property_name": "sessionStorage",
+  "className": "Storage",
+  "description": "Storage",
+  "objectId": "9000349586401721920.2.1130",
+  "resolved_data": {
+    "QSI_HistorySession": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "value": "https%3A%2F%2Fpubmed.ncbi.nlm.nih.gov%2F~1763924326300%7Chttps%3A%2F%2Fpubmed.ncbi.nlm.nih.gov%2F%3Fterm%3Dtest~1763924370791"
+    },
+    "ncbi_pinger": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "value": "N4IgDgTgpgbg+mAFgSwCYgFwgMICYBCAogAykCMAzAGy4AcAnBbQKyml0VkDstALAGK5cAQTIA6cQFs4uEAF8gA="
+    },
+    "pm-rs": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "value": ""
+    },
+    "QSI_History": {
+      "type": "string",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "value": "{\"SearchTerm\":\"\",\"SiteReferrer\":\"https://www.google.com/\",\"PageReferrer\":\"https://pubmed.ncbi.nlm.nih.gov/\",\"BlurTime\":5,\"FocusTime\":39}"
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "9000349586401721920.2.2191",
+        "className": "Storage"
+      }
+    ]
+  }
+}

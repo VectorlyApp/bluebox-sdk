@@ -1,0 +1,15 @@
+{
+  "property_name": "sharedStorage",
+  "className": "SharedStorage",
+  "description": "SharedStorage",
+  "objectId": "9000349586401721920.2.1178",
+  "resolved_data": {
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "9000349586401721920.2.2200",
+        "className": "SharedStorage"
+      }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "property_name": "GPUShaderStage",
+  "className": "GPUShaderStage",
+  "description": "GPUShaderStage",
+  "objectId": "9000349586401721920.2.1936",
+  "resolved_data": {
+    "VERTEX": {
+      "type": "number",
+      "writable": false,
+      "configurable": false,
+      "enumerable": true,
+      "value": 1
+    },
+    "FRAGMENT": {
+      "type": "number",
+      "writable": false,
+      "configurable": false,
+      "enumerable": true,
+      "value": 2
+    },
+    "COMPUTE": {
+      "type": "number",
+      "writable": false,
+      "configurable": false,
+      "enumerable": true,
+      "value": 4
+    },
+    "Symbol(Symbol.toStringTag)": {
+      "type": "string",
+      "writable": false,
+      "configurable": true,
+      "enumerable": false,
+      "value": "GPUShaderStage"
+    },
+    "_internalProperties": [
+      {
+        "name": "[[Prototype]]",
+        "objectId": "9000349586401721920.2.4781",
+        "className": "Object"
+      }
+    ]
+  }
+}
