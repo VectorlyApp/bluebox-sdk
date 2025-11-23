@@ -15,6 +15,7 @@ from web_hacker.config import Config
 from web_hacker.cdp.network_monitor import NetworkMonitor
 from web_hacker.cdp.storage_monitor import StorageMonitor
 from web_hacker.cdp.interaction_monitor import InteractionMonitor
+from web_hacker.cdp.window_property_monitor import WindowPropertyMonitor
 
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
@@ -60,6 +61,11 @@ class CDPSession:
         )
         
         self.interaction_monitor = InteractionMonitor(
+            output_dir=output_dir,
+            paths=paths
+        )
+        
+        self.window_property_monitor = WindowPropertyMonitor(
             output_dir=output_dir,
             paths=paths
         )
@@ -141,6 +147,7 @@ class CDPSession:
         self.network_monitor.setup_network_monitoring(self)
         self.storage_monitor.setup_storage_monitoring(self)
         self.interaction_monitor.setup_interaction_monitoring(self)
+        self.window_property_monitor.setup_window_property_monitoring(self)
         
         # Optional navigate
         if navigate_to:
@@ -158,6 +165,10 @@ class CDPSession:
         
         # Try interaction monitor
         if self.interaction_monitor.handle_interaction_message(msg, self):
+            return
+        
+        # Try window property monitor
+        if self.window_property_monitor.handle_window_property_message(msg, self):
             return
         
         # Handle command replies
@@ -206,10 +217,23 @@ class CDPSession:
         """Main message processing loop."""
         logger.info("Blocking trackers & capturing network/storage… Press Ctrl+C to stop.")
         
+        last_check_time = 0
+        check_interval = 1.0  # Check every 1 second
+        
         try:
             while True:
                 msg = json.loads(self.ws.recv())
                 self.handle_message(msg)
+                
+                # Check for periodic window property collection (throttled)
+                current_time = time.time()
+                if current_time - last_check_time >= check_interval:
+                    try:
+                        self.window_property_monitor.check_and_collect(self)
+                    except Exception as e:
+                        # Don't let window property collection errors crash the session
+                        logger.debug(f"Window property collection error (non-fatal): {e}")
+                    last_check_time = current_time
         except KeyboardInterrupt:
             logger.info("\nStopped. Saving assets...")
             # Final cookie sync using native CDP (no delay needed)
@@ -244,9 +268,11 @@ class CDPSession:
         storage_summary = self.storage_monitor.get_storage_summary()
         network_summary = self.network_monitor.get_network_summary()
         interaction_summary = self.interaction_monitor.get_interaction_summary()
+        window_property_summary = self.window_property_monitor.get_window_property_summary()
         
         return {
             "network": network_summary,
             "storage": storage_summary,
             "interaction": interaction_summary,
+            "window_properties": window_property_summary,
         }

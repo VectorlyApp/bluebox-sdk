@@ -2,7 +2,7 @@
   "property_name": "GPUTextureUsage",
   "className": "GPUTextureUsage",
   "description": "GPUTextureUsage",
-  "objectId": "9000349586401721920.2.1940",
+  "objectId": "2647560887788821383.1.1915",
   "resolved_data": {
     "COPY_SRC": {
       "type": "number",
@@ -49,7 +49,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4783",
+        "objectId": "2647560887788821383.1.2358",
         "className": "Object"
       }
     ]

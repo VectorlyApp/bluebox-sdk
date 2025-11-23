@@ -2,7 +2,7 @@
   "property_name": "GPUMapMode",
   "className": "GPUMapMode",
   "description": "GPUMapMode",
-  "objectId": "9000349586401721920.2.1924",
+  "objectId": "2647560887788821383.1.1899",
   "resolved_data": {
     "READ": {
       "type": "number",
@@ -28,7 +28,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4779",
+        "objectId": "2647560887788821383.1.2354",
         "className": "Object"
       }
     ]

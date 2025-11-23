@@ -2,7 +2,7 @@
   "property_name": "console",
   "className": "console",
   "description": "console",
-  "objectId": "9000349586401721920.2.1266",
+  "objectId": "2647560887788821383.1.1241",
   "resolved_data": {
     "debug": {
       "type": "function",
@@ -179,12 +179,12 @@
       "enumerable": true,
       "className": "MemoryInfo",
       "description": "MemoryInfo",
-      "objectId": "9000349586401721920.2.4675",
+      "objectId": "2647560887788821383.1.2250",
       "nested": {
         "_internalProperties": [
           {
             "name": "[[Prototype]]",
-            "objectId": "9000349586401721920.2.4678",
+            "objectId": "2647560887788821383.1.2253",
             "className": "MemoryInfo"
           }
         ]
@@ -200,7 +200,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4677",
+        "objectId": "2647560887788821383.1.2252",
         "className": "Object"
       }
     ]

@@ -2,12 +2,12 @@
   "property_name": "scrollbars",
   "className": "BarProp",
   "description": "BarProp",
-  "objectId": "9000349586401721920.2.1114",
+  "objectId": "2647560887788821383.1.1103",
   "resolved_data": {
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.2184",
+        "objectId": "2647560887788821383.1.2159",
         "className": "BarProp"
       }
     ]

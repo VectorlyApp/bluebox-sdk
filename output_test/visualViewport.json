@@ -2,12 +2,12 @@
   "property_name": "visualViewport",
   "className": "VisualViewport",
   "description": "VisualViewport",
-  "objectId": "9000349586401721920.2.1123",
+  "objectId": "2647560887788821383.1.1112",
   "resolved_data": {
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.2188",
+        "objectId": "2647560887788821383.1.2163",
         "className": "VisualViewport"
       }
     ]

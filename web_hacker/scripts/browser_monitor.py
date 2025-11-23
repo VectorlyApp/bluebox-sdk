@@ -242,6 +242,7 @@ def setup_output_directory(output_dir, keep_output):
     
     return {
         # Main directories
+        'output_dir': output_dir,
         'network_dir': network_dir,
         'storage_dir': storage_dir,
         'interaction_dir': interaction_dir,
@@ -354,7 +355,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("\nSession stopped by user")
     except Exception as e:
-        logger.info(f"Error: {e}")
+        logger.error("Session crashed!", exc_info=True)
         sys.exit(1)
     finally:
         # Cleanup: dispose context if we created a tab
@@ -397,6 +398,8 @@ def main():
             logger.info(f"│           └── response_body.[ext]")
             logger.info(f"├── storage/")
             logger.info(f"│   └── events.jsonl")
+            logger.info(f"├── window_properties/")
+            logger.info(f"│   └── window_properties_flat.json")
             logger.info(f"└── interaction/")
             logger.info(f"    └── events.jsonl")
 

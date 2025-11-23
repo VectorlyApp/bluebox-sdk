@@ -2,7 +2,7 @@
   "property_name": "CSS",
   "className": "CSS",
   "description": "CSS",
-  "objectId": "9000349586401721920.2.1842",
+  "objectId": "2647560887788821383.1.1817",
   "resolved_data": {
     "highlights": {
       "type": "object",
@@ -11,12 +11,12 @@
       "enumerable": true,
       "className": "HighlightRegistry",
       "description": "HighlightRegistry",
-      "objectId": "9000349586401721920.2.4679",
+      "objectId": "2647560887788821383.1.2254",
       "nested": {
         "_internalProperties": [
           {
             "name": "[[Prototype]]",
-            "objectId": "9000349586401721920.2.4750",
+            "objectId": "2647560887788821383.1.2325",
             "className": "HighlightRegistry"
           }
         ]
@@ -498,12 +498,12 @@
       "enumerable": true,
       "className": "Worklet",
       "description": "Worklet",
-      "objectId": "9000349586401721920.2.4747",
+      "objectId": "2647560887788821383.1.2322",
       "nested": {
         "_internalProperties": [
           {
             "name": "[[Prototype]]",
-            "objectId": "9000349586401721920.2.4751",
+            "objectId": "2647560887788821383.1.2326",
             "className": "Worklet"
           }
         ]
@@ -519,7 +519,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4749",
+        "objectId": "2647560887788821383.1.2324",
         "className": "Object"
       }
     ]

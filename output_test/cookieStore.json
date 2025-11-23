@@ -2,12 +2,12 @@
   "property_name": "cookieStore",
   "className": "CookieStore",
   "description": "CookieStore",
-  "objectId": "9000349586401721920.2.1176",
+  "objectId": "2647560887788821383.1.1164",
   "resolved_data": {
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.2199",
+        "objectId": "2647560887788821383.1.2200",
         "className": "CookieStore"
       }
     ]

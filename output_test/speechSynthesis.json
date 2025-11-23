@@ -2,12 +2,12 @@
   "property_name": "speechSynthesis",
   "className": "SpeechSynthesis",
   "description": "SpeechSynthesis",
-  "objectId": "9000349586401721920.2.1187",
+  "objectId": "2647560887788821383.1.1175",
   "resolved_data": {
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.2203",
+        "objectId": "2647560887788821383.1.2204",
         "className": "SpeechSynthesis"
       }
     ]

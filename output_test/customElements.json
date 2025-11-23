@@ -2,12 +2,12 @@
   "property_name": "customElements",
   "className": "CustomElementRegistry",
   "description": "CustomElementRegistry",
-  "objectId": "9000349586401721920.2.1108",
+  "objectId": "2647560887788821383.1.1097",
   "resolved_data": {
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.2180",
+        "objectId": "2647560887788821383.1.2155",
         "className": "CustomElementRegistry"
       }
     ]

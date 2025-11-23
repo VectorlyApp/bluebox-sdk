@@ -2,7 +2,7 @@
   "property_name": "Atomics",
   "className": "Atomics",
   "description": "Atomics",
-  "objectId": "9000349586401721920.2.1234",
+  "objectId": "2647560887788821383.1.1209",
   "resolved_data": {
     "load": {
       "type": "function",
@@ -112,7 +112,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4650",
+        "objectId": "2647560887788821383.1.2225",
         "className": "Object"
       }
     ]

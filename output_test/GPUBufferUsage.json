@@ -2,7 +2,7 @@
   "property_name": "GPUBufferUsage",
   "className": "GPUBufferUsage",
   "description": "GPUBufferUsage",
-  "objectId": "9000349586401721920.2.1910",
+  "objectId": "2647560887788821383.1.1885",
   "resolved_data": {
     "MAP_READ": {
       "type": "number",
@@ -84,7 +84,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4775",
+        "objectId": "2647560887788821383.1.2350",
         "className": "Object"
       }
     ]

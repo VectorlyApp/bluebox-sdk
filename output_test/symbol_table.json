@@ -1,7 +1,15 @@
 {
-  "connection": "ws://localhost:9222/devtools/page/34515534D491C03FFE9831BE7E745277",
-  "window_objectId": "9000349586401721920.2.1",
+  "connection": "ws://localhost:9222/devtools/page/B96B64EA0F0EC45D62E396A62AB22E08",
+  "window_objectId": "2647560887788821383.1.1",
   "properties": {
+    "0": {
+      "type": "object",
+      "writable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "_skipped": "Native API or circular reference"
+    },
     "window": {
       "type": "object",
       "writable": false,
@@ -48,7 +56,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1108",
+      "objectId": "2647560887788821383.1.1097",
       "className": "CustomElementRegistry",
       "description": "CustomElementRegistry"
     },
@@ -74,7 +82,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1111",
+      "objectId": "2647560887788821383.1.1100",
       "className": "BarProp",
       "description": "BarProp"
     },
@@ -84,7 +92,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1112",
+      "objectId": "2647560887788821383.1.1101",
       "className": "BarProp",
       "description": "BarProp"
     },
@@ -94,7 +102,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1113",
+      "objectId": "2647560887788821383.1.1102",
       "className": "BarProp",
       "description": "BarProp"
     },
@@ -104,7 +112,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1114",
+      "objectId": "2647560887788821383.1.1103",
       "className": "BarProp",
       "description": "BarProp"
     },
@@ -114,7 +122,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1115",
+      "objectId": "2647560887788821383.1.1104",
       "className": "BarProp",
       "description": "BarProp"
     },
@@ -124,7 +132,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1116",
+      "objectId": "2647560887788821383.1.1105",
       "className": "BarProp",
       "description": "BarProp"
     },
@@ -158,7 +166,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": 0
+      "value": 1
     },
     "top": {
       "type": "object",
@@ -206,7 +214,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": "https://pubmed.ncbi.nlm.nih.gov"
+      "value": "chrome://new-tab-page"
     },
     "external": {
       "type": "object",
@@ -214,7 +222,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1121",
+      "objectId": "2647560887788821383.1.1110",
       "className": "External",
       "description": "External"
     },
@@ -232,7 +240,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": 562
+      "value": 1230
     },
     "innerHeight": {
       "type": "number",
@@ -240,7 +248,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": 857
+      "value": 695
     },
     "scrollX": {
       "type": "number",
@@ -280,7 +288,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1123",
+      "objectId": "2647560887788821383.1.1112",
       "className": "VisualViewport",
       "description": "VisualViewport"
     },
@@ -290,7 +298,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": 0
+      "value": 67
     },
     "screenY": {
       "type": "number",
@@ -306,7 +314,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": 1512
+      "value": 1230
     },
     "outerHeight": {
       "type": "number",
@@ -314,7 +322,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": 944
+      "value": 782
     },
     "devicePixelRatio": {
       "type": "number",
@@ -346,7 +354,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": 0
+      "value": 67
     },
     "screenTop": {
       "type": "number",
@@ -362,7 +370,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1125",
+      "objectId": "2647560887788821383.1.1114",
       "className": "StyleMedia",
       "description": "StyleMedia"
     },
@@ -380,7 +388,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1126",
+      "objectId": "2647560887788821383.1.1115",
       "className": "TrustedTypePolicyFactory",
       "description": "TrustedTypePolicyFactory"
     },
@@ -430,7 +438,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1130",
+      "objectId": "2647560887788821383.1.1119",
       "className": "Storage",
       "description": "Storage"
     },
@@ -440,7 +448,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1131",
+      "objectId": "2647560887788821383.1.1120",
       "className": "Storage",
       "description": "Storage"
     },
@@ -677,12 +685,12 @@
       "value": null
     },
     "onerror": {
-      "type": "function",
+      "type": "object",
       "writable": false,
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "_skipped": "Native API or circular reference"
+      "value": null
     },
     "onfocus": {
       "type": "object",
@@ -1354,7 +1362,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1133",
+      "objectId": "2647560887788821383.1.1121",
       "className": "Scheduler",
       "description": "Scheduler"
     },
@@ -1684,7 +1692,7 @@
       "configurable": false,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1174",
+      "objectId": "2647560887788821383.1.1162",
       "className": "Object",
       "description": "Object"
     },
@@ -1702,7 +1710,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1176",
+      "objectId": "2647560887788821383.1.1164",
       "className": "CookieStore",
       "description": "CookieStore"
     },
@@ -1752,7 +1760,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1178",
+      "objectId": "2647560887788821383.1.1166",
       "className": "SharedStorage",
       "description": "SharedStorage"
     },
@@ -1810,7 +1818,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": true
+      "value": false
     },
     "viewport": {
       "type": "object",
@@ -1818,7 +1826,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1185",
+      "objectId": "2647560887788821383.1.1173",
       "className": "Viewport",
       "description": "Viewport"
     },
@@ -1860,7 +1868,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1186",
+      "objectId": "2647560887788821383.1.1174",
       "className": "LaunchQueue",
       "description": "LaunchQueue"
     },
@@ -1870,7 +1878,7 @@
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1187",
+      "objectId": "2647560887788821383.1.1175",
       "className": "SpeechSynthesis",
       "description": "SpeechSynthesis"
     },
@@ -1906,39 +1914,41 @@
       "_source": "window",
       "_skipped": "Native API or circular reference"
     },
-    "nwds_version": {
-      "type": "string",
-      "writable": true,
-      "configurable": false,
-      "enumerable": true,
-      "_source": "window",
-      "value": "1.2.5"
-    },
-    "meta_nwds_ver": {
+    "litPropertyMetadata": {
       "type": "object",
       "writable": true,
-      "configurable": false,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "window",
+      "objectId": "2647560887788821383.1.1178",
+      "className": "WeakMap",
+      "description": "WeakMap"
+    },
+    "reactiveElementVersions": {
+      "type": "object",
+      "writable": true,
+      "configurable": true,
       "enumerable": true,
       "_source": "window",
       "_skipped": "Native API or circular reference"
     },
-    "meta_nwds": {
+    "litHtmlVersions": {
       "type": "object",
       "writable": true,
-      "configurable": false,
+      "configurable": true,
       "enumerable": true,
       "_source": "window",
       "_skipped": "Native API or circular reference"
     },
-    "alertsUrl": {
-      "type": "string",
+    "litElementVersions": {
+      "type": "object",
       "writable": true,
-      "configurable": false,
+      "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "value": "/core/alerts/alerts.js"
+      "_skipped": "Native API or circular reference"
     },
-    "$": {
+    "JSCompiler_renameProperty": {
       "type": "function",
       "writable": true,
       "configurable": true,
@@ -1946,195 +1956,15 @@
       "_source": "window",
       "_skipped": "Native API or circular reference"
     },
-    "jQuery": {
-      "type": "function",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "_skipped": "Native API or circular reference"
-    },
-    "uswds": {
+    "cr": {
       "type": "object",
       "writable": true,
       "configurable": true,
       "enumerable": true,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1194",
+      "objectId": "2647560887788821383.1.1183",
       "className": "Object",
       "description": "Object"
-    },
-    "ncbi": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1195",
-      "className": "Object",
-      "description": "Object"
-    },
-    "noUiSlider": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1196",
-      "className": "Object",
-      "description": "Object"
-    },
-    "pingerDataLayer": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1197",
-      "className": "Array",
-      "description": "Array(8)"
-    },
-    "google_tag_manager": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1198",
-      "className": "Object",
-      "description": "Object"
-    },
-    "google_tag_data": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1199",
-      "className": "Object",
-      "description": "Object"
-    },
-    "gaGlobal": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1200",
-      "className": "Object",
-      "description": "Object"
-    },
-    "_fullParams": {
-      "type": "string",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "value": "agency=HHS&subagency=NCBI%20-%20ncbi.nlm.nih.gov&sitetopic=NCBI%20Pinger%200.39.3&siteplatform=NCBI%20Pinger%200.39.3"
-    },
-    "_keyValuePair": {
-      "type": "string",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "value": "siteplatform=ncbi pinger 0.39.3"
-    },
-    "_key": {
-      "type": "string",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "value": "siteplatform"
-    },
-    "_value": {
-      "type": "string",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "value": "ncbi pinger 0.39.3"
-    },
-    "dataLayer": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1201",
-      "className": "Array",
-      "description": "Array(9)"
-    },
-    "gas": {
-      "type": "function",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "_skipped": "Native API or circular reference"
-    },
-    "gas4": {
-      "type": "function",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "_skipped": "Native API or circular reference"
-    },
-    "_isRedacted": {
-      "type": "boolean",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "value": true
-    },
-    "webVitals": {
-      "type": "object",
-      "writable": true,
-      "configurable": false,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1204",
-      "className": "Object",
-      "description": "Object"
-    },
-    "galert": {
-      "type": "function",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "_skipped": "Native API or circular reference"
-    },
-    "QSI": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1206",
-      "className": "Object",
-      "description": "Object"
-    },
-    "WAFQualtricsWebpackJsonP-cloud-2.38.0": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "_skipped": "Native API or circular reference"
-    },
-    "_qsie": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.1208",
-      "className": "e",
-      "description": "e"
     },
     "Object": {
       "type": "function",
@@ -2366,7 +2196,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1234",
+      "objectId": "2647560887788821383.1.1209",
       "className": "Atomics",
       "description": "Atomics"
     },
@@ -2624,7 +2454,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1266",
+      "objectId": "2647560887788821383.1.1241",
       "className": "console",
       "description": "console"
     },
@@ -7234,7 +7064,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1842",
+      "objectId": "2647560887788821383.1.1817",
       "className": "CSS",
       "description": "CSS"
     },
@@ -7564,7 +7394,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1882",
+      "objectId": "2647560887788821383.1.1857",
       "className": "WebAssembly",
       "description": "WebAssembly"
     },
@@ -7790,7 +7620,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1910",
+      "objectId": "2647560887788821383.1.1885",
       "className": "GPUBufferUsage",
       "description": "GPUBufferUsage"
     },
@@ -7808,7 +7638,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1912",
+      "objectId": "2647560887788821383.1.1887",
       "className": "GPUColorWrite",
       "description": "GPUColorWrite"
     },
@@ -7906,7 +7736,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1924",
+      "objectId": "2647560887788821383.1.1899",
       "className": "GPUMapMode",
       "description": "GPUMapMode"
     },
@@ -8004,7 +7834,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1936",
+      "objectId": "2647560887788821383.1.1911",
       "className": "GPUShaderStage",
       "description": "GPUShaderStage"
     },
@@ -8038,7 +7868,7 @@
       "configurable": true,
       "enumerable": false,
       "_source": "window",
-      "objectId": "9000349586401721920.2.1940",
+      "objectId": "2647560887788821383.1.1915",
       "className": "GPUTextureUsage",
       "description": "GPUTextureUsage"
     },
@@ -8779,6 +8609,30 @@
       "_skipped": "Native API or circular reference"
     },
     "ServiceWorkerContainer": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "_skipped": "Native API or circular reference"
+    },
+    "Mojo": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "_skipped": "Native API or circular reference"
+    },
+    "MojoHandle": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": false,
+      "_source": "window",
+      "_skipped": "Native API or circular reference"
+    },
+    "MojoWatcher": {
       "type": "function",
       "writable": true,
       "configurable": true,
@@ -9922,26 +9776,6 @@
       "_source": "window",
       "_skipped": "Native API or circular reference"
     },
-    "__core-js_shared__": {
-      "type": "object",
-      "writable": true,
-      "configurable": true,
-      "enumerable": false,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.2176",
-      "className": "Object",
-      "description": "Object"
-    },
-    "jQuery3710210915418321619861": {
-      "type": "object",
-      "writable": false,
-      "configurable": true,
-      "enumerable": false,
-      "_source": "window",
-      "objectId": "9000349586401721920.2.2177",
-      "className": "Object",
-      "description": "Object"
-    },
     "TEMPORARY": {
       "type": "number",
       "writable": true,
@@ -10015,14 +9849,6 @@
       "_skipped": "Native API or circular reference"
     },
     "profileEnd": {
-      "type": "function",
-      "writable": true,
-      "configurable": true,
-      "enumerable": true,
-      "_source": "additional_globals",
-      "_skipped": "Native API or circular reference"
-    },
-    "clear": {
       "type": "function",
       "writable": true,
       "configurable": true,
@@ -10198,6 +10024,14 @@
       "_source": "additional_globals",
       "_skipped": "Native API or circular reference"
     },
+    "$": {
+      "type": "function",
+      "writable": true,
+      "configurable": true,
+      "enumerable": true,
+      "_source": "additional_globals",
+      "_skipped": "Native API or circular reference"
+    },
     "$$": {
       "type": "function",
       "writable": true,
@@ -10215,9 +10049,7 @@
       "_skipped": "Native API or circular reference"
     }
   },
-  "lexical_scope_variables": [
-    "common_tasks"
-  ],
+  "lexical_scope_variables": [],
   "global_variables_count": 34,
   "additional_global_variable_names": [
     "TEMPORARY",
@@ -10230,7 +10062,6 @@
     "dirxml",
     "profile",
     "profileEnd",
-    "clear",
     "table",
     "keys",
     "values",
@@ -10252,26 +10083,14 @@
     "getAccessibleRole",
     "monitorEvents",
     "unmonitorEvents",
+    "$",
     "$$",
     "$x"
   ],
   "lexical_scope_variable_names": [],
   "storage_contents": {
-    "cookies": {
-      "_ga": "GA1.1.1877605758.1763924325",
-      "pm-sid": "xo6UTXw3py06kPwT0OUXIQ:098f6bcd4621d373cade4e832627b4f6",
-      "pm-adjnav-sid": "HAzIvEOVE_UHz99rPVh6SQ:098f6bcd4621d373cade4e832627b4f6",
-      "pm-iosp": "",
-      "ncbi_pinger": "N4IgDgTgpgbg+mAFgSwCYgFwgMICYBCAogAykCMAzAGy4AcAnBbQKyml0VkDstALAGK5cAQTIA6cQFs4uEAF8gA=",
-      "_ga_DP2X732JSX": "GS2.1.s1763924325$o1$g1$t1763924370$j15$l0$h0",
-      "_ga_CSLL4ZEK4L": "GS2.1.s1763924325$o1$g1$t1763924405$j60$l0$h0"
-    },
-    "sessionStorage": {
-      "QSI_HistorySession": "https%3A%2F%2Fpubmed.ncbi.nlm.nih.gov%2F~1763924326300%7Chttps%3A%2F%2Fpubmed.ncbi.nlm.nih.gov%2F%3Fterm%3Dtest~1763924370791",
-      "ncbi_pinger": "N4IgDgTgpgbg+mAFgSwCYgFwgMICYBCAogAykCMAzAGy4AcAnBbQKyml0VkDstALAGK5cAQTIA6cQFs4uEAF8gA=",
-      "pm-rs": "",
-      "QSI_History": "{\"SearchTerm\":\"\",\"SiteReferrer\":\"https://www.google.com/\",\"PageReferrer\":\"https://pubmed.ncbi.nlm.nih.gov/\",\"BlurTime\":5,\"FocusTime\":39}"
-    },
+    "cookies": {},
+    "sessionStorage": {},
     "localStorage": {}
   },
   "object_files": [
@@ -10376,59 +10195,14 @@
       "className": "SpeechSynthesis"
     },
     {
-      "name": "uswds",
-      "filename": "uswds.json",
+      "name": "litPropertyMetadata",
+      "filename": "litPropertyMetadata.json",
+      "className": "WeakMap"
+    },
+    {
+      "name": "cr",
+      "filename": "cr.json",
       "className": "Object"
-    },
-    {
-      "name": "ncbi",
-      "filename": "ncbi.json",
-      "className": "Object"
-    },
-    {
-      "name": "noUiSlider",
-      "filename": "noUiSlider.json",
-      "className": "Object"
-    },
-    {
-      "name": "pingerDataLayer",
-      "filename": "pingerDataLayer.json",
-      "className": "Array"
-    },
-    {
-      "name": "google_tag_manager",
-      "filename": "google_tag_manager.json",
-      "className": "Object"
-    },
-    {
-      "name": "google_tag_data",
-      "filename": "google_tag_data.json",
-      "className": "Object"
-    },
-    {
-      "name": "gaGlobal",
-      "filename": "gaGlobal.json",
-      "className": "Object"
-    },
-    {
-      "name": "dataLayer",
-      "filename": "dataLayer.json",
-      "className": "Array"
-    },
-    {
-      "name": "webVitals",
-      "filename": "webVitals.json",
-      "className": "Object"
-    },
-    {
-      "name": "QSI",
-      "filename": "QSI.json",
-      "className": "Object"
-    },
-    {
-      "name": "_qsie",
-      "filename": "_qsie.json",
-      "className": "e"
     },
     {
       "name": "Atomics",
@@ -10474,16 +10248,6 @@
       "name": "GPUTextureUsage",
       "filename": "GPUTextureUsage.json",
       "className": "GPUTextureUsage"
-    },
-    {
-      "name": "__core-js_shared__",
-      "filename": "__core-js_shared__.json",
-      "className": "Object"
-    },
-    {
-      "name": "jQuery3710210915418321619861",
-      "filename": "jQuery3710210915418321619861.json",
-      "className": "Object"
     }
   ]
 }

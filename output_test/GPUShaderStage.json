@@ -2,7 +2,7 @@
   "property_name": "GPUShaderStage",
   "className": "GPUShaderStage",
   "description": "GPUShaderStage",
-  "objectId": "9000349586401721920.2.1936",
+  "objectId": "2647560887788821383.1.1911",
   "resolved_data": {
     "VERTEX": {
       "type": "number",
@@ -35,7 +35,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4781",
+        "objectId": "2647560887788821383.1.2356",
         "className": "Object"
       }
     ]

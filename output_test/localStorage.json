@@ -2,12 +2,12 @@
   "property_name": "localStorage",
   "className": "Storage",
   "description": "Storage",
-  "objectId": "9000349586401721920.2.1131",
+  "objectId": "2647560887788821383.1.1120",
   "resolved_data": {
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.2192",
+        "objectId": "2647560887788821383.1.2167",
         "className": "Storage"
       }
     ]

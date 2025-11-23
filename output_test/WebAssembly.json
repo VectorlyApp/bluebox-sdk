@@ -2,7 +2,7 @@
   "property_name": "WebAssembly",
   "className": "WebAssembly",
   "description": "WebAssembly",
-  "objectId": "9000349586401721920.2.1882",
+  "objectId": "2647560887788821383.1.1857",
   "resolved_data": {
     "compile": {
       "type": "function",
@@ -95,12 +95,12 @@
       "enumerable": false,
       "className": "Tag",
       "description": "Tag",
-      "objectId": "9000349586401721920.2.4764",
+      "objectId": "2647560887788821383.1.2339",
       "nested": {
         "_internalProperties": [
           {
             "name": "[[Prototype]]",
-            "objectId": "9000349586401721920.2.4773",
+            "objectId": "2647560887788821383.1.2348",
             "className": "WebAssembly.Tag"
           }
         ]
@@ -158,7 +158,7 @@
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.4772",
+        "objectId": "2647560887788821383.1.2347",
         "className": "Object"
       }
     ]

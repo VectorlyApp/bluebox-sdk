@@ -26,12 +26,75 @@ def get_ws_url():
     resp = requests.get("http://localhost:9222/json")
     return resp.json()[0]["webSocketDebuggerUrl"]
 
+
+class CDPClient:
+    def __init__(self, ws_url):
+        self.ws = create_connection(ws_url)
+        self.msg_id = 1
+        self.navigation_detected = False
+        
+        # Enable Page events
+        self.send("Page.enable")
+        
+    def send(self, method, params=None):
+        current_id = self.msg_id
+        self.msg_id += 1
+        
+        payload = {"id": current_id, "method": method}
+        if params:
+            payload["params"] = params
+        self.ws.send(json.dumps(payload))
+        
+        while True:
+            resp = json.loads(self.ws.recv())
+            
+            # If it's the response we're waiting for
+            if resp.get("id") == current_id:
+                return resp
+            
+            # If it's an event
+            if "method" in resp:
+                self._handle_event(resp)
+                
+    def _handle_event(self, msg):
+        method = msg.get("method")
+        # Detect navigation/reload events
+        if method in ["Page.loadEventFired", "Page.frameNavigated", "Runtime.executionContextsCleared"]:
+            print(f"\n!!! Navigation detected: {method} !!!")
+            self.navigation_detected = True
+            
+    def wait_for_navigation_or_timeout(self, timeout):
+        """Wait for navigation event or timeout. Returns True if navigation occurred."""
+        # If navigation already detected during previous commands
+        if self.navigation_detected:
+            self.navigation_detected = False
+            return True
+            
+        start_time = time.time()
+        self.ws.settimeout(0.1) # Short timeout for non-blocking check
+        
+        while time.time() - start_time < timeout:
+            try:
+                resp = json.loads(self.ws.recv())
+                if "method" in resp:
+                    self._handle_event(resp)
+                    if self.navigation_detected:
+                        self.navigation_detected = False
+                        self.ws.settimeout(None) # Reset timeout
+                        return True
+            except Exception:
+                # Timeout, continue loop
+                pass
+                
+        self.ws.settimeout(None) # Reset timeout
+        return False
+        
+    def close(self):
+        self.ws.close()
+
 def cdp_send(ws, method, params=None, msg_id=1):
-    payload = {"id": msg_id, "method": method}
-    if params:
-        payload["params"] = params
-    ws.send(json.dumps(payload))
-    return json.loads(ws.recv())
+    # Legacy wrapper for compatibility if needed, but we should switch to client
+    pass 
 
 def is_application_object(className, name):
     """
@@ -66,20 +129,16 @@ def is_application_object(className, name):
     ]
     if name in native_globals:
         return False
-    
-    # If className is "Object" or empty, only treat as application object if name is lowercase
-    # (native APIs usually have uppercase names)
+    # If className is "Object" or empty, and it passed the blacklist checks above, it is likely an application object
+    # This allows objects like "ZD", "__REDUX_STATE__", "x-zdata" to be captured
     if className == "Object" or not className:
-        if name and name[0].islower() and name[0].isalpha():
-            return True
-        # Default to native if we're not sure
-        return False
+        return True
     
     # If we get here and className doesn't match native patterns, it might be application
     # But be conservative - only if it's clearly not native
     return True
 
-def fully_resolve_object_flat(ws, object_id, base_path, flat_dict, visited=None, depth=0, max_depth=10):
+def fully_resolve_object_flat(client, object_id, base_path, flat_dict, visited=None, depth=0, max_depth=20):
     """
     Recursively resolve an object and add all properties to a flat dictionary with dot paths.
     """
@@ -92,7 +151,7 @@ def fully_resolve_object_flat(ws, object_id, base_path, flat_dict, visited=None,
     visited.add(object_id)
     
     try:
-        props = cdp_send(ws, "Runtime.getProperties", {
+        props = client.send("Runtime.getProperties", {
             "objectId": object_id,
             "ownProperties": True
         })
@@ -125,7 +184,7 @@ def fully_resolve_object_flat(ws, object_id, base_path, flat_dict, visited=None,
                     # Recursively resolve if it's an application object
                     # This ensures we capture all application objects even if they have native-like classNames
                     if is_app_obj:
-                        fully_resolve_object_flat(ws, nested_obj_id, prop_path, flat_dict, visited.copy(), depth + 1, max_depth)
+                        fully_resolve_object_flat(client, nested_obj_id, prop_path, flat_dict, visited.copy(), depth + 1, max_depth)
                     # Don't add anything for skipped native APIs
                 else:
                     flat_dict[prop_path] = value.get("value")
@@ -139,40 +198,61 @@ def fully_resolve_object_flat(ws, object_id, base_path, flat_dict, visited=None,
         # Skip errors - don't add error metadata
         pass
 
-def main():
-    ws_url = get_ws_url()
-    output_dir = Path("output")
-    output_dir.mkdir(exist_ok=True)
+def collect_window_properties(client):
+    """Collect all window properties into a flat dictionary."""
+    # Get current URL using CDP
+    current_url = None
+    try:
+        # Try Runtime.evaluate first
+        url_resp = client.send("Runtime.evaluate", {
+            "expression": "window.location.href",
+            "returnByValue": True
+        })
+        if "error" not in url_resp:
+            current_url = url_resp.get("result", {}).get("value")
+        
+        # Fallback: Try Page.getFrameTree if Runtime.evaluate fails
+        if not current_url:
+            frame_resp = client.send("Page.getFrameTree", {})
+            if "error" not in frame_resp:
+                frame_tree = frame_resp.get("result", {}).get("frameTree", {})
+                current_url = frame_tree.get("frame", {}).get("url")
+    except Exception as e:
+        print(f"Warning: Could not get URL: {e}")
     
-    print("Connecting to:", ws_url)
-
-    ws = create_connection(ws_url)
-    time.sleep(0.2)
-
-    msg_id = 1
-
+    if not current_url:
+        # Last resort: try document.location.href
+        try:
+            url_resp = client.send("Runtime.evaluate", {
+                "expression": "document.location.href",
+                "returnByValue": True
+            })
+            if "error" not in url_resp:
+                current_url = url_resp.get("result", {}).get("value")
+        except:
+            pass
+    
+    if not current_url:
+        raise RuntimeError("Failed to retrieve page URL via CDP")
+    
     # Step 1: Get window object
-    resp = cdp_send(ws, "Runtime.evaluate", {
+    resp = client.send("Runtime.evaluate", {
         "expression": "window",
         "returnByValue": False
-    }, msg_id=msg_id)
-    msg_id += 1
+    })
 
     if "error" in resp or not resp["result"]["result"].get("objectId"):
         print("Window object not found!")
-        ws.close()
-        return
+        return None, current_url
 
     window_obj = resp["result"]["result"]["objectId"]
-    print(f"Window objectId: {window_obj}")
-
+    
     # Get all properties of window
     print("\n=== Getting window properties ===")
-    props = cdp_send(ws, "Runtime.getProperties", {
+    props = client.send("Runtime.getProperties", {
         "objectId": window_obj,
         "ownProperties": True
-    }, msg_id=msg_id)
-    msg_id += 1
+    })
 
     # This will be our flat dictionary with dot-separated paths
     flat_dict = {}
@@ -195,30 +275,15 @@ def main():
         is_app_object = is_application_object(className, name)
         
         # Skip native browser APIs and circular references
-        # Also skip functions that are native APIs (they don't have className in value)
-        # BUT allow application objects and storage APIs even if they match other skip criteria
-        should_skip = (
-            not is_app_object and (
-                value_type == "function" and (name.startswith("HTML") or name.startswith("SVG") or 
-                                             name.startswith("RTC") or name[0].isupper())
-            )
-        )
-        
-        if should_skip:
+        if not is_app_object:
             skipped_count += 1
-            if skipped_count % 100 == 0:
-                print(f"  ... skipped {skipped_count} native APIs ...")
             continue
         
         # Only store actual values, no metadata
         if value_type == "string":
             flat_dict[name] = value.get("value")
-            if processed_count % 100 == 0:
-                print(f"  {name}: string")
         elif value_type in ["number", "boolean"]:
             flat_dict[name] = value.get("value")
-            if processed_count % 100 == 0:
-                print(f"  {name}: {value_type}")
         elif value_type == "object" and value.get("objectId"):
             obj_id = value.get("objectId")
             
@@ -226,33 +291,122 @@ def main():
             
             # Fully resolve the object into flat dict (only for non-native objects)
             # Use higher max_depth to ensure we capture deeply nested application objects
-            fully_resolve_object_flat(ws, obj_id, name, flat_dict, max_depth=10)
+            fully_resolve_object_flat(client, obj_id, name, flat_dict, max_depth=10)
             
             print(f"    -> Resolved {name}")
         elif value_type == "function":
             # Skip functions - don't add anything
-            if processed_count % 100 == 0:
-                print(f"  {name}: function")
+            pass
         else:
             flat_dict[name] = value.get("value")
-            if processed_count % 100 == 0:
-                print(f"  {name}: {value_type}")
         
         processed_count += 1
     
-    # Save the flat dictionary to a single file
+    print(f"Processed: {processed_count}, Skipped: {skipped_count}")
+    return flat_dict, current_url
+
+def main():
+    ws_url = get_ws_url()
+    output_dir = Path("output")
+    output_dir.mkdir(exist_ok=True)
     output_file = output_dir / "window_properties_flat.json"
-    with open(output_file, "w", encoding="utf-8") as f:
-        json.dump(flat_dict, f, indent=2, ensure_ascii=False)
     
-    print(f"\n=== Summary ===")
-    print(f"Flat properties file saved to: {output_file}")
-    print(f"Total properties in flat dict: {len(flat_dict)}")
-    print(f"Processed properties: {processed_count}")
-    print(f"Skipped (native APIs): {skipped_count}")
-    print(f"Output directory: {output_dir.absolute()}")
+    print("Connecting to:", ws_url)
+    client = CDPClient(ws_url)
+    time.sleep(0.2)
     
-    ws.close()
+    # Load existing history if available
+    history_db = {}
+    if output_file.exists():
+        try:
+            with open(output_file, "r", encoding="utf-8") as f:
+                loaded_data = json.load(f)
+                
+            # Get current URL for migration
+            migration_url = None
+            try:
+                url_resp = client.send("Runtime.evaluate", {
+                    "expression": "window.location.href",
+                    "returnByValue": True
+                })
+                if "error" not in url_resp:
+                    migration_url = url_resp.get("result", {}).get("value")
+                if not migration_url:
+                    frame_resp = client.send("Page.getFrameTree", {})
+                    if "error" not in frame_resp:
+                        migration_url = frame_resp.get("result", {}).get("frameTree", {}).get("frame", {}).get("url")
+            except Exception as e:
+                print(f"Warning: Could not get URL for migration: {e}")
+            
+            # Migrate old format to new format if necessary
+            migration_ts = time.time()
+            for k, v in loaded_data.items():
+                if not isinstance(v, list):
+                    # Old format: key -> value. Convert to key -> [{ts, value, url}]
+                    history_db[k] = [{"timestamp": migration_ts, "value": v, "url": migration_url or ""}]
+                else:
+                    # Assume new format, but ensure url key exists
+                    history_db[k] = v
+                    for entry in history_db[k]:
+                        if "url" not in entry:
+                            entry["url"] = migration_url or ""
+                    
+            print(f"Loaded existing history with {len(history_db)} keys")
+        except Exception as e:
+            print(f"Error loading existing file: {e}")
+    
+    print("Starting continuous collection (every 10s or on navigation)...")
+    
+    try:
+        while True:
+            start_time = time.time()
+            current_ts = start_time
+            
+            print(f"\n--- Collection cycle at {current_ts} ---")
+            
+            current_snapshot, current_url = collect_window_properties(client)
+            
+            if current_snapshot is not None:
+                changes_count = 0
+                
+                # Update history with new/changed values
+                for key, value in current_snapshot.items():
+                    if key not in history_db:
+                        # New key
+                        history_db[key] = [{"timestamp": current_ts, "value": value, "url": current_url}]
+                        changes_count += 1
+                    else:
+                        # Existing key, check if value changed
+                        last_entry = history_db[key][-1]
+                        if last_entry["value"] != value:
+                            history_db[key].append({"timestamp": current_ts, "value": value, "url": current_url})
+                            changes_count += 1
+                
+                # Check for deleted keys
+                for key in list(history_db.keys()):
+                    if key not in current_snapshot:
+                        last_entry = history_db[key][-1]
+                        # If it wasn't already marked as deleted (None)
+                        if last_entry["value"] is not None:
+                            history_db[key].append({"timestamp": current_ts, "value": None, "url": current_url})
+                            changes_count += 1
+                
+                print(f"Saving {changes_count} changes to {output_file}")
+                with open(output_file, "w", encoding="utf-8") as f:
+                    json.dump(history_db, f, indent=2, ensure_ascii=False)
+            
+            # Wait for next cycle or navigation event
+            print("Waiting for next cycle (10s) or navigation...")
+            if client.wait_for_navigation_or_timeout(10):
+                print("\n>>> Navigation event detected! Triggering immediate collection...")
+                # Loop will restart immediately
+            else:
+                print("\n>>> Timeout reached. Starting next cycle...")
+            
+    except KeyboardInterrupt:
+        print("\nStopping collection...")
+    finally:
+        client.close()
 
 
 if __name__ == "__main__":

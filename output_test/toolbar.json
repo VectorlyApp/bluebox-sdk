@@ -2,12 +2,12 @@
   "property_name": "toolbar",
   "className": "BarProp",
   "description": "BarProp",
-  "objectId": "9000349586401721920.2.1116",
+  "objectId": "2647560887788821383.1.1105",
   "resolved_data": {
     "_internalProperties": [
       {
         "name": "[[Prototype]]",
-        "objectId": "9000349586401721920.2.2186",
+        "objectId": "2647560887788821383.1.2161",
         "className": "BarProp"
       }
     ]
