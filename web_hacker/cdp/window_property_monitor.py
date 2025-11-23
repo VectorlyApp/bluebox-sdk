@@ -42,6 +42,7 @@ class WindowPropertyMonitor:
         
         # Window properties history
         self.history_db = {}
+        self.last_seen_keys = set()  # Track keys from previous collection to detect deletions
         
         # Collection state
         self.collection_interval = 10.0  # seconds
@@ -50,16 +51,17 @@ class WindowPropertyMonitor:
         self.page_ready = False  # Track if page is ready for collection
         self.collection_thread = None
         self.collection_lock = threading.Lock()
+        self.pending_navigation = False  # Track if navigation happened during collection
+        self.abort_collection = False  # Flag to abort ongoing collection on navigation
         
         # Output path
         root_output_dir = paths.get('output_dir', output_dir)
         self.window_properties_dir = os.path.join(root_output_dir, "window_properties")
         os.makedirs(self.window_properties_dir, exist_ok=True)
-        self.output_file = os.path.join(self.window_properties_dir, "window_properties_flat.json")
+        self.output_file = os.path.join(self.window_properties_dir, "window_properties.json")
     
     def _save_history(self):
         """Save window properties history to file."""
-        logger.info(f"Saving window properties to {self.output_file}")
         try:
             with open(self.output_file, "w", encoding="utf-8") as f:
                 json.dump(self.history_db, f, indent=2, ensure_ascii=False)
@@ -82,11 +84,8 @@ class WindowPropertyMonitor:
             }, timeout=2)
             if result and result.get("result", {}).get("value") == "complete":
                 self.page_ready = True
-                logger.info("Page already loaded, marking as ready")
         except Exception:
             pass
-            
-        logger.info("Window property monitoring enabled")
     
     def handle_window_property_message(self, msg, cdp_session):
         """Handle window property-related CDP messages."""
@@ -94,36 +93,53 @@ class WindowPropertyMonitor:
         
         # Detect navigation events
         if method == "Runtime.executionContextsCleared":
-            # JS context cleared - page is navigating, but NOT ready yet
-            logger.info("JavaScript context cleared - navigation starting")
-            self.page_ready = False  # Page is NOT ready yet
+            self.page_ready = False
             self.navigation_detected = True
+            
+            # If collection is running, signal it to abort (don't block the event loop!)
+            if self.collection_thread and self.collection_thread.is_alive():
+                self.abort_collection = True
+                self.pending_navigation = True
+            
             return True
         
         elif method == "Page.frameNavigated":
-            # Frame navigated - page might be loading
-            logger.info("Frame navigated")
             self.navigation_detected = True
-            # We can start trying to collect here, but it might be too early.
-            # But if the user wants "as soon as possible", we should try.
-            self.page_ready = True 
-            self._trigger_collection_thread(cdp_session)
+            self.page_ready = True
+            
+            # Only trigger if no collection is running
+            if not (self.collection_thread and self.collection_thread.is_alive()):
+                self._trigger_collection_thread(cdp_session)
+            else:
+                # Collection is running, mark navigation as pending
+                self.pending_navigation = True
+            
             return True
         
         elif method == "Page.domContentEventFired":
-            # DOM is ready - good time to collect
-            logger.info("DOM content event fired - page is ready")
             self.page_ready = True
             self.navigation_detected = True
-            self._trigger_collection_thread(cdp_session)
+            
+            # Only trigger if no collection is running
+            if not (self.collection_thread and self.collection_thread.is_alive()):
+                self._trigger_collection_thread(cdp_session)
+            else:
+                # Collection is running, mark navigation as pending
+                self.pending_navigation = True
+            
             return True
         
         elif method == "Page.loadEventFired":
-            # Page is fully loaded - NOW we can collect
-            logger.info("Page load event fired - page is ready")
             self.page_ready = True
             self.navigation_detected = True
-            self._trigger_collection_thread(cdp_session)
+            
+            # Only trigger if no collection is running
+            if not (self.collection_thread and self.collection_thread.is_alive()):
+                self._trigger_collection_thread(cdp_session)
+            else:
+                # Collection is running, mark navigation as pending
+                self.pending_navigation = True
+            
             return True
         
         return False
@@ -167,6 +183,10 @@ class WindowPropertyMonitor:
     
     def _fully_resolve_object_flat(self, cdp_session, object_id, base_path, flat_dict, visited=None, depth=0, max_depth=10):
         """Recursively resolve an object and add all properties to a flat dictionary with dot paths."""
+        # Check abort flag at start
+        if self.abort_collection:
+            return
+        
         if visited is None:
             visited = set()
         
@@ -181,9 +201,16 @@ class WindowPropertyMonitor:
                 "ownProperties": True
             }, timeout=5)
             
+            # Check abort flag after CDP call
+            if self.abort_collection:
+                return
+            
             props_list = props_result.get("result", [])
             
             for prop in props_list:
+                # Check abort flag periodically during processing
+                if self.abort_collection:
+                    return
                 name = prop["name"]
                 value = prop.get("value", {})
                 value_type = value.get("type", "unknown")
@@ -214,6 +241,12 @@ class WindowPropertyMonitor:
                     flat_dict[prop_path] = value.get("value")
         
         except Exception as e:
+            # During navigation, object IDs become invalid - this is expected
+            error_str = str(e)
+            if "-32000" in error_str or "Cannot find context" in error_str or "context" in error_str.lower():
+                # Silently skip - object ID became invalid due to navigation
+                return
+            # Log only unexpected errors
             logger.error(f"Error resolving object {base_path}: {e}")
     
     def _get_current_url(self, cdp_session):
@@ -250,42 +283,39 @@ class WindowPropertyMonitor:
                 except Exception:
                     pass
         except Exception as e:
-            logger.info(f"Could not get URL: {e}")
+            logger.debug(f"Could not get URL: {e}")
         
-        # Return placeholder if we can't get URL - don't fail collection
         return "unknown"
     
     def _collect_window_properties(self, cdp_session):
         """Collect all window properties into a flat dictionary."""
-        logger.info("Starting window property collection...")
+        # Reset abort flag at start of collection
+        self.abort_collection = False
+        
         try:
-            # Check if Runtime context is ready (quick check with short timeout)
+            # Check if Runtime context is ready
             try:
-                # Try a simple evaluation to check if JS context is ready
                 test_result = cdp_session.send_and_wait("Runtime.evaluate", {
                     "expression": "1+1",
                     "returnByValue": True
                 }, timeout=2)
-                # Check if result has error or if result structure is invalid
                 if not test_result:
-                    logger.info("Runtime context not ready yet (no result), skipping collection")
                     return
                 if isinstance(test_result, dict):
-                    if "error" in test_result:
-                        logger.info(f"Runtime context has error: {test_result['error']}, skipping collection")
+                    if "error" in test_result or "result" not in test_result:
                         return
-                    if "result" not in test_result:
-                        logger.info("Runtime context returned invalid response (no result key), skipping collection")
-                        return
-            except TimeoutError:
-                logger.info("Runtime context check timed out, skipping collection")
+            except (TimeoutError, Exception):
                 return
-            except Exception as e:
-                logger.info(f"Runtime context check failed: {e}, skipping collection")
+            
+            # Check abort flag before continuing
+            if self.abort_collection:
                 return
             
             current_url = self._get_current_url(cdp_session)
-            # Don't fail if URL is unknown - continue with collection
+            
+            # Check abort flag
+            if self.abort_collection:
+                return
             
             # Get window object
             result = cdp_session.send_and_wait("Runtime.evaluate", {
@@ -294,16 +324,30 @@ class WindowPropertyMonitor:
             }, timeout=5)
             
             if not result or not result.get("result", {}).get("objectId"):
-                logger.info("Window object not found, skipping collection")
+                return
+            
+            # Check abort flag
+            if self.abort_collection:
                 return
             
             window_obj = result["result"]["objectId"]
             
             # Get all properties of window
-            props_result = cdp_session.send_and_wait("Runtime.getProperties", {
-                "objectId": window_obj,
-                "ownProperties": True
-            }, timeout=10)
+            try:
+                props_result = cdp_session.send_and_wait("Runtime.getProperties", {
+                    "objectId": window_obj,
+                    "ownProperties": True
+                }, timeout=10)
+            except Exception as e:
+                # If navigation happens during collection, object IDs become invalid
+                error_str = str(e)
+                if "-32000" in error_str or "Cannot find context" in error_str:
+                    return  # Silently abort collection
+                raise  # Re-raise unexpected errors
+            
+            # Check abort flag after getting properties
+            if self.abort_collection:
+                return
             
             flat_dict = {}
             all_props = props_result.get("result", [])
@@ -314,6 +358,9 @@ class WindowPropertyMonitor:
             processed_count = 0
             
             for prop in all_props:
+                # Check abort flag periodically during processing
+                if self.abort_collection:
+                    return
                 name = prop["name"]
                 value = prop.get("value", {})
                 value_type = value.get("type", "unknown")
@@ -344,11 +391,10 @@ class WindowPropertyMonitor:
             current_ts = time.time()
             changes_count = 0
             
-            # Log collection stats
-            logger.info(f"Window properties collected: {total_props} total, {processed_count} processed, {skipped_count} skipped (native)")
-            
             # Update history with new/changed values
+            current_keys = set()
             for key, value in flat_dict.items():
+                current_keys.add(key)
                 if key not in self.history_db:
                     # New key
                     self.history_db[key] = [{"timestamp": current_ts, "value": value, "url": current_url}]
@@ -360,23 +406,41 @@ class WindowPropertyMonitor:
                         self.history_db[key].append({"timestamp": current_ts, "value": value, "url": current_url})
                         changes_count += 1
             
-            # Check for deleted keys
-            for key in list(self.history_db.keys()):
-                if key not in flat_dict:
-                    last_entry = self.history_db[key][-1]
-                    if last_entry["value"] is not None:
-                        self.history_db[key].append({"timestamp": current_ts, "value": None, "url": current_url})
-                        changes_count += 1
+            # Check for deleted keys (only check keys from previous collection, not all history!)
+            for key in self.last_seen_keys:
+                if key not in current_keys:
+                    # Key was deleted since last collection
+                    if key in self.history_db:
+                        last_entry = self.history_db[key][-1]
+                        if last_entry["value"] is not None:
+                            self.history_db[key].append({"timestamp": current_ts, "value": None, "url": current_url})
+                            changes_count += 1
+            
+            # Update last_seen_keys for next collection
+            self.last_seen_keys = current_keys
             
             if changes_count > 0 or not os.path.exists(self.output_file):
                 self._save_history()
-                if changes_count > 0:
-                    logger.info(f"Window properties: {changes_count} changes saved")
-                else:
-                    logger.info(f"Window properties: No changes, but saved initial state")
             
         except Exception as e:
             logger.error(f"Error collecting window properties: {e}")
+        finally:
+            # Clear abort flag and thread reference since collection is done
+            was_aborted = self.abort_collection
+            self.abort_collection = False
+            
+            with self.collection_lock:
+                self.collection_thread = None
+            
+            # After collection finishes, check if navigation is pending
+            # If so, trigger a new collection for the new page
+            if self.pending_navigation:
+                self.pending_navigation = False
+                # Small delay to let new page settle
+                time.sleep(0.5)
+                # Reset navigation flag and trigger new collection
+                self.navigation_detected = True
+                self._trigger_collection_thread(cdp_session)
     
     def _trigger_collection_thread(self, cdp_session):
         """Trigger collection in a separate thread."""
@@ -415,17 +479,27 @@ class WindowPropertyMonitor:
             self._trigger_collection_thread(cdp_session)
 
     def force_collect(self, cdp_session):
-        """Force immediate collection of window properties (blocks until done)."""
-        # For force_collect (used at exit), we might need to run it in a thread too if the main loop is still running?
-        # If called from _generate_assets in finally block, the main loop might be stopped or stopping.
-        # But send_and_wait relies on the main loop to process messages.
-        # If main loop is stopped (e.g. KeyboardInterrupt broke the loop), send_and_wait will hang forever!
+        """Force immediate collection of window properties (blocks until done or timeout)."""
+        # Wait for any existing collection thread to finish (with timeout)
+        if self.collection_thread and self.collection_thread.is_alive():
+            self.collection_thread.join(timeout=5.0)
+            if self.collection_thread.is_alive():
+                logger.warning("Previous collection thread did not finish in time")
+                return
         
-        # We cannot rely on send_and_wait if the main loop is dead.
-        # So force_collect at exit is tricky with the current architecture.
-        # Ideally we should just let the background thread finish if it's running.
-        pass
-        # For now, disabling force_collect at exit to prevent hangs, as it relies on the dead event loop.
+        # Trigger new collection and wait for it
+        with self.collection_lock:
+            self.collection_thread = threading.Thread(
+                target=self._collect_window_properties,
+                args=(cdp_session,)
+            )
+            self.collection_thread.daemon = True
+            self.collection_thread.start()
+        
+        # Wait for collection to complete (with timeout)
+        self.collection_thread.join(timeout=15.0)
+        if self.collection_thread.is_alive():
+            logger.warning("Force collection did not complete in time")
     
     def get_window_property_summary(self):
         """Get summary of window property monitoring."""
