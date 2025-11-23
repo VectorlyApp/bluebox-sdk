@@ -23,7 +23,7 @@ Usage:
     )
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # Public API - High-level interface
 from .sdk import WebHacker, BrowserMonitor, RoutineDiscovery, RoutineExecutor
