@@ -231,11 +231,13 @@ def setup_output_directory(output_dir, keep_output):
     network_dir = os.path.join(output_dir, "network")
     storage_dir = os.path.join(output_dir, "storage")
     interaction_dir = os.path.join(output_dir, "interaction")
+    window_properties_dir = os.path.join(output_dir, "window_properties")
     
     os.makedirs(network_dir, exist_ok=True)
     os.makedirs(storage_dir, exist_ok=True)
     os.makedirs(interaction_dir, exist_ok=True)
-    
+    os.makedirs(window_properties_dir, exist_ok=True)
+
     # Create transactions directory for unified request/response storage
     transactions_dir = os.path.join(network_dir, "transactions")
     os.makedirs(transactions_dir, exist_ok=True)
@@ -245,15 +247,17 @@ def setup_output_directory(output_dir, keep_output):
         'output_dir': output_dir,
         'network_dir': network_dir,
         'storage_dir': storage_dir,
+        'window_properties_dir': window_properties_dir,
         'interaction_dir': interaction_dir,
         'transactions_dir': transactions_dir,
         
-        
-        # Storage files  
+        # File paths (all static output files)
         'storage_jsonl_path': os.path.join(storage_dir, "events.jsonl"),
         'interaction_jsonl_path': os.path.join(interaction_dir, "events.jsonl"),
-        
-        # Summary file
+        'window_properties_json_path': os.path.join(window_properties_dir, "window_properties.json"),
+        'consolidated_transactions_json_path': os.path.join(network_dir, "consolidated_transactions.json"),
+        'network_har_path': os.path.join(network_dir, "network.har"),
+        'consolidated_interactions_json_path': os.path.join(interaction_dir, "consolidated_interactions.json"),
         'summary_path': os.path.join(output_dir, "session_summary.json")
     }
 
@@ -399,7 +403,7 @@ def main():
             logger.info(f"├── storage/")
             logger.info(f"│   └── events.jsonl")
             logger.info(f"├── window_properties/")
-            logger.info(f"│   └── window_properties_flat.json")
+            logger.info(f"│   └── window_properties.json")
             logger.info(f"└── interaction/")
             logger.info(f"    └── events.jsonl")
 

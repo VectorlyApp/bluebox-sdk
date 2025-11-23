@@ -26,8 +26,9 @@ class StorageMonitor:
         self.pending_storage_commands = {}
         
         # Storage log paths
+        storage_dir = self.paths.get('storage_dir', os.path.join(output_dir, "storage"))
         self.storage_log_path = self.paths.get('storage_jsonl_path', 
-                                             f"{output_dir}/storage_events.jsonl")
+                                             os.path.join(storage_dir, "events.jsonl"))
         
         # Debouncing for native cookie checks
         self._last_native_cookie_check = 0
@@ -95,13 +96,11 @@ class StorageMonitor:
         # Page navigation events (cookies might change on navigation)
         elif method == "Page.frameNavigated":
             self._trigger_native_cookie_check(cdp_session)
-            # Don't swallow this event, let other monitors see it
-            return False
+            return False # Don't swallow this event
         
         elif method == "Page.loadEventFired":
             self._trigger_native_cookie_check(cdp_session)
-            # Don't swallow this event, let other monitors see it
-            return False
+            return False # Don't swallow this event
         
         # Optional: Runtime console events for document.cookie detection
         elif method == "Runtime.consoleAPICalled":

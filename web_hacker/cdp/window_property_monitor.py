@@ -54,11 +54,11 @@ class WindowPropertyMonitor:
         self.pending_navigation = False  # Track if navigation happened during collection
         self.abort_collection = False  # Flag to abort ongoing collection on navigation
         
-        # Output path
-        root_output_dir = paths.get('output_dir', output_dir)
-        self.window_properties_dir = os.path.join(root_output_dir, "window_properties")
-        os.makedirs(self.window_properties_dir, exist_ok=True)
-        self.output_file = os.path.join(self.window_properties_dir, "window_properties.json")
+        # Output path (handled like storage and other monitors)
+        self.output_file = paths.get('window_properties_json_path', 
+                                     os.path.join(output_dir, "window_properties", "window_properties.json"))
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(self.output_file), exist_ok=True)
     
     def _save_history(self):
         """Save window properties history to file."""

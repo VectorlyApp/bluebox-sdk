@@ -71,11 +71,22 @@ class BrowserMonitor:
         
         # Create output directory structure
         paths = {
+            # Main directories
             "output_dir": self.output_dir,
             "network_dir": str(Path(self.output_dir) / "network"),
             "transactions_dir": str(Path(self.output_dir) / "network" / "transactions"),
             "storage_dir": str(Path(self.output_dir) / "storage"),
             "interaction_dir": str(Path(self.output_dir) / "interaction"),
+            "window_properties_dir": str(Path(self.output_dir) / "window_properties"),
+            
+            # File paths (all static output files)
+            "storage_jsonl_path": str(Path(self.output_dir) / "storage" / "events.jsonl"),
+            "interaction_jsonl_path": str(Path(self.output_dir) / "interaction" / "events.jsonl"),
+            "window_properties_json_path": str(Path(self.output_dir) / "window_properties" / "window_properties.json"),
+            "consolidated_transactions_json_path": str(Path(self.output_dir) / "network" / "consolidated_transactions.json"),
+            "network_har_path": str(Path(self.output_dir) / "network" / "network.har"),
+            "consolidated_interactions_json_path": str(Path(self.output_dir) / "interaction" / "consolidated_interactions.json"),
+            "summary_path": str(Path(self.output_dir) / "session_summary.json"),
         }
         
         # Create directories
@@ -159,33 +170,45 @@ class BrowserMonitor:
             try:
                 if self.session:
                     self.session.storage_monitor.monitor_cookie_changes(self.session)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to sync cookies: {e}", exc_info=True)
+            
+            # Force final window property collection
+            try:
+                if self.session:
+                    self.session.window_property_monitor.force_collect(self.session)
+            except Exception as e:
+                logger.warning(f"Failed to force collect window properties: {e}", exc_info=True)
             
             # Consolidate transactions
             try:
                 if self.session:
-                    consolidated_path = f"{self.output_dir}/network/consolidated_transactions.json"
+                    network_dir = self.session.paths.get('network_dir', str(Path(self.output_dir) / "network"))
+                    consolidated_path = self.session.paths.get('consolidated_transactions_json_path',
+                                                               str(Path(network_dir) / "consolidated_transactions.json"))
                     self.session.network_monitor.consolidate_transactions(consolidated_path)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to consolidate transactions: {e}", exc_info=True)
             
             # Generate HAR file
             try:
                 if self.session:
-                    har_path = f"{self.output_dir}/network/network.har"
+                    network_dir = self.session.paths.get('network_dir', str(Path(self.output_dir) / "network"))
+                    har_path = self.session.paths.get('network_har_path',
+                                                      str(Path(network_dir) / "network.har"))
                     self.session.network_monitor.generate_har_from_transactions(har_path, "Web Hacker Session")
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to generate HAR file: {e}", exc_info=True)
             
             # Consolidate interactions
             try:
                 if self.session:
-                    interaction_dir = self.session.paths.get('interaction_dir', f"{self.output_dir}/interaction")
-                    consolidated_interactions_path = str(Path(interaction_dir) / "consolidated_interactions.json")
+                    interaction_dir = self.session.paths.get('interaction_dir', str(Path(self.output_dir) / "interaction"))
+                    consolidated_interactions_path = self.session.paths.get('consolidated_interactions_json_path',
+                                                                          str(Path(interaction_dir) / "consolidated_interactions.json"))
                     self.session.interaction_monitor.consolidate_interactions(consolidated_interactions_path)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to consolidate interactions: {e}", exc_info=True)
     
     def stop(self) -> dict:
         """Stop monitoring and return summary."""

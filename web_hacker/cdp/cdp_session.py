@@ -246,16 +246,20 @@ class CDPSession:
                 logger.debug(f"Could not force collect window properties: {e}")
             
             # Consolidate all transactions into a single JSON file
-            consolidated_path = f"{self.output_dir}/consolidated_transactions.json"
+            network_dir = self.paths.get('network_dir', os.path.join(self.output_dir, "network"))
+            consolidated_path = self.paths.get('consolidated_transactions_json_path', 
+                                               os.path.join(network_dir, "consolidated_transactions.json"))
             self.network_monitor.consolidate_transactions(consolidated_path)
             
             # Generate HAR file from consolidated transactions
-            har_path = f"{self.output_dir}/network.har"
+            har_path = self.paths.get('network_har_path', 
+                                     os.path.join(network_dir, "network.har"))
             self.network_monitor.generate_har_from_transactions(har_path, "Web Hacker Session")
             
             # Consolidate all interactions into a single JSON file
-            interaction_dir = self.paths.get('interaction_dir', f"{self.output_dir}/interaction")
-            consolidated_interactions_path = os.path.join(interaction_dir, "consolidated_interactions.json")
+            interaction_dir = self.paths.get('interaction_dir', os.path.join(self.output_dir, "interaction"))
+            consolidated_interactions_path = self.paths.get('consolidated_interactions_json_path',
+                                                           os.path.join(interaction_dir, "consolidated_interactions.json"))
             self.interaction_monitor.consolidate_interactions(consolidated_interactions_path)
         finally:
             try:
