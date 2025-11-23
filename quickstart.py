@@ -11,8 +11,6 @@ import platform
 import subprocess
 import shutil
 import json
-import atexit
-import signal
 from pathlib import Path
 from typing import Optional
 import requests
@@ -28,9 +26,6 @@ NC = '\033[0m'  # No Color
 PORT = 9222
 CDP_CAPTURES_DIR = Path("./cdp_captures")
 DISCOVERY_OUTPUT_DIR = Path("./routine_discovery_output")
-
-# Global variable to track Chrome process for cleanup
-_chrome_process: Optional[subprocess.Popen] = None
 
 
 def print_colored(text: str, color: str = NC) -> None:
@@ -292,55 +287,6 @@ def launch_chrome(port: int) -> Optional[subprocess.Popen]:
         return None
 
 
-def cleanup_chrome(process: Optional[subprocess.Popen], port: int) -> None:
-    """Clean up Chrome process if it was launched by this script."""
-    if process is None:
-        return
-    
-    try:
-        # Check if Chrome is still running on the port
-        if not check_chrome_running(port):
-            return
-        
-        print()
-        print_colored("🧹 Cleaning up Chrome...", YELLOW)
-        
-        # Try graceful termination first
-        try:
-            if platform.system() == "Windows":
-                # On Windows with CREATE_NEW_PROCESS_GROUP, we need to kill the process group
-                process.terminate()
-                time.sleep(1)
-                if process.poll() is None:
-                    process.kill()
-            else:
-                process.terminate()
-                time.sleep(1)
-                if process.poll() is None:
-                    process.kill()
-            
-            # Wait a bit for Chrome to close
-            process.wait(timeout=3)
-            print_colored("✅ Chrome closed successfully", GREEN)
-        except subprocess.TimeoutExpired:
-            # Force kill if it didn't terminate
-            try:
-                process.kill()
-                process.wait(timeout=2)
-                print_colored("✅ Chrome force-closed", GREEN)
-            except Exception:
-                pass
-        except Exception as e:
-            # Process might already be dead
-            if process.poll() is not None:
-                print_colored("✅ Chrome already closed", GREEN)
-            else:
-                print_colored(f"⚠️  Error closing Chrome: {e}", YELLOW)
-    except Exception:
-        # Silently fail during cleanup
-        pass
-
-
 def run_command(cmd: list[str], description: str) -> bool:
     """Run a command and return True if successful."""
     try:
@@ -360,8 +306,6 @@ def run_command(cmd: list[str], description: str) -> bool:
 
 def main():
     """Main workflow."""
-    global _chrome_process
-    
     # Use local variables that can be updated
     cdp_captures_dir = CDP_CAPTURES_DIR
     discovery_output_dir = DISCOVERY_OUTPUT_DIR
@@ -369,17 +313,6 @@ def main():
     print_colored("╔════════════════════════════════════════════════════════════╗", BLUE)
     print_colored("║         Web Hacker - Quickstart Workflow                   ║", BLUE)
     print_colored("╚════════════════════════════════════════════════════════════╝", BLUE)
-    print()
-    
-    # Pipeline overview
-    print_colored("Web-hacker Pipeline:", BLUE)
-    print()
-    print("  Step 1: Launch Chrome in debug mode")
-    print("  Step 2: Monitor browser interactions")
-    print("  Step 3: Discover web action routine")
-    print("  Step 4 (optional): Test routine execution")
-    print()
-    input("Press Enter to start: ")
     print()
     
     # Step 1: Launch Chrome
@@ -390,19 +323,6 @@ def main():
         print_colored(f"✅ Chrome is already running in debug mode on port {PORT}", GREEN)
     else:
         chrome_process = launch_chrome(PORT)
-        # Store globally for cleanup
-        _chrome_process = chrome_process
-        # Register cleanup function if we launched Chrome
-        if chrome_process is not None:
-            atexit.register(cleanup_chrome, chrome_process, PORT)
-            # Also register signal handlers for graceful shutdown
-            def signal_handler(signum, frame):
-                cleanup_chrome(chrome_process, PORT)
-                sys.exit(0)
-            signal.signal(signal.SIGINT, signal_handler)
-            # SIGTERM may not be available on all platforms
-            if hasattr(signal, 'SIGTERM'):
-                signal.signal(signal.SIGTERM, signal_handler)
     
     print()
     
@@ -456,96 +376,29 @@ def main():
         run_command(monitor_cmd, "monitoring")
         print()
     
-    # Close Chrome before Step 3 if we launched it
-    if chrome_process is not None:
-        cleanup_chrome(chrome_process, PORT)
-        atexit.unregister(cleanup_chrome)
-        chrome_process = None
-        _chrome_process = None
-        print()
-    
     # Step 3: Discover
-    print_colored("Step 3: Discovering routine from captured data...", GREEN)
-    
-    # Check if capture data exists first
     transactions_dir = cdp_captures_dir / "network" / "transactions"
     if not cdp_captures_dir.exists() or not transactions_dir.exists() or not any(transactions_dir.iterdir()):
         print_colored("⚠️  No capture data found. Skipping discovery step.", YELLOW)
         print("   Make sure you performed actions during monitoring.")
         return
     
-    skip = input("   Skip discovery step? (y/n): ").strip().lower()
-    if skip == 'y':
-        # Use default directory when skipping - user can specify routine path in step 4 if needed
-        discovery_output_dir = DISCOVERY_OUTPUT_DIR
-        print_colored("⏭️  Skipping discovery step.", GREEN)
-        print_colored(f"   Using default discovery output directory: {discovery_output_dir.resolve()}", GREEN)
-        print()
-        
-        # Set routine_file for step 4 even if skipped
-        routine_file = discovery_output_dir / "routine.json"
-    else:
-        new_output_dir = input(f"   Enter discovery output directory path [Press Enter to use: {DISCOVERY_OUTPUT_DIR.resolve()}]: ").strip()
-        if new_output_dir:
-            discovery_output_dir = Path(new_output_dir)
-            print_colored(f"✅ Using discovery output directory: {discovery_output_dir}", GREEN)
-        else:
-            discovery_output_dir = DISCOVERY_OUTPUT_DIR
-        
-        # Check if routine already exists
-        routine_file = discovery_output_dir / "routine.json"
-        has_existing_routine = routine_file.exists()
-        
-        if has_existing_routine:
-            print_colored(f"📁 Found existing routine at {routine_file}", YELLOW)
-            overwrite = input("   Overwrite existing routine? (y/n): ").strip().lower()
-            if overwrite != 'y':
-                print_colored("⏭️  Keeping existing routine. Skipping discovery step.", GREEN)
-                print()
-            else:
-                # Check if directory exists and has content before running discovery
-                if discovery_output_dir.exists() and any(discovery_output_dir.iterdir()):
-                    print_colored(f"⚠️  Directory {discovery_output_dir} already exists and contains files.", YELLOW)
-                    confirm = input("   Remove existing data before discovery? (Data may be overwritten if not removed) (y/n): ").strip().lower()
-                    if confirm == 'y':
-                        # Remove all data but keep the directory
-                        for item in discovery_output_dir.iterdir():
-                            if item.is_file():
-                                item.unlink()
-                            elif item.is_dir():
-                                shutil.rmtree(item)
-                        print_colored(f"✅ Cleared data in {discovery_output_dir}", GREEN)
-                    else:
-                        print_colored(f"⚠️  Keeping existing data in {discovery_output_dir}", YELLOW)
-                
-                print_colored("📋 Enter a description of what you want to automate:", YELLOW)
-                print("   Example: 'Search for flights and get prices'")
-                print("   (Press Ctrl+C to exit)")
-                
-                task = ""
-                while not task:
-                    try:
-                        task = input("   Task: ").strip()
-                        if not task:
-                            print_colored("⚠️  Task cannot be empty. Please enter a description (or Ctrl+C to exit).", YELLOW)
-                    except KeyboardInterrupt:
-                        print()
-                        print_colored("⚠️  Discovery cancelled by user.", YELLOW)
-                        return
-                
-                print()
-                print("🤖 Running routine discovery agent...")
-                
-                discover_cmd = [
-                    "web-hacker-discover",
-                    "--task", task,
-                    "--cdp-captures-dir", str(cdp_captures_dir),
-                    "--output-dir", str(discovery_output_dir),
-                    "--llm-model", "gpt-5",
-                ]
-                
-                run_command(discover_cmd, "discovery")
-                print()
+    print_colored("Step 3: Discovering routine from captured data...", GREEN)
+    new_output_dir = input(f"   Enter discovery output directory path [Press Enter to use: {DISCOVERY_OUTPUT_DIR.resolve()}]: ").strip()
+    if new_output_dir:
+        discovery_output_dir = Path(new_output_dir)
+        print_colored(f"✅ Using discovery output directory: {discovery_output_dir}", GREEN)
+    
+    # Check if routine already exists
+    routine_file = discovery_output_dir / "routine.json"
+    has_existing_routine = routine_file.exists()
+    
+    if has_existing_routine:
+        print_colored(f"📁 Found existing routine at {routine_file}", YELLOW)
+        skip = input("   Skip discovery? (y/n): ").strip().lower()
+        if skip == 'y':
+            print_colored("⏭️  Skipping discovery step.", GREEN)
+            print()
         else:
             # Check if directory exists and has content before running discovery
             if discovery_output_dir.exists() and any(discovery_output_dir.iterdir()):
@@ -590,6 +443,50 @@ def main():
             
             run_command(discover_cmd, "discovery")
             print()
+    else:
+        # Check if directory exists and has content before running discovery
+        if discovery_output_dir.exists() and any(discovery_output_dir.iterdir()):
+            print_colored(f"⚠️  Directory {discovery_output_dir} already exists and contains files.", YELLOW)
+            confirm = input("   Remove existing data before discovery? (Data may be overwritten if not removed) (y/n): ").strip().lower()
+            if confirm == 'y':
+                # Remove all data but keep the directory
+                for item in discovery_output_dir.iterdir():
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        shutil.rmtree(item)
+                print_colored(f"✅ Cleared data in {discovery_output_dir}", GREEN)
+            else:
+                print_colored(f"⚠️  Keeping existing data in {discovery_output_dir}", YELLOW)
+        
+        print_colored("📋 Enter a description of what you want to automate:", YELLOW)
+        print("   Example: 'Search for flights and get prices'")
+        print("   (Press Ctrl+C to exit)")
+        
+        task = ""
+        while not task:
+            try:
+                task = input("   Task: ").strip()
+                if not task:
+                    print_colored("⚠️  Task cannot be empty. Please enter a description (or Ctrl+C to exit).", YELLOW)
+            except KeyboardInterrupt:
+                print()
+                print_colored("⚠️  Discovery cancelled by user.", YELLOW)
+                return
+        
+        print()
+        print("🤖 Running routine discovery agent...")
+        
+        discover_cmd = [
+            "web-hacker-discover",
+            "--task", task,
+            "--cdp-captures-dir", str(cdp_captures_dir),
+            "--output-dir", str(discovery_output_dir),
+            "--llm-model", "gpt-5",
+        ]
+        
+        run_command(discover_cmd, "discovery")
+        print()
     
     # Step 4: Execute (optional)
     if not routine_file.exists():
@@ -621,8 +518,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print()
         print_colored("⚠️  Interrupted by user.", YELLOW)
-        # Clean up Chrome if we launched it
-        if _chrome_process is not None:
-            cleanup_chrome(_chrome_process, PORT)
         sys.exit(0)
-
