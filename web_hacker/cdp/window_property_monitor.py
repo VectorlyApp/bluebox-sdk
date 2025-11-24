@@ -76,15 +76,16 @@ class WindowPropertyMonitor:
         # Enable Runtime domain for property access
         cdp_session.send("Runtime.enable")
         
-        # Check if page is already loaded
+        # Check if page is already loaded (non-blocking, fail-fast)
         try:
             result = cdp_session.send_and_wait("Runtime.evaluate", {
                 "expression": "document.readyState",
                 "returnByValue": True
-            }, timeout=2)
+            }, timeout=0.5)  # Very short timeout - fail fast
             if result and result.get("result", {}).get("value") == "complete":
                 self.page_ready = True
         except Exception:
+            # Too bad, so sad - page not ready yet, will check later
             pass
     
     def handle_window_property_message(self, msg, cdp_session):
@@ -182,7 +183,7 @@ class WindowPropertyMonitor:
         return True
     
     def _fully_resolve_object_flat(self, cdp_session, object_id, base_path, flat_dict, visited=None, depth=0, max_depth=10):
-        """Recursively resolve an object and add all properties to a flat dictionary with dot paths."""
+        """Recursively resolve an object and add all properties to a flat dictionary with dot paths. Non-blocking, fail-fast."""
         # Check abort flag at start
         if self.abort_collection:
             return
@@ -196,10 +197,11 @@ class WindowPropertyMonitor:
         visited.add(object_id)
         
         try:
+            # Very short timeout - if page changed, object IDs are invalid, just skip
             props_result = cdp_session.send_and_wait("Runtime.getProperties", {
                 "objectId": object_id,
                 "ownProperties": True
-            }, timeout=5)
+            }, timeout=0.5)  # Fail fast - if page changed, too bad so sad
             
             # Check abort flag after CDP call
             if self.abort_collection:
@@ -242,69 +244,74 @@ class WindowPropertyMonitor:
         
         except Exception as e:
             # During navigation, object IDs become invalid - this is expected
+            # Too bad, so sad - just skip it, don't wait, don't log
             error_str = str(e)
-            if "-32000" in error_str or "Cannot find context" in error_str or "context" in error_str.lower():
-                # Silently skip - object ID became invalid due to navigation
+            if "-32000" in error_str or "Cannot find context" in error_str or "context" in error_str.lower() or "TimeoutError" in str(type(e).__name__):
+                # Silently skip - object ID became invalid due to navigation or timeout
                 return
-            # Log only unexpected errors
-            logger.error(f"Error resolving object {base_path}: {e}")
+            # Only log truly unexpected errors (not timeouts or navigation errors)
+            if "TimeoutError" not in str(type(e).__name__):
+                logger.debug(f"Error resolving object {base_path}: {e}")
     
     def _get_current_url(self, cdp_session):
-        """Get current page URL using CDP. Tries Page.getFrameTree first (doesn't require JS)."""
+        """Get current page URL using CDP. Non-blocking, fail-fast."""
+        # Check abort flag first
+        if self.abort_collection:
+            return "unknown"
+        
         try:
             # Try Page.getFrameTree first - this works even if JavaScript isn't ready
-            frame_tree = cdp_session.send_and_wait("Page.getFrameTree", {}, timeout=5)
+            # Very short timeout - fail fast if page changed
+            frame_tree = cdp_session.send_and_wait("Page.getFrameTree", {}, timeout=0.5)
             if frame_tree and "frameTree" in frame_tree:
                 current_url = frame_tree.get("frameTree", {}).get("frame", {}).get("url")
                 if current_url:
                     return current_url
-            
-            # Fallback: Try Runtime.evaluate (requires JS to be ready)
-            try:
-                result = cdp_session.send_and_wait("Runtime.evaluate", {
-                    "expression": "window.location.href",
-                    "returnByValue": True
-                }, timeout=3)
-                if result and "result" in result:
-                    current_url = result["result"].get("value")
-                    if current_url:
-                        return current_url
-            except Exception:
-                # Runtime.evaluate failed, try document.location.href as last resort
-                try:
-                    result = cdp_session.send_and_wait("Runtime.evaluate", {
-                        "expression": "document.location.href",
-                        "returnByValue": True
-                    }, timeout=3)
-                    if result and "result" in result:
-                        current_url = result["result"].get("value")
-                        if current_url:
-                            return current_url
-                except Exception:
-                    pass
-        except Exception as e:
-            logger.debug(f"Could not get URL: {e}")
+        except Exception:
+            # Too bad, so sad - skip fallbacks if first attempt fails
+            return "unknown"
+        
+        # Only try one fallback with very short timeout
+        if self.abort_collection:
+            return "unknown"
+        
+        try:
+            result = cdp_session.send_and_wait("Runtime.evaluate", {
+                "expression": "window.location.href",
+                "returnByValue": True
+            }, timeout=0.5)  # Very short timeout
+            if result and "result" in result:
+                current_url = result["result"].get("value")
+                if current_url:
+                    return current_url
+        except Exception:
+            # Too bad, so sad - can't get URL
+            pass
         
         return "unknown"
     
     def _collect_window_properties(self, cdp_session):
-        """Collect all window properties into a flat dictionary."""
+        """Collect all window properties into a flat dictionary. Fully non-blocking, fail-fast."""
         # Reset abort flag at start of collection
         self.abort_collection = False
         
         try:
-            # Check if Runtime context is ready
+            # Check if Runtime context is ready (very short timeout - fail fast)
+            if self.abort_collection:
+                return
+            
             try:
                 test_result = cdp_session.send_and_wait("Runtime.evaluate", {
                     "expression": "1+1",
                     "returnByValue": True
-                }, timeout=2)
+                }, timeout=0.5)  # Very short timeout
                 if not test_result:
                     return
                 if isinstance(test_result, dict):
                     if "error" in test_result or "result" not in test_result:
                         return
             except (TimeoutError, Exception):
+                # Too bad, so sad - Runtime not ready, skip collection
                 return
             
             # Check abort flag before continuing
@@ -317,11 +324,15 @@ class WindowPropertyMonitor:
             if self.abort_collection:
                 return
             
-            # Get window object
-            result = cdp_session.send_and_wait("Runtime.evaluate", {
-                "expression": "window",
-                "returnByValue": False
-            }, timeout=5)
+            # Get window object (very short timeout)
+            try:
+                result = cdp_session.send_and_wait("Runtime.evaluate", {
+                    "expression": "window",
+                    "returnByValue": False
+                }, timeout=0.5)  # Very short timeout - fail fast
+            except (TimeoutError, Exception):
+                # Too bad, so sad - can't get window object, skip
+                return
             
             if not result or not result.get("result", {}).get("objectId"):
                 return
@@ -332,18 +343,24 @@ class WindowPropertyMonitor:
             
             window_obj = result["result"]["objectId"]
             
-            # Get all properties of window
+            # Get all properties of window (short timeout - this is the biggest operation)
+            if self.abort_collection:
+                return
+            
             try:
                 props_result = cdp_session.send_and_wait("Runtime.getProperties", {
                     "objectId": window_obj,
                     "ownProperties": True
-                }, timeout=10)
-            except Exception as e:
+                }, timeout=1.0)  # Short timeout - if page changed, too bad so sad
+            except (TimeoutError, Exception) as e:
                 # If navigation happens during collection, object IDs become invalid
+                # Too bad, so sad - just abort collection silently
                 error_str = str(e)
-                if "-32000" in error_str or "Cannot find context" in error_str:
+                if "-32000" in error_str or "Cannot find context" in error_str or "TimeoutError" in str(type(e).__name__):
                     return  # Silently abort collection
-                raise  # Re-raise unexpected errors
+                # Only log truly unexpected errors
+                logger.debug(f"Error getting window properties: {e}")
+                return
             
             # Check abort flag after getting properties
             if self.abort_collection:
@@ -358,7 +375,7 @@ class WindowPropertyMonitor:
             processed_count = 0
             
             for prop in all_props:
-                # Check abort flag periodically during processing
+                # Check abort flag frequently during processing
                 if self.abort_collection:
                     return
                 name = prop["name"]
@@ -378,8 +395,15 @@ class WindowPropertyMonitor:
                 elif value_type in ["number", "boolean"]:
                     flat_dict[name] = value.get("value")
                 elif value_type == "object" and value.get("objectId"):
+                    # Check abort before recursive call
+                    if self.abort_collection:
+                        return
                     obj_id = value.get("objectId")
+                    # Recursive resolution with fail-fast timeout (handled inside)
                     self._fully_resolve_object_flat(cdp_session, obj_id, name, flat_dict, max_depth=10)
+                    # Check abort after recursive call
+                    if self.abort_collection:
+                        return
                 elif value_type == "function":
                     pass  # Skip functions
                 else:
