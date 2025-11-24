@@ -13,9 +13,12 @@ from collections import defaultdict
 from web_hacker.config import Config
 from web_hacker.utils.cdp_utils import write_jsonl, write_json_file
 
-# Import UiElement models
+# Import UiElement and UiInteraction models
 from web_hacker.data_models.ui_elements import (
     UiElement, Selector, SelectorType, BoundingBox
+)
+from web_hacker.data_models.ui_interactions import (
+    UiInteraction, InteractionType, EventData
 )
 
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
@@ -400,12 +403,14 @@ class InteractionMonitor:
                 return False
             
             # Parse the interaction data from JavaScript
-            interaction_data = json.loads(payload)
+            raw_data = json.loads(payload)
             
-            # Convert element details to UiElement format if available
-            element_data = interaction_data.get("element")
-            if element_data:
-                try:
+            try:
+                # Convert element details to UiElement format
+                element_data = raw_data.get("element")
+                ui_element = None
+                
+                if element_data:
                     # Convert bounding_box if present
                     bounding_box = None
                     if element_data.get("bounding_box"):
@@ -436,25 +441,68 @@ class InteractionMonitor:
                         bounding_box=bounding_box,
                         css_path=element_data.get("css_path"),
                         xpath=element_data.get("xpath"),
-                        url=element_data.get("url") or interaction_data.get("url"),
+                        url=element_data.get("url") or raw_data.get("url"),
                     )
                     
                     # Build default selectors
                     ui_element.build_default_selectors()
-                    
-                    # Replace element data with UiElement dict representation
-                    interaction_data["element"] = ui_element.model_dump()
-                except Exception as e:
-                    logger.info("Failed to convert element to UiElement format: %s", e)
-                    # Keep original element data if conversion fails
-            
-            # Add server-side timestamp
-            interaction_data["server_timestamp"] = time.time()
+                
+                # Convert event data to EventData format
+                event_data = None
+                event_raw = raw_data.get("event")
+                if event_raw:
+                    event_data = EventData(
+                        type=event_raw.get("type", ""),
+                        button=event_raw.get("button"),
+                        key=event_raw.get("key"),
+                        code=event_raw.get("code"),
+                        keyCode=event_raw.get("keyCode"),
+                        which=event_raw.get("which"),
+                        ctrlKey=event_raw.get("ctrlKey", False),
+                        shiftKey=event_raw.get("shiftKey", False),
+                        altKey=event_raw.get("altKey", False),
+                        metaKey=event_raw.get("metaKey", False),
+                        clientX=event_raw.get("clientX"),
+                        clientY=event_raw.get("clientY"),
+                        pageX=event_raw.get("pageX"),
+                        pageY=event_raw.get("pageY"),
+                    )
+                
+                # Get interaction type (convert string to enum)
+                interaction_type_str = raw_data.get("type", "unknown")
+                try:
+                    interaction_type = InteractionType(interaction_type_str)
+                except ValueError:
+                    # If type doesn't match enum, log warning and skip
+                    logger.warning("Unknown interaction type: %s, skipping", interaction_type_str)
+                    return False
+                
+                # Create UiInteraction
+                if ui_element is None:
+                    logger.warning("Missing element data for interaction, skipping")
+                    return False
+                
+                ui_interaction = UiInteraction(
+                    type=interaction_type,
+                    timestamp=raw_data.get("timestamp", 0),
+                    event=event_data,
+                    element=ui_element,
+                    url=raw_data.get("url", ""),
+                )
+                
+                # Convert to dict for logging
+                interaction_data = ui_interaction.model_dump()
+                
+            except Exception as e:
+                logger.info("Failed to convert to UiInteraction format: %s", e)
+                # Fallback to original format if conversion fails
+                interaction_data = raw_data
             
             # Update statistics
             self.interaction_count += 1
-            interaction_type = interaction_data.get("type", "unknown")
-            self.interaction_types[interaction_type] += 1
+            # Extract interaction type (model_dump() serializes enum to string)
+            interaction_type_str = interaction_data.get("type", "unknown")
+            self.interaction_types[interaction_type_str] += 1
             url = interaction_data.get("url", "unknown")
             self.interactions_by_url[url] += 1
             
