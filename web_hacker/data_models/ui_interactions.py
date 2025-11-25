@@ -35,69 +35,82 @@ class InteractionType(StrEnum):
     BLUR = "blur"
 
 
-class EventData(BaseModel):
+class Interaction(BaseModel):
     """
-    Raw event data from the browser event object.
-    Contains all the details about the specific event that occurred.
+    Details about how an interaction occurred.
+    
+    Contains browser event properties like mouse coordinates, keyboard keys,
+    and modifier keys. These details provide the "how" of an interaction,
+    while InteractionType provides the "what".
     """
-    # Event type (e.g., "click", "keydown", "input")
-    type: str
-    
-    # Mouse button (0=left, 1=middle, 2=right, null for non-mouse events)
-    button: Optional[int] = None
-    
-    # Keyboard key information
-    key: Optional[str] = Field(
+    # Mouse properties
+    mouse_button: Optional[int] = Field(
         default=None,
-        description="The key value of the key pressed (e.g., 'a', 'Enter', 'Shift')."
+        description="Mouse button pressed (0=left, 1=middle, 2=right). None for non-mouse interactions."
     )
-    code: Optional[str] = Field(
+    mouse_x_viewport: Optional[int] = Field(
         default=None,
-        description="The physical key code (e.g., 'KeyA', 'Enter', 'ShiftLeft')."
+        description="X coordinate relative to viewport. None for non-mouse interactions."
     )
-    keyCode: Optional[int] = Field(
+    mouse_y_viewport: Optional[int] = Field(
         default=None,
-        description="Deprecated key code (numeric)."
+        description="Y coordinate relative to viewport. None for non-mouse interactions."
     )
-    which: Optional[int] = Field(
+    mouse_x_page: Optional[int] = Field(
         default=None,
-        description="Deprecated key code (numeric)."
+        description="X coordinate relative to page (includes scroll). None for non-mouse interactions."
+    )
+    mouse_y_page: Optional[int] = Field(
+        default=None,
+        description="Y coordinate relative to page (includes scroll). None for non-mouse interactions."
     )
     
-    # Modifier keys
-    ctrlKey: bool = False
-    shiftKey: bool = False
-    altKey: bool = False
-    metaKey: bool = False
+    # Keyboard properties
+    key_value: Optional[str] = Field(
+        default=None,
+        description="The key value pressed (e.g., 'a', 'Enter', 'Shift'). None for non-keyboard interactions."
+    )
+    key_code: Optional[str] = Field(
+        default=None,
+        description="The physical key code (e.g., 'KeyA', 'Enter', 'ShiftLeft'). None for non-keyboard interactions."
+    )
+    key_code_deprecated: Optional[int] = Field(
+        default=None,
+        description="Deprecated numeric key code. None for non-keyboard interactions."
+    )
+    key_which_deprecated: Optional[int] = Field(
+        default=None,
+        description="Deprecated numeric key code. None for non-keyboard interactions."
+    )
     
-    # Mouse coordinates (null for non-mouse events)
-    clientX: Optional[int] = Field(
-        default=None,
-        description="X coordinate relative to viewport."
+    # Modifier keys (apply to both mouse and keyboard interactions)
+    ctrl_pressed: bool = Field(
+        default=False,
+        description="Whether the Ctrl key was pressed during the interaction."
     )
-    clientY: Optional[int] = Field(
-        default=None,
-        description="Y coordinate relative to viewport."
+    shift_pressed: bool = Field(
+        default=False,
+        description="Whether the Shift key was pressed during the interaction."
     )
-    pageX: Optional[int] = Field(
-        default=None,
-        description="X coordinate relative to page (includes scroll)."
+    alt_pressed: bool = Field(
+        default=False,
+        description="Whether the Alt key was pressed during the interaction."
     )
-    pageY: Optional[int] = Field(
-        default=None,
-        description="Y coordinate relative to page (includes scroll)."
+    meta_pressed: bool = Field(
+        default=False,
+        description="Whether the Meta/Cmd key was pressed during the interaction."
     )
 
 
-class UiInteraction(BaseModel):
+class UiInteractionEvent(BaseModel):
     """
-    Complete UI interaction record.
+    Complete UI interaction event record.
     
     Represents a single user interaction with a web element, including:
     - What type of interaction occurred
-    - When it occurred (client and server timestamps)
+    - When it occurred (timestamp)
     - What element was interacted with (UiElement)
-    - Raw event details (EventData)
+    - How it occurred (Interaction) - mouse position, keys pressed, modifiers, etc.
     - Page context (URL)
     """
     # Interaction type
@@ -108,10 +121,10 @@ class UiInteraction(BaseModel):
         description="Client-side timestamp (milliseconds since epoch) when the interaction occurred."
     )
     
-    # Event details
-    event: EventData | None = Field(
+    # How the interaction occurred (mouse coordinates, keyboard keys, modifiers, etc.)
+    interaction: Interaction | None = Field(
         default=None,
-        description="Raw event details from the browser event object."
+        description="Details about how the interaction occurred (mouse position, keys pressed, modifiers, etc.)."
     )
     
     # Element that was interacted with

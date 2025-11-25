@@ -13,12 +13,12 @@ from collections import defaultdict
 from web_hacker.config import Config
 from web_hacker.utils.cdp_utils import write_jsonl, write_json_file
 
-# Import UiElement and UiInteraction models
+# Import UiElement and UiInteractionEvent models
 from web_hacker.data_models.ui_elements import (
     UiElement, Selector, SelectorType, BoundingBox
 )
 from web_hacker.data_models.ui_interactions import (
-    UiInteraction, InteractionType, EventData
+    UiInteractionEvent, InteractionType, Interaction
 )
 
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
@@ -249,20 +249,19 @@ class InteractionMonitor:
             type: type,
             timestamp: Date.now(),
             event: {{
-                type: event.type,
-                button: event.button !== undefined ? event.button : null,
-                key: event.key || null,
-                code: event.code || null,
-                keyCode: event.keyCode || null,
-                which: event.which || null,
-                ctrlKey: event.ctrlKey || false,
-                shiftKey: event.shiftKey || false,
-                altKey: event.altKey || false,
-                metaKey: event.metaKey || false,
-                clientX: event.clientX || null,
-                clientY: event.clientY || null,
-                pageX: event.pageX || null,
-                pageY: event.pageY || null,
+                mouse_button: event.button !== undefined ? event.button : null,
+                key_value: event.key || null,
+                key_code: event.code || null,
+                key_code_deprecated: event.keyCode || null,
+                key_which_deprecated: event.which || null,
+                ctrl_pressed: event.ctrlKey || false,
+                shift_pressed: event.shiftKey || false,
+                alt_pressed: event.altKey || false,
+                meta_pressed: event.metaKey || false,
+                mouse_x_viewport: event.clientX || null,
+                mouse_y_viewport: event.clientY || null,
+                mouse_x_page: event.pageX || null,
+                mouse_y_page: event.pageY || null,
             }},
             element: details,
             url: window.location.href
@@ -447,25 +446,24 @@ class InteractionMonitor:
                     # Build default selectors
                     ui_element.build_default_selectors()
                 
-                # Convert event data to EventData format
-                event_data = None
+                # Convert event data to Interaction format
+                interaction_details = None
                 event_raw = raw_data.get("event")
                 if event_raw:
-                    event_data = EventData(
-                        type=event_raw.get("type", ""),
-                        button=event_raw.get("button"),
-                        key=event_raw.get("key"),
-                        code=event_raw.get("code"),
-                        keyCode=event_raw.get("keyCode"),
-                        which=event_raw.get("which"),
-                        ctrlKey=event_raw.get("ctrlKey", False),
-                        shiftKey=event_raw.get("shiftKey", False),
-                        altKey=event_raw.get("altKey", False),
-                        metaKey=event_raw.get("metaKey", False),
-                        clientX=event_raw.get("clientX"),
-                        clientY=event_raw.get("clientY"),
-                        pageX=event_raw.get("pageX"),
-                        pageY=event_raw.get("pageY"),
+                    interaction_details = Interaction(
+                        mouse_button=event_raw.get("mouse_button"),
+                        key_value=event_raw.get("key_value"),
+                        key_code=event_raw.get("key_code"),
+                        key_code_deprecated=event_raw.get("key_code_deprecated"),
+                        key_which_deprecated=event_raw.get("key_which_deprecated"),
+                        ctrl_pressed=event_raw.get("ctrl_pressed", False),
+                        shift_pressed=event_raw.get("shift_pressed", False),
+                        alt_pressed=event_raw.get("alt_pressed", False),
+                        meta_pressed=event_raw.get("meta_pressed", False),
+                        mouse_x_viewport=event_raw.get("mouse_x_viewport"),
+                        mouse_y_viewport=event_raw.get("mouse_y_viewport"),
+                        mouse_x_page=event_raw.get("mouse_x_page"),
+                        mouse_y_page=event_raw.get("mouse_y_page"),
                     )
                 
                 # Get interaction type (convert string to enum)
@@ -477,24 +475,24 @@ class InteractionMonitor:
                     logger.warning("Unknown interaction type: %s, skipping", interaction_type_str)
                     return False
                 
-                # Create UiInteraction
+                # Create UiInteractionEvent
                 if ui_element is None:
                     logger.warning("Missing element data for interaction, skipping")
                     return False
                 
-                ui_interaction = UiInteraction(
+                ui_interaction_event = UiInteractionEvent(
                     type=interaction_type,
                     timestamp=raw_data.get("timestamp", 0),
-                    event=event_data,
+                    interaction=interaction_details,
                     element=ui_element,
                     url=raw_data.get("url", ""),
                 )
                 
                 # Convert to dict for logging
-                interaction_data = ui_interaction.model_dump()
+                interaction_data = ui_interaction_event.model_dump()
                 
             except Exception as e:
-                logger.info("Failed to convert to UiInteraction format: %s", e)
+                logger.info("Failed to convert to UiInteractionEvent format: %s", e)
                 # Fallback to original format if conversion fails
                 interaction_data = raw_data
             
