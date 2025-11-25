@@ -4,10 +4,14 @@ Browser monitoring SDK wrapper.
 
 from typing import Optional, Set
 from pathlib import Path
+import json
 import logging
+import os
 import sys
 import time
 import threading
+
+import requests
 
 from ..cdp.cdp_session import CDPSession
 from ..cdp.tab_managements import cdp_new_tab, dispose_context
@@ -71,11 +75,22 @@ class BrowserMonitor:
         
         # Create output directory structure
         paths = {
+            # Main directories
             "output_dir": self.output_dir,
             "network_dir": str(Path(self.output_dir) / "network"),
             "transactions_dir": str(Path(self.output_dir) / "network" / "transactions"),
             "storage_dir": str(Path(self.output_dir) / "storage"),
             "interaction_dir": str(Path(self.output_dir) / "interaction"),
+            "window_properties_dir": str(Path(self.output_dir) / "window_properties"),
+            
+            # File paths (all static output files)
+            "storage_jsonl_path": str(Path(self.output_dir) / "storage" / "events.jsonl"),
+            "interaction_jsonl_path": str(Path(self.output_dir) / "interaction" / "events.jsonl"),
+            "window_properties_json_path": str(Path(self.output_dir) / "window_properties" / "window_properties.json"),
+            "consolidated_transactions_json_path": str(Path(self.output_dir) / "network" / "consolidated_transactions.json"),
+            "network_har_path": str(Path(self.output_dir) / "network" / "network.har"),
+            "consolidated_interactions_json_path": str(Path(self.output_dir) / "interaction" / "consolidated_interactions.json"),
+            "summary_path": str(Path(self.output_dir) / "session_summary.json"),
         }
         
         # Create directories
@@ -98,7 +113,6 @@ class BrowserMonitor:
         else:
             # Connect to existing browser
             try:
-                import requests
                 ver = requests.get(f"{self.remote_debugging_address}/json/version", timeout=5)
                 ver.raise_for_status()
                 data = ver.json()
@@ -128,14 +142,68 @@ class BrowserMonitor:
         
         logger.info(f"Browser monitoring started. Output directory: {self.output_dir}")
     
+    def _finalize_session(self):
+        """Finalize session: sync cookies, collect window properties, and consolidate data."""
+        logger.info("Finalizing session...")
+        if not self.session:
+            logger.warning("No session to finalize!")
+            return
+        
+        # Final cookie sync
+        try:
+            self.session.storage_monitor.monitor_cookie_changes(self.session)
+        except Exception as e:
+            logger.error(f"Failed to sync cookies: {e}", exc_info=True)
+        
+        # Force final window property collection
+        try:
+            self.session.window_property_monitor.force_collect(self.session)
+        except Exception as e:
+            logger.error(f"Failed to force collect window properties: {e}", exc_info=True)
+        
+        # Consolidate transactions
+        try:
+            network_dir = self.session.paths.get('network_dir', str(Path(self.output_dir) / "network"))
+            consolidated_path = self.session.paths.get('consolidated_transactions_json_path',
+                                                       str(Path(network_dir) / "consolidated_transactions.json"))
+            logger.info(f"Consolidating transactions to {consolidated_path}...")
+            result = self.session.network_monitor.consolidate_transactions(consolidated_path)
+            if os.path.exists(consolidated_path):
+                logger.info(f"✓ Consolidated transactions saved to {consolidated_path}")
+            else:
+                logger.error(f"✗ Consolidated transactions file NOT created at {consolidated_path}")
+        except Exception as e:
+            logger.error(f"Failed to consolidate transactions: {e}", exc_info=True)
+        
+        # Generate HAR file
+        try:
+            network_dir = self.session.paths.get('network_dir', str(Path(self.output_dir) / "network"))
+            har_path = self.session.paths.get('network_har_path',
+                                              str(Path(network_dir) / "network.har"))
+            logger.info(f"Generating HAR file at {har_path}...")
+            self.session.network_monitor.generate_har_from_transactions(har_path, "Web Hacker Session")
+            if os.path.exists(har_path):
+                logger.info(f"✓ HAR file saved to {har_path}")
+            else:
+                logger.error(f"✗ HAR file NOT created at {har_path}")
+        except Exception as e:
+            logger.error(f"Failed to generate HAR file: {e}", exc_info=True)
+        
+        # Consolidate interactions
+        try:
+            interaction_dir = self.session.paths.get('interaction_dir', str(Path(self.output_dir) / "interaction"))
+            consolidated_interactions_path = self.session.paths.get('consolidated_interactions_json_path',
+                                                                   str(Path(interaction_dir) / "consolidated_interactions.json"))
+            self.session.interaction_monitor.consolidate_interactions(consolidated_interactions_path)
+        except Exception as e:
+            logger.error(f"Failed to consolidate interactions: {e}", exc_info=True)
+    
     def _run_monitoring_loop(self):
         """Run the monitoring loop in a separate thread."""
         if not self.session:
             return
         
         try:
-            import json
-            
             # Set a timeout on the websocket to allow checking stop event
             if hasattr(self.session.ws, 'settimeout'):
                 self.session.ws.settimeout(1.0)
@@ -155,37 +223,7 @@ class BrowserMonitor:
         except KeyboardInterrupt:
             pass
         finally:
-            # Final cookie sync
-            try:
-                if self.session:
-                    self.session.storage_monitor.monitor_cookie_changes(self.session)
-            except:
-                pass
-            
-            # Consolidate transactions
-            try:
-                if self.session:
-                    consolidated_path = f"{self.output_dir}/network/consolidated_transactions.json"
-                    self.session.network_monitor.consolidate_transactions(consolidated_path)
-            except:
-                pass
-            
-            # Generate HAR file
-            try:
-                if self.session:
-                    har_path = f"{self.output_dir}/network/network.har"
-                    self.session.network_monitor.generate_har_from_transactions(har_path, "Web Hacker Session")
-            except:
-                pass
-            
-            # Consolidate interactions
-            try:
-                if self.session:
-                    interaction_dir = self.session.paths.get('interaction_dir', f"{self.output_dir}/interaction")
-                    consolidated_interactions_path = str(Path(interaction_dir) / "consolidated_interactions.json")
-                    self.session.interaction_monitor.consolidate_interactions(consolidated_interactions_path)
-            except:
-                pass
+            self._finalize_session()
     
     def stop(self) -> dict:
         """Stop monitoring and return summary."""
@@ -198,6 +236,9 @@ class BrowserMonitor:
         # Wait for thread to finish (with timeout)
         if self._run_thread and self._run_thread.is_alive():
             self._run_thread.join(timeout=5.0)
+        
+        # Ensure consolidation happens even if thread didn't finish cleanly
+        self._finalize_session()
         
         # Close WebSocket
         try:

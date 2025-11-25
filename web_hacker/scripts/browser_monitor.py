@@ -231,28 +231,33 @@ def setup_output_directory(output_dir, keep_output):
     network_dir = os.path.join(output_dir, "network")
     storage_dir = os.path.join(output_dir, "storage")
     interaction_dir = os.path.join(output_dir, "interaction")
+    window_properties_dir = os.path.join(output_dir, "window_properties")
     
     os.makedirs(network_dir, exist_ok=True)
     os.makedirs(storage_dir, exist_ok=True)
     os.makedirs(interaction_dir, exist_ok=True)
-    
+    os.makedirs(window_properties_dir, exist_ok=True)
+
     # Create transactions directory for unified request/response storage
     transactions_dir = os.path.join(network_dir, "transactions")
     os.makedirs(transactions_dir, exist_ok=True)
     
     return {
         # Main directories
+        'output_dir': output_dir,
         'network_dir': network_dir,
         'storage_dir': storage_dir,
+        'window_properties_dir': window_properties_dir,
         'interaction_dir': interaction_dir,
         'transactions_dir': transactions_dir,
         
-        
-        # Storage files  
+        # File paths (all static output files)
         'storage_jsonl_path': os.path.join(storage_dir, "events.jsonl"),
         'interaction_jsonl_path': os.path.join(interaction_dir, "events.jsonl"),
-        
-        # Summary file
+        'window_properties_json_path': os.path.join(window_properties_dir, "window_properties.json"),
+        'consolidated_transactions_json_path': os.path.join(network_dir, "consolidated_transactions.json"),
+        'network_har_path': os.path.join(network_dir, "network.har"),
+        'consolidated_interactions_json_path': os.path.join(interaction_dir, "consolidated_interactions.json"),
         'summary_path': os.path.join(output_dir, "session_summary.json")
     }
 
@@ -338,6 +343,7 @@ def main():
     logger.info(f"Tab ID: {tab_id}")
 
     # Create and run CDP session
+    session = None
     try:
         session = CDPSession(
             ws_url, 
@@ -354,23 +360,28 @@ def main():
     except KeyboardInterrupt:
         logger.info("\nSession stopped by user")
     except Exception as e:
-        logger.info(f"Error: {e}")
+        logger.error("Session crashed!", exc_info=True)
         sys.exit(1)
     finally:
+        logger.info("Running cleanup...")
         # Cleanup: dispose context if we created a tab
         if created_tab and context_id:
             try:
-                logger.info("Cleaning up created browser context...")
+                logger.info(f"Disposing browser context {context_id}...")
                 dispose_context(remote_debugging_address, context_id)
+                logger.info("✓ Browser context disposed - tab should close")
             except Exception as e:
-                logger.info(f"Warning: Could not dispose browser context: {e}")
+                logger.error(f"✗ Failed to dispose browser context: {e}", exc_info=True)
+        else:
+            logger.info("No browser context to dispose (tab was not created by this script)")
 
         end_time = time.time()
 
         # Get final summary and save it
         try:
-            summary = session.get_monitoring_summary()
-            save_session_summary(paths, summary, args, start_time, end_time, created_tab, context_id)
+            if session:
+                summary = session.get_monitoring_summary()
+                save_session_summary(paths, summary, args, start_time, end_time, created_tab, context_id)
 
             # Print organized summary
             logger.info("\n" + "="*60)
@@ -397,6 +408,8 @@ def main():
             logger.info(f"│           └── response_body.[ext]")
             logger.info(f"├── storage/")
             logger.info(f"│   └── events.jsonl")
+            logger.info(f"├── window_properties/")
+            logger.info(f"│   └── window_properties.json")
             logger.info(f"└── interaction/")
             logger.info(f"    └── events.jsonl")
 
