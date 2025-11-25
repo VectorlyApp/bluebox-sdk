@@ -201,48 +201,55 @@ class Routine(BaseModel):
                 result = False
                 errors.append("Second to last operation should be a fetch operation")
                 
-            # get all placeholders
-            all_placeholders = self._get_all_placeholders(self.model_dump_json())
+            # get all placeholders (as a set for easier operations)
+            all_placeholders = set(self._get_all_placeholders(self.model_dump_json()))
                 
             # check that every parameter is used at least once
-            routine_string = self.model_dump_json()
-            for parameter in self.parameters:
-                if parameter.name not in all_placeholders:
-                    result = False
-                    errors.append(f"Parameter '{parameter.name}' is not used in the routine operations...")
-                else:
-                    all_placeholders.remove(parameter.name)
+            defined_parameters = {p.name for p in self.parameters}
+            unused_parameters = defined_parameters - all_placeholders
+            if unused_parameters:
+                result = False
+                for param_name in unused_parameters:
+                    errors.append(f"Parameter '{param_name}' is not used in the routine operations...")
+            
+            # remaining placeholders are those that are NOT parameters
+            remaining_placeholders = all_placeholders - defined_parameters
                     
             # all remaining placeholders should be session storage keys, cookies, local storage
-            for placeholder in all_placeholders:
+            for placeholder in remaining_placeholders:
                 if placeholder.split(":")[0] not in ["sessionStorage", "cookie", "localStorage", "uuid", "epoch_milliseconds", "meta", "windowProperty"]:
                     result = False
                     errors.append(f"Placeholder '{placeholder}' is not a session storage key, cookie, local storage key, uuid, epoch_milliseconds, meta, or window property...")
                         
-            # get all used session storage keys
-            all_session_storage_keys = []
-            for placeholder in all_placeholders:
+            # get all used session storage keys (from placeholders)
+            used_session_storage_keys = set()
+            for placeholder in all_placeholders: # Iterate over ALL placeholders (including params if any overlap? No, params don't start with sessionStorage:)
                 if placeholder.split(":")[0] == "sessionStorage":
-                    all_session_storage_keys.append(placeholder.split(":")[1].split(".")[0])
+                    used_session_storage_keys.add(placeholder.split(":")[1].split(".")[0])
+            
+            # also consider the return operation's key as "used"
+            if isinstance(self.operations[-1], RoutineReturnOperation):
+                used_session_storage_keys.add(self.operations[-1].session_storage_key)
                     
-            # get all fetch session storage keys
-            all_fetch_session_storage_keys = []
+            # get all fetch session storage keys (produced keys)
+            all_fetch_session_storage_keys = set()
             for operation in self.operations:
                 if isinstance(operation, RoutineFetchOperation):
-                    all_fetch_session_storage_keys.append(operation.session_storage_key)
+                    all_fetch_session_storage_keys.add(operation.session_storage_key)
             
             # check that every fetch session storage key is used at least once
-            for fetch_session_storage_key in all_fetch_session_storage_keys:
-                if fetch_session_storage_key not in all_session_storage_keys and fetch_session_storage_key != self.operations[-1].session_storage_key:
-                    result = False
-                    errors.append(f"Fetch session storage key '{fetch_session_storage_key}' is not used in the routine operations. Fetch may not be necessary for this routine.")
-                else:
-                    all_session_storage_keys.remove(fetch_session_storage_key)
+            unused_keys = all_fetch_session_storage_keys - used_session_storage_keys
+            if unused_keys:
+                result = False
+                for key in unused_keys:
+                    errors.append(f"Fetch session storage key '{key}' is not used in the routine operations. Fetch may not be necessary for this routine.")
                     
             # session storage key of the last fetch operation should be the same as the return operation's session storage key
-            if self.operations[-1].session_storage_key != self.operations[-2].session_storage_key:
-                result = False
-                errors.append("Session storage key of the last fetch operation should be the same as the return operation's session storage key")
+            # Ensure we have enough operations and they are of correct types before checking keys
+            if len(self.operations) >= 3 and isinstance(self.operations[-1], RoutineReturnOperation) and isinstance(self.operations[-2], RoutineFetchOperation):
+                if self.operations[-1].session_storage_key != self.operations[-2].session_storage_key:
+                    result = False
+                    errors.append("Session storage key of the last fetch operation should be the same as the return operation's session storage key")
             
         except Exception as e:
             result = False

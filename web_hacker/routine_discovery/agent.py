@@ -379,7 +379,9 @@ class RoutineDiscoveryAgent(BaseModel):
         message = (
             f"Please extract the variables from only these network requests (requests only!): {transactions}"
             "Mark each variable with requires_resolution=True if we need to dynamically resolve this variable at runtime."
-            "If we can most likely hardcode this value, mark requires_resolution=False."
+            "If we can most likely hardcode this value, mark requires_resolution=False!!!!"
+            "Resolving these is hard so if we can get away without resolving them... lets not resolve them!"
+            "But if we really need to resolve them for authentication or maintain native webapp functionality, mark requires_resolution=True and provide the values_to_scan_for."
             "system variables are related to the device or browser environment, and are not used to identify the user."
             "token and cookie values are not used to identify the user: these may need to be resolved at runtime."
             "Only the actual values of the variables (token/cookies, etc.) should be placed into the observed_value field."
@@ -547,6 +549,7 @@ class RoutineDiscoveryAgent(BaseModel):
             f"Every fetch operation result is written to session storage. "
             f"At the end of the routine return the proper session storage value (likely containing the last fetch operation result). "
             f"To feed output of a fetch into a subsequent fetch, you can save result to session storage and then use {{{{sessionStorage:key.to.path}}}}. "
+            f"Credentials should be set to same-origin if possible. If not possible, set to include. The absolute last resort is to set to omit."
         )
         self._add_to_message_history("user", message)
 
@@ -634,6 +637,9 @@ class RoutineDiscoveryAgent(BaseModel):
             client=self.client,
             llm_model=self.llm_model
         )
+        
+        # fix the placeholders in the production routine
+        production_routine.fix_placeholders()
         
         return production_routine
 
