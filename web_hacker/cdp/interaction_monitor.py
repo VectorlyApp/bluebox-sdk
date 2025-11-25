@@ -13,6 +13,14 @@ from collections import defaultdict
 from web_hacker.config import Config
 from web_hacker.utils.cdp_utils import write_jsonl, write_json_file
 
+# Import UiElement and UiInteractionEvent models
+from web_hacker.data_models.ui_elements import (
+    UiElement, Identifier, IdentifierType, BoundingBox
+)
+from web_hacker.data_models.ui_interactions import (
+    UiInteractionEvent, InteractionType, Interaction
+)
+
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
 logger = logging.getLogger(__name__)
 
@@ -92,58 +100,143 @@ class InteractionMonitor:
         check();
     }}
     
-    // Helper function to get element details
+    // Helper function to get element details (UiElement format)
     function getElementDetails(element) {{
         if (!element) return null;
         
+        // Collect all attributes
+        const attributes = {{}};
+        if (element.attributes) {{
+            for (let i = 0; i < element.attributes.length; i++) {{
+                const attr = element.attributes[i];
+                attributes[attr.name] = attr.value;
+            }}
+        }}
+        
+        // Parse class names into array
+        const classNames = element.className && typeof element.className === 'string'
+            ? element.className.split(/\\s+/).filter(c => c)
+            : [];
+        
         const details = {{
-            tagName: element.tagName || '',
-            id: element.id || '',
-            className: element.className || '',
-            name: element.name || '',
-            type: element.type || '',
-            value: element.value || '',
-            text: element.textContent ? element.textContent.substring(0, 200) : '',
-            href: element.href || '',
-            src: element.src || '',
-            role: element.getAttribute('role') || '',
-            ariaLabel: element.getAttribute('aria-label') || '',
-            title: element.title || '',
-            placeholder: element.placeholder || '',
+            tag_name: (element.tagName || '').toLowerCase(),
+            id: element.id || null,
+            name: element.name || null,
+            class_names: classNames.length > 0 ? classNames : null,
+            type_attr: element.type || null,
+            role: element.getAttribute('role') || null,
+            aria_label: element.getAttribute('aria-label') || null,
+            placeholder: element.placeholder || null,
+            title: element.title || null,
+            href: element.href || null,
+            src: element.src || null,
+            value: element.value || null,
+            text: element.textContent ? element.textContent.trim().substring(0, 200) : null,
+            attributes: Object.keys(attributes).length > 0 ? attributes : null,
         }};
         
-        // Get XPath-like path
+        // Improved selector generation
         function getElementPath(el) {{
             if (!el || el.nodeType !== 1) return '';
             const path = [];
-            while (el && el.nodeType === 1) {{
-                let selector = el.tagName.toLowerCase();
-                if (el.id) {{
-                    selector += '#' + el.id;
-                }} else if (el.className) {{
-                    const classes = el.className.split(' ').filter(c => c).slice(0, 3).join('.');
-                    if (classes) selector += '.' + classes;
+            let current = el;
+            
+            while (current && current.nodeType === 1) {{
+                let selector = current.tagName.toLowerCase();
+                
+                // 1. ID is gold standard
+                if (current.id) {{
+                    selector += '#' + current.id;
+                    path.unshift(selector);
+                    break; // ID is usually unique enough
                 }}
+                
+                // 2. Stable attributes
+                const stableAttrs = ['name', 'data-testid', 'data-test-id', 'data-cy', 'role', 'placeholder', 'aria-label', 'title'];
+                let foundStable = false;
+                for (const attr of stableAttrs) {{
+                    const val = current.getAttribute(attr);
+                    if (val) {{
+                        selector += `[${{attr}}="${{val.replace(/"/g, '\\"')}}"]`;
+                        foundStable = true;
+                        break;
+                    }}
+                }}
+                
+                // 3. Classes (careful filtering)
+                if (!foundStable && current.className && typeof current.className === 'string') {{
+                    // Filter out likely generated classes
+                    const classes = current.className.split(/\\s+/)
+                        .filter(c => c)
+                        .filter(c => !c.startsWith('sc-')) // Styled Components
+                        .filter(c => !c.match(/^[a-zA-Z0-9]{{10,}}$/)) // Long random strings
+                        .filter(c => !c.match(/css-/)); // Emotion/CSS-in-JS
+                    
+                    if (classes.length > 0) {{
+                        selector += '.' + classes.join('.');
+                    }}
+                }}
+                
+                // 4. Nth-child fallback if no unique traits
+                if (!foundStable && !current.id) {{
+                    let sibling = current;
+                    let index = 1;
+                    while (sibling = sibling.previousElementSibling) {{
+                        if (sibling.tagName === current.tagName) index++;
+                    }}
+                    if (index > 1) selector += `:nth-of-type(${{index}})`;
+                }}
+
                 path.unshift(selector);
-                el = el.parentElement;
+                current = current.parentElement;
                 if (path.length > 5) break; // Limit depth
             }}
             return path.join(' > ');
         }}
         
-        details.path = getElementPath(element);
+        details.css_path = getElementPath(element);
+        
+        // Get XPath (Full structural path like /html/body/div[1]/input[1])
+        function getXPath(el) {{
+            if (!el || el.nodeType !== 1) return '';
+            
+            const parts = [];
+            while (el && el.nodeType === 1) {{
+                let part = el.tagName.toLowerCase();
+                
+                // Count all previous siblings with the same tag name (1-based indexing)
+                let index = 1;
+                let sibling = el.previousElementSibling;
+                while (sibling) {{
+                    if (sibling.nodeType === 1 && sibling.tagName === el.tagName) {{
+                        index++;
+                    }}
+                    sibling = sibling.previousElementSibling;
+                }}
+                
+                // Always include index (XPath is 1-based)
+                part += `[${{index}}]`;
+                parts.unshift(part);
+                
+                el = el.parentElement;
+            }}
+            return '/' + parts.join('/');
+        }}
+        
+        details.xpath = getXPath(element);
+        details.url = window.location.href;
         
         // Get bounding box
         try {{
             const rect = element.getBoundingClientRect();
-            details.boundingBox = {{
-                x: Math.round(rect.x),
-                y: Math.round(rect.y),
-                width: Math.round(rect.width),
-                height: Math.round(rect.height)
+            details.bounding_box = {{
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height
             }};
         }} catch (e) {{
-            details.boundingBox = null;
+            details.bounding_box = null;
         }}
         
         return details;
@@ -156,20 +249,19 @@ class InteractionMonitor:
             type: type,
             timestamp: Date.now(),
             event: {{
-                type: event.type,
-                button: event.button !== undefined ? event.button : null,
-                key: event.key || null,
-                code: event.code || null,
-                keyCode: event.keyCode || null,
-                which: event.which || null,
-                ctrlKey: event.ctrlKey || false,
-                shiftKey: event.shiftKey || false,
-                altKey: event.altKey || false,
-                metaKey: event.metaKey || false,
-                clientX: event.clientX || null,
-                clientY: event.clientY || null,
-                pageX: event.pageX || null,
-                pageY: event.pageY || null,
+                mouse_button: event.button !== undefined ? event.button : null,
+                key_value: event.key || null,
+                key_code: event.code || null,
+                key_code_deprecated: event.keyCode || null,
+                key_which_deprecated: event.which || null,
+                ctrl_pressed: event.ctrlKey || false,
+                shift_pressed: event.shiftKey || false,
+                alt_pressed: event.altKey || false,
+                meta_pressed: event.metaKey || false,
+                mouse_x_viewport: event.clientX || null,
+                mouse_y_viewport: event.clientY || null,
+                mouse_x_page: event.pageX || null,
+                mouse_y_page: event.pageY || null,
             }},
             element: details,
             url: window.location.href
@@ -189,40 +281,40 @@ class InteractionMonitor:
     waitForBinding(function() {{
         // Mouse event listeners
         document.addEventListener('click', function(event) {{
-            logInteraction('mouse_click', event, event.target);
+            logInteraction('click', event, event.target);
         }}, true);
         
         document.addEventListener('mousedown', function(event) {{
-            logInteraction('mouse_down', event, event.target);
+            logInteraction('mousedown', event, event.target);
         }}, true);
         
         document.addEventListener('mouseup', function(event) {{
-            logInteraction('mouse_up', event, event.target);
+            logInteraction('mouseup', event, event.target);
         }}, true);
         
         document.addEventListener('dblclick', function(event) {{
-            logInteraction('mouse_double_click', event, event.target);
+            logInteraction('dblclick', event, event.target);
         }}, true);
         
         document.addEventListener('contextmenu', function(event) {{
-            logInteraction('mouse_context_menu', event, event.target);
+            logInteraction('contextmenu', event, event.target);
         }}, true);
         
         document.addEventListener('mouseover', function(event) {{
-            logInteraction('mouse_over', event, event.target);
+            logInteraction('mouseover', event, event.target);
         }}, true);
         
         // Keyboard event listeners
         document.addEventListener('keydown', function(event) {{
-            logInteraction('key_down', event, event.target);
+            logInteraction('keydown', event, event.target);
         }}, true);
         
         document.addEventListener('keyup', function(event) {{
-            logInteraction('key_up', event, event.target);
+            logInteraction('keyup', event, event.target);
         }}, true);
         
         document.addEventListener('keypress', function(event) {{
-            logInteraction('key_press', event, event.target);
+            logInteraction('keypress', event, event.target);
         }}, true);
         
         // Input events (for form fields)
@@ -310,15 +402,105 @@ class InteractionMonitor:
                 return False
             
             # Parse the interaction data from JavaScript
-            interaction_data = json.loads(payload)
+            raw_data = json.loads(payload)
             
-            # Add server-side timestamp
-            interaction_data["server_timestamp"] = time.time()
+            try:
+                # Convert element details to UiElement format
+                element_data = raw_data.get("element")
+                ui_element = None
+                
+                if element_data:
+                    # Convert bounding_box if present
+                    bounding_box = None
+                    if element_data.get("bounding_box"):
+                        bb_data = element_data["bounding_box"]
+                        bounding_box = BoundingBox(
+                            x=bb_data.get("x", 0),
+                            y=bb_data.get("y", 0),
+                            width=bb_data.get("width", 0),
+                            height=bb_data.get("height", 0)
+                        )
+                    
+                    # Create UiElement
+                    ui_element = UiElement(
+                        tag_name=element_data.get("tag_name", ""),
+                        id=element_data.get("id"),
+                        name=element_data.get("name"),
+                        class_names=element_data.get("class_names"),
+                        type_attr=element_data.get("type_attr"),
+                        role=element_data.get("role"),
+                        aria_label=element_data.get("aria_label"),
+                        placeholder=element_data.get("placeholder"),
+                        title=element_data.get("title"),
+                        href=element_data.get("href"),
+                        src=element_data.get("src"),
+                        value=element_data.get("value"),
+                        text=element_data.get("text"),
+                        attributes=element_data.get("attributes"),
+                        bounding_box=bounding_box,
+                        css_path=element_data.get("css_path"),
+                        xpath=element_data.get("xpath"),
+                        url=element_data.get("url") or raw_data.get("url"),
+                    )
+                    
+                    # Build default Identifiers
+                    ui_element.build_default_Identifiers()
+                
+                # Convert event data to Interaction format
+                interaction_details = None
+                event_raw = raw_data.get("event")
+                if event_raw:
+                    interaction_details = Interaction(
+                        mouse_button=event_raw.get("mouse_button"),
+                        key_value=event_raw.get("key_value"),
+                        key_code=event_raw.get("key_code"),
+                        key_code_deprecated=event_raw.get("key_code_deprecated"),
+                        key_which_deprecated=event_raw.get("key_which_deprecated"),
+                        ctrl_pressed=event_raw.get("ctrl_pressed", False),
+                        shift_pressed=event_raw.get("shift_pressed", False),
+                        alt_pressed=event_raw.get("alt_pressed", False),
+                        meta_pressed=event_raw.get("meta_pressed", False),
+                        mouse_x_viewport=event_raw.get("mouse_x_viewport"),
+                        mouse_y_viewport=event_raw.get("mouse_y_viewport"),
+                        mouse_x_page=event_raw.get("mouse_x_page"),
+                        mouse_y_page=event_raw.get("mouse_y_page"),
+                    )
+                
+                # Get interaction type (convert string to enum)
+                interaction_type_str = raw_data.get("type", "unknown")
+                try:
+                    interaction_type = InteractionType(interaction_type_str)
+                except ValueError:
+                    # If type doesn't match enum, log warning and skip
+                    logger.warning("Unknown interaction type: %s, skipping", interaction_type_str)
+                    return False
+                
+                # Create UiInteractionEvent
+                if ui_element is None:
+                    logger.warning("Missing element data for interaction, skipping")
+                    return False
+                
+                ui_interaction_event = UiInteractionEvent(
+                    type=interaction_type,
+                    timestamp=raw_data.get("timestamp", 0),
+                    interaction=interaction_details,
+                    element=ui_element,
+                    url=raw_data.get("url", ""),
+                )
+                
+                # Convert to dict for logging
+                interaction_data = ui_interaction_event.model_dump()
+                
+            except Exception as e:
+                logger.info("Failed to convert to UiInteractionEvent format: %s", e)
+                # Fallback to original format if conversion fails
+                interaction_data = raw_data
             
             # Update statistics
             self.interaction_count += 1
-            interaction_type = interaction_data.get("type", "unknown")
-            self.interaction_types[interaction_type] += 1
+            # Extract interaction type (model_dump() serializes enum to string)
+            interaction_type_str = interaction_data.get("type", "unknown")
+            self.interaction_types[interaction_type_str] += 1
             url = interaction_data.get("url", "unknown")
             self.interactions_by_url[url] += 1
             
