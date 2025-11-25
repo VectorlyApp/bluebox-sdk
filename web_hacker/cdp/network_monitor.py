@@ -757,14 +757,14 @@ class NetworkMonitor:
         
         # Save HAR file
         if output_path:
-        try:
+            try:
                 # Ensure directory exists
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(har_data, f, indent=2, ensure_ascii=False)
-            logger.info("HAR file saved to: %s", output_path)
-        except Exception as e:
-                logger.error("Failed to save HAR file: %s", e, exc_info=True)
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(har_data, f, indent=2, ensure_ascii=False)
+                logger.info("HAR file saved to: %s", output_path)
+            except Exception as e:
+                    logger.error("Failed to save HAR file: %s", e, exc_info=True)
         
         return har_data
 
