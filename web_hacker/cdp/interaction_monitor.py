@@ -15,7 +15,7 @@ from web_hacker.utils.cdp_utils import write_jsonl, write_json_file
 
 # Import UiElement and UiInteractionEvent models
 from web_hacker.data_models.ui_elements import (
-    UiElement, Indetifier, IndetifierType, BoundingBox
+    UiElement, Identifier, IdentifierType, BoundingBox
 )
 from web_hacker.data_models.ui_interactions import (
     UiInteractionEvent, InteractionType, Interaction
@@ -443,8 +443,8 @@ class InteractionMonitor:
                         url=element_data.get("url") or raw_data.get("url"),
                     )
                     
-                    # Build default indetifiers
-                    ui_element.build_default_indetifiers()
+                    # Build default Identifiers
+                    ui_element.build_default_Identifiers()
                 
                 # Convert event data to Interaction format
                 interaction_details = None

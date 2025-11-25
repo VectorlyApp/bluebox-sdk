@@ -13,7 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class IndetifierType(StrEnum):
+class IdentifierType(StrEnum):
     CSS = "css"
     XPATH = "xpath"
     TEXT = "text"          # e.g. "button with label X"
@@ -23,17 +23,17 @@ class IndetifierType(StrEnum):
 
 
 # Default priority mapping for selector types (lower = higher priority)
-DEFAULT_IDENTIFIER_PRIORITIES: Dict[IndetifierType, int] = {
-    IndetifierType.ID: 10,           # Highest priority - IDs are unique
-    IndetifierType.NAME: 20,         # Form controls by name are very stable
-    IndetifierType.CSS: 30,          # CSS indetifiers (with stable attributes)
-    IndetifierType.ROLE: 40,         # ARIA roles + labels
-    IndetifierType.TEXT: 50,         # Text-based matching
-    IndetifierType.XPATH: 80,        # XPath (often brittle, last resort)
+DEFAULT_IDENTIFIER_PRIORITIES: Dict[IdentifierType, int] = {
+    IdentifierType.ID: 10,           # Highest priority - IDs are unique
+    IdentifierType.NAME: 20,         # Form controls by name are very stable
+    IdentifierType.CSS: 30,          # CSS Identifiers (with stable attributes)
+    IdentifierType.ROLE: 40,         # ARIA roles + labels
+    IdentifierType.TEXT: 50,         # Text-based matching
+    IdentifierType.XPATH: 80,        # XPath (often brittle, last resort)
 }
 
 
-class Indetifier(BaseModel):
+class Identifier(BaseModel):
     """
     A single way to locate an element.
     `value` is the raw string (CSS, XPath, etc.)
@@ -41,7 +41,7 @@ class Indetifier(BaseModel):
     `priority` controls which selector to try first (lower = higher priority).
     If not specified, uses the default priority for the selector type.
     """
-    type: IndetifierType
+    type: IdentifierType
     value: str
     priority: int | None = Field(
         default=None,
@@ -72,7 +72,7 @@ class UiElement(BaseModel):
     Unified description of a UI element sufficient for robust replay.
 
     - Raw DOM data (tag, attributes, text)
-    - Multiple indetifiers (CSS, XPath, text-based, etc.)
+    - Multiple Identifiers (CSS, XPath, text-based, etc.)
     - Context (URL, frame)
     """
     # Context
@@ -106,30 +106,30 @@ class UiElement(BaseModel):
     # Content
     text: str | None = Field(
         default=None,
-        description="Trimmed inner text (useful for text-based indetifiers).",
+        description="Trimmed inner text (useful for text-based Identifiers).",
     )
 
     # Geometry
     bounding_box: BoundingBox | None = None
 
     # Locators (multiple ways to find it again)
-    indetifiers: List[Indetifier] | None = Field(
+    Identifiers: List[Identifier] | None = Field(
         default=None,
-        description="Ordered list of indetifiers to try when locating this element.",
+        description="Ordered list of Identifiers to try when locating this element.",
     )
 
-    # Convenience accessors for most common indetifiers
+    # Convenience accessors for most common Identifiers
     css_path: str | None = None    # from getElementPath
     xpath: str | None = None       # full xpath
 
-    def build_default_indetifiers(self) -> None:
+    def build_default_Identifiers(self) -> None:
         """
-        Populate `indetifiers` from known fields if empty.
+        Populate `Identifiers` from known fields if empty.
         Call this once after constructing from raw DOM.
         """
-        if self.indetifiers is None:
-            self.indetifiers = []
-        elif self.indetifiers:
+        if self.Identifiers is None:
+            self.Identifiers = []
+        elif self.Identifiers:
             return
         
         # Ensure attributes is a dict for easier access
@@ -142,44 +142,44 @@ class UiElement(BaseModel):
 
         # Highest priority: ID (uses default priority from DEFAULT_IDENTIFIER_PRIORITIES)
         if self.id:
-            self.indetifiers.append(
-                Indetifier(
-                    type=IndetifierType.ID,
+            self.Identifiers.append(
+                Identifier(
+                    type=IdentifierType.ID,
                     value=self.id,
-                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.ID],
+                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.ID],
                     description="Locate by DOM id",
                 )
             )
 
         # Name attribute - if it exists, use it
         if self.name:
-            self.indetifiers.append(
-                Indetifier(
-                    type=IndetifierType.NAME,
+            self.Identifiers.append(
+                Identifier(
+                    type=IdentifierType.NAME,
                     value=self.name,
-                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.NAME],
+                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.NAME],
                     description="Locate by name attribute",
                 )
             )
 
         # Placeholder attribute - if it exists, use it
         if self.placeholder:
-            self.indetifiers.append(
-                Indetifier(
-                    type=IndetifierType.CSS,
+            self.Identifiers.append(
+                Identifier(
+                    type=IdentifierType.CSS,
                     value=f'{self.tag_name.lower()}[placeholder="{self.placeholder}"]',
-                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.CSS],
+                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.CSS],
                     description="Locate by placeholder",
                 )
             )
 
         # Role - if it exists, use it
         if self.role:
-            self.indetifiers.append(
-                Indetifier(
-                    type=IndetifierType.ROLE,
+            self.Identifiers.append(
+                Identifier(
+                    type=IdentifierType.ROLE,
                     value=self.role,
-                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.ROLE],
+                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.ROLE],
                     description=f"Locate by role={self.role}",
                 )
             )
@@ -188,37 +188,37 @@ class UiElement(BaseModel):
         if self.text:
             snippet = self.text.strip()
             if snippet:
-                self.indetifiers.append(
-                    Indetifier(
-                        type=IndetifierType.TEXT,
+                self.Identifiers.append(
+                    Identifier(
+                        type=IdentifierType.TEXT,
                         value=snippet,
-                        priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.TEXT],
+                        priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.TEXT],
                         description="Locate by text content",
                     )
                 )
 
         # Direct CSS and XPath if we have them
         if self.css_path:
-            self.indetifiers.append(
-                Indetifier(
-                    type=IndetifierType.CSS,
+            self.Identifiers.append(
+                Identifier(
+                    type=IdentifierType.CSS,
                     value=self.css_path,
-                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.CSS],
+                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.CSS],
                     description="Recorded CSS path",
                 )
             )
         if self.xpath:
-            self.indetifiers.append(
-                Indetifier(
-                    type=IndetifierType.XPATH,
+            self.Identifiers.append(
+                Identifier(
+                    type=IdentifierType.XPATH,
                     value=self.xpath,
-                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.XPATH],
+                    priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.XPATH],
                     description="Full XPath (last resort)",
                 )
             )
 
         # Fallback: first stable-looking class
-        if not self.indetifiers and self.class_names:
+        if not self.Identifiers and self.class_names:
             
             # Filter out classes that are likely to be unstable
             stable_classes = [
@@ -231,15 +231,15 @@ class UiElement(BaseModel):
             # If there are stable classes, use the first one
             if stable_classes:
                 cls = stable_classes[0]
-                self.indetifiers.append(
-                    Indetifier(
-                        type=IndetifierType.CSS,
+                self.Identifiers.append(
+                    Identifier(
+                        type=IdentifierType.CSS,
                         value=f".{cls}",
-                        priority=DEFAULT_IDENTIFIER_PRIORITIES[IndetifierType.CSS],
+                        priority=DEFAULT_IDENTIFIER_PRIORITIES[IdentifierType.CSS],
                         description="Fallback by single stable-looking class",
                     )
                 )
                 
-        if not self.indetifiers: 
-            logger.warning("No indetifiers found for element %s", self.model_dump_json())
+        if not self.Identifiers: 
+            logger.warning("No Identifiers found for element %s", self.model_dump_json())
                 

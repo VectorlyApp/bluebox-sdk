@@ -12,25 +12,26 @@ from web_hacker.data_models.ui_elements import UiElement
 
 
 class InteractionType(StrEnum):
-    """Types of UI interactions that can be recorded. Values are DOM event types for direct JavaScript injection."""
-    # Mouse interactions
-    MOUSE_CLICK = "click"
-    MOUSE_DOWN = "mousedown"
-    MOUSE_UP = "mouseup"
-    MOUSE_DOUBLE_CLICK = "dblclick"
-    MOUSE_CONTEXT_MENU = "contextmenu"
-    MOUSE_OVER = "mouseover"
-    
-    # Keyboard interactions
-    KEY_DOWN = "keydown"
-    KEY_UP = "keyup"
-    KEY_PRESS = "keypress"
-    
-    # Form interactions
+    """Types of UI interactions that match real DOM event names."""
+
+    # Mouse events
+    CLICK = "click"
+    MOUSEDOWN = "mousedown"
+    MOUSEUP = "mouseup"
+    DBLCLICK = "dblclick"
+    CONTEXTMENU = "contextmenu"
+    MOUSEOVER = "mouseover"
+
+    # Keyboard events
+    KEYDOWN = "keydown"
+    KEYUP = "keyup"
+    KEYPRESS = "keypress"  # Deprecated but still emitted by browsers
+
+    # Form events
     INPUT = "input"
     CHANGE = "change"
-    
-    # Focus interactions
+
+    # Focus events
     FOCUS = "focus"
     BLUR = "blur"
 
