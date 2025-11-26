@@ -474,9 +474,6 @@ web-hacker-execute \
 - Checkpointing progress and resumability
 
   - Avoid re-running the entire discovery pipeline after exceptions; the agent will checkpoint progress and resume from the last successful stage.
-- Context overflow management
-
-  - On detection of context overflow, the agent will checkpoint state, summarize findings, and spawn a continuation agent to proceed with discovery without losing context.
 - Parameter resolution visibility
 
   - During execution, show which placeholders (e.g., `{{sessionStorage:...}}`, `{{cookie:...}}`, `{{localStorage:...}}` resolved successfully and which failed
