@@ -33,15 +33,18 @@ Welcome to Vectorly's Web Hacker... **No API? No Problem!**
 Define once. Reuse everywhere. Automate anything you can do in a browser.
 
 Each Routine includes:
+
 - **name** — a human-readable identifier
 - **description** — what the Routine does
 - **parameters** — input values the Routine needs to run (e.g. URLs, credentials, text)
 - **operations** — the ordered browser actions that perform the automation
 
 Example:
+
 > Navigate to a dashboard, search based on keywords, and return results — all as a reusable Routine.
 
 ### Quickstart
+
 <p align="center">
   <video src="https://github.com/user-attachments/assets/ec47cfb2-5fb8-4726-b136-cb51df3c1b83" width="760" controls autoplay loop muted>
     Video not supported? Watch the demo on YouTube: https://youtu.be/YFVQSuiaWmM
@@ -57,22 +60,21 @@ Example:
 - **Parameter Validation**: Parameters support validation constraints such as `min_length`, `max_length`, `min_value`, `max_value`, `pattern` (regex), `enum_values`, and `format`.
 - **Reserved Prefixes**: Parameter names cannot start with reserved prefixes: `sessionStorage`, `localStorage`, `cookie`, `meta`, `uuid`, `epoch_milliseconds`.
 
-
 ### Operations
 
 Operations define the executable steps of a Routine. They are represented as a **typed list** (see [`RoutineOperationUnion`](https://github.com/VectorlyApp/web-hacker/blob/main/src/data_models/production_routine.py)) and are executed sequentially by a browser.
 
 Each operation specifies a `type` and its parameters:
 
-- **navigate** — open a URL in the browser.  
+- **navigate** — open a URL in the browser.
   ```json
   { "type": "navigate", "url": "https://example.com" }
   ```
-- **sleep** — pause execution for a given duration (in seconds).  
+- **sleep** — pause execution for a given duration (in seconds).
   ```json
   { "type": "sleep", "timeout_seconds": 1.5 }
   ```
-- **fetch** — perform an HTTP request defined by an `endpoint` object (method, URL, headers, body, credentials). Optionally, store the response under a `session_storage_key`.  
+- **fetch** — perform an HTTP request defined by an `endpoint` object (method, URL, headers, body, credentials). Optionally, store the response under a `session_storage_key`.
   ```json
   { 
     "type": "fetch", 
@@ -86,12 +88,13 @@ Each operation specifies a `type` and its parameters:
     "session_storage_key": "userData" 
   }
   ```
-- **return** — return the value previously stored under a `session_storage_key`.  
+- **return** — return the value previously stored under a `session_storage_key`.
   ```json
   { "type": "return", "session_storage_key": "userData" }
   ```
 
 Example sequence:
+
 ```json
 [
   { "type": "navigate", "url": "https://example.com/login" },
@@ -110,7 +113,6 @@ Example sequence:
 ```
 
 This defines a deterministic flow: open → wait → authenticate → return a session token.
-
 
 ### Placeholder Interpolation `{{...}}`
 
@@ -221,6 +223,7 @@ python quickstart.py
 ```
 
 The quickstart script will:
+
 1. ✅ Automatically launch Chrome in debug mode
 2. 📊 Start browser monitoring (you perform actions)
 3. 🤖 Discover routines from captured data
@@ -312,6 +315,7 @@ The reverse engineering process follows a simple three-step workflow:
 Each step is detailed below. Start by ensuring Chrome is running in debug mode (see [Launch Chrome in Debug Mode](#launch-chrome-in-debug-mode-🐞) above).
 
 ### 0. Legal & Privacy Notice ⚠️
+
 Reverse-engineering and automating a website can violate terms of service. Store captures securely and scrub any sensitive fields before sharing.
 
 ### 1. Monitor Browser While Performing Some Task
@@ -356,6 +360,7 @@ Use the **routine-discovery pipeline** to analyze captured data and synthesize a
 > ⚠️ **Important:** You must specify your own `--task` parameter. The example below is just for demonstration—replace it with a description of what you want to automate.
 
 **Linux/macOS (bash):**
+
 ```bash
 web-hacker-discover \
   --task "Recover API endpoints for searching for trains and their prices" \
@@ -365,12 +370,14 @@ web-hacker-discover \
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 # Simple task (no quotes inside):
 web-hacker-discover --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5
 ```
 
 **Example tasks:**
+
 - `"recover the api endpoints for searching for trains and their prices"` (shown above)
 - `"discover how to search for flights and get pricing"`
 - `"find the API endpoint for user authentication"`
@@ -400,18 +407,20 @@ routine_discovery_output/
 ⚠️ **Important:** If you have a string-typed parameter used in a JSON body field, it may need to be escaped. When the agent generates routines, string parameters are sometimes placed as `"{{PARAM}}"` when they should be `"\"{{PARAM}}\""` to ensure proper JSON string escaping.
 
 **Example:** If you see:
+
 ```json
 "field": "{{paramName}}"
 ```
 
 And `paramName` is a string parameter, manually change it to:
+
 ```json
 "field": "\"{{paramName}}\""
 ```
 
 This ensures the parameter value is properly quoted as a JSON string when substituted.
 
-Run the example routine: 
+Run the example routine:
 
 ```bash
 # Using a parameters file:
@@ -449,13 +458,13 @@ web-hacker-execute \
 
   - Export the key in your shell or create a `.env` file and run via `uv run` (dotenv is loaded).
 - `No such file or directory: './cdp_captures/network/transactions/N/A'` or similar transaction path errors
-  
+
   - The agent cannot find any network transactions relevant to your task. This usually means:
+
     - The `--task` description doesn't match what you actually performed during monitoring
     - The relevant network requests weren't captured (they may have been blocked or filtered)
     - The task description is too vague or too specific
-  
-  - **Fix:** Reword your `--task` parameter to more accurately describe what you did during the monitoring step, or re-run the browser monitor and ensure you perform the exact actions you want to automate. 
+  - **Fix:** Reword your `--task` parameter to more accurately describe what you did during the monitoring step, or re-run the browser monitor and ensure you perform the exact actions you want to automate.
 
 ## Coming Soon 🔮
 

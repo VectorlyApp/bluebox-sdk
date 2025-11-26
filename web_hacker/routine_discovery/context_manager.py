@@ -15,6 +15,7 @@ class ContextManager(BaseModel):
     transactions_dir: str
     consolidated_transactions_path: str
     storage_jsonl_path: str
+    window_properties_path: str
     vectorstore_id: str | None = None
     supported_file_extensions: list[str] = Field(default_factory=lambda: [
         ".txt",
@@ -28,7 +29,7 @@ class ContextManager(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    @field_validator('transactions_dir', 'consolidated_transactions_path', 'storage_jsonl_path')
+    @field_validator('transactions_dir', 'consolidated_transactions_path', 'storage_jsonl_path', 'window_properties_path')
     @classmethod
     def validate_paths(cls, v: str) -> str:
         if not os.path.exists(v):
@@ -71,6 +72,9 @@ class ContextManager(BaseModel):
 
         # upload the storage to the vectorstore using add_file_to_vectorstore method
         self.add_file_to_vectorstore(storage_file_path, {"filename": "storage.json"})
+        
+        # upload the window properties to the vectorstore using add_file_to_vectorstore method
+        self.add_file_to_vectorstore(self.window_properties_path, {"filename": "window_properties.json"})
 
         # delete the tmp directory
         shutil.rmtree(self.tmp_dir)
@@ -327,6 +331,24 @@ class ContextManager(BaseModel):
                 if value in line and timestamp_check:
                     results.append(line)
         return results
+    
+    def scan_window_properties_for_value(self, value: str) -> dict:
+        """
+        Scan the window properties for a value.
+        Args:
+            value: The value to scan for in the window properties.
+        Returns:
+            A dictionary of window properties that contain the value.
+        """
+        result = {}
+        with open(self.window_properties_path, mode="r", encoding='utf-8', errors='replace') as f:
+            window_properties = json.load(f)
+            
+            for key, window_property_value in window_properties.items():
+                if value in str(window_property_value):
+                    result[key] = window_property_value
+                    
+        return result
 
     def get_response_body_file_extension(self, transaction_id: str) -> str:
         """

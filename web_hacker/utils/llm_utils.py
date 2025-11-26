@@ -41,34 +41,48 @@ def manual_llm_parse_text_to_model(
     """
     # define system prompt
     SYSTEM_PROMPT = f"""
-    You are a helpful assistant that parses text to a pydantic model.
-    You must conform to the provided pydantic model schema.
+    You are a helpful assistant that extracts information and structures it into a JSON object.
+    You must output ONLY the valid JSON object that matches the provided schema.
+    Do not include any explanations, markdown formatting, or code blocks.
     """
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": f"Context: {context}"},
         {"role": "user", "content": f"Text to parse: {text}"},
-        {"role": "user", "content": f"Model JSON schema: {pydantic_model.model_json_schema()}"},
-        {"role": "user", "content": f"Please respond in the following format above. Your response must be a valid JSON object."}
+        {"role": "user", "content": f"Target Model JSON Schema: {json.dumps(pydantic_model.model_json_schema())}"},
+        {"role": "user", "content": "Extract the data and return a JSON object that validates against the schema above."}
     ]
 
     for current_try in range(n_tries):
+        
         try:
             response = client.chat.completions.create(
                 model=llm_model,
                 messages=messages,
+                response_format={"type": "json_object"},
             )
-            messages.append({"role": "assistant", "content": response.choices[0].message.content})
-            text = response.choices[0].message.content
+            
+            response_content = response.choices[0].message.content
+            messages.append({"role": "assistant", "content": response_content})
+            
+            # Basic cleanup to ensure we just get the JSON
+            clean_content = response_content.strip()
+            if clean_content.startswith("```json"):
+                clean_content = clean_content[7:]
+            if clean_content.startswith("```"):
+                clean_content = clean_content[3:]
+            if clean_content.endswith("```"):
+                clean_content = clean_content[:-3]
+            clean_content = clean_content.strip()
 
-            parsed_model = pydantic_model(**json.loads(text))
+            parsed_model = pydantic_model(**json.loads(clean_content))
             return parsed_model
 
         except Exception as e:
             logger.warning(f"Try {current_try + 1} failed with error: {e}")
             messages.append(
-                {"role": "user", "content": f"Previous attempt failed with error: {e}. Please try again."}
+                {"role": "user", "content": f"Previous attempt failed with error: {e}. Please try again and ensure the JSON matches the schema exactly."}
             )
 
     logger.error(f"Failed to parse text to model after {n_tries} tries")

@@ -155,6 +155,9 @@ class RoutineDiscoveryAgent(BaseModel):
 
         # storing data for all transactions necessary for the routine construction
         routine_transactions = {}
+        
+        # storing all resolved variables
+        all_resolved_variables = []
 
         # processing the transaction queue (breadth-first search)
         while (len(transaction_queue) > 0):
@@ -182,6 +185,7 @@ class RoutineDiscoveryAgent(BaseModel):
             # resolve cookies and tokens
             logger.info("Resolving cookies and tokens...")
             resolved_variables = self.resolve_variables(extracted_variables)
+            all_resolved_variables.extend(resolved_variables)
             resolved_variables_json = [resolved_variable.model_dump() for resolved_variable in resolved_variables]
             
             # save the resolved variables
@@ -204,8 +208,8 @@ class RoutineDiscoveryAgent(BaseModel):
                     if new_transaction_id not in routine_transactions:
                         transaction_queue.append(new_transaction_id)
 
-        # construct the routine
-        routine = self.construct_routine(routine_transactions)
+        # construct the routine from the routine transactions and resolved variables
+        routine = self.construct_routine(routine_transactions=routine_transactions, resolved_variables=all_resolved_variables)
 
         # save the routine
         save_path = os.path.join(self.output_dir, f"routine.json")
@@ -251,10 +255,6 @@ class RoutineDiscoveryAgent(BaseModel):
                     "role": "user",
                     "content": f"These are the possible network transaction ids you can choose from: {self.context_manager.get_all_transaction_ids()}"
                 },
-                # {
-                #     "role": "user",
-                #     "content": f"Please respond in the following format: {TransactionIdentificationResponse.model_json_schema()}"
-                # }
             ]
         else:
             message = (
@@ -377,17 +377,14 @@ class RoutineDiscoveryAgent(BaseModel):
         
         # add message to the message history
         message = (
-            f"Please extract the variables from only these network requests (requests only!): {transactions}"
-            "Mark each variable with requires_resolution=True if we need to dynamically resolve this variable at runtime."
-            "If we can most likely hardcode this value, mark requires_resolution=False!!!!"
-            "Resolving these is hard so if we can get away without resolving them... lets not resolve them!"
-            "But if we really need to resolve them for authentication or maintain native webapp functionality, mark requires_resolution=True and provide the values_to_scan_for."
-            "system variables are related to the device or browser environment, and are not used to identify the user."
-            "token and cookie values are not used to identify the user: these may need to be resolved at runtime."
-            "Only the actual values of the variables (token/cookies, etc.) should be placed into the observed_value field."
-            "The values of values_to_scan_for will then be used to scan the storage and transactions for the source of the variable so only include the actual values of the variables."
-            "values_to_scan_for should be possible substrings that will likely be present in the response body of a network transaction or a storage entry value."
-            "This is necessary to figure out where the variable is coming from."
+            f"Extract variables from these network REQUESTS only: {transactions}\n\n"
+            "CRITICAL RULES:\n"
+            "1. **requires_resolution=False**: Default to this. HARDCODE values whenever possible (e.g. app versions, static IDs, constants).\n"
+            "2. **requires_resolution=True**: ONLY for dynamic security tokens (CSRF, Auth headers, cookies) that change per session/user.\n"
+            "   - If it's a token (CSRF, JWT, session ID), it MUST be resolved.\n"
+            "   - 'values_to_scan_for' must contain the EXACT raw string value seen in the request (e.g. the actual token string), so we can find where it originated.\n"
+            "3. **System variables**: Device/browser info (User-Agent, screen size) are static (False).\n"
+            "4. **Parameters/Arguments**: These are the fundamental inputs to the flow, directly related to the user's task (e.g. search query, item ID). Mark these as parameters.\n"
         )
 
         self._add_to_message_history("user", message)
@@ -424,10 +421,7 @@ class RoutineDiscoveryAgent(BaseModel):
             var for var in extracted_variables.variables
             if (
                 var.requires_resolution
-                and var.type in [
-                    VariableType.COOKIE,
-                    VariableType.TOKEN
-                ]
+                and var.type == VariableType.DYNAMIC_TOKEN
             )
         ]
 
@@ -444,9 +438,17 @@ class RoutineDiscoveryAgent(BaseModel):
                     value=value,
                 )
                 storage_objects.extend(storage_sources)
-
+                
             if len(storage_objects) > 0:
                 logger.info(f"Found {len(storage_objects)} storage sources that contain the value")
+
+            # get the window properties that contain the value and are before the latest timestamp
+            window_properties = []
+            for value in variable.values_to_scan_for:
+                window_properties.extend(self.context_manager.scan_window_properties_for_value(value))
+                
+            if len(window_properties) > 0:
+                logger.info(f"Found {len(window_properties)} window properties that contain the value")
 
             # get the transaction ids that contain the value and are before the latest timestamp
             transaction_ids = []
@@ -475,12 +477,13 @@ class RoutineDiscoveryAgent(BaseModel):
             message = (
                 f"Please resolve the variable: {variable.observed_value}"
                 f"The variable was found in the following storage sources: {storage_objects}"
+                f"The variable was found in the following window properties: {window_properties}"
                 f"The variable was found in the following transactions ids: {transaction_ids}"
                 f"These transactions are added to the vectorstore in full (including response bodies)."
                 f"Dot paths should be like this: 'key.data.items[0].id', 'path.to.valiable.0.value', etc."
                 f"For paths in transaction responses, start with the first key of the response body"
                 f"For paths in storage, start with the cookie, local storage, or session storage entry name"
-                f"If the variable is found in both storage and transactions, you should indicate both sources and resolve them accordinly!"
+                f"If the variable is found in multiple places you need to resolve all of them!"
             )
             self._add_to_message_history("user", message)
 
@@ -515,20 +518,36 @@ class RoutineDiscoveryAgent(BaseModel):
             # parse the response to the pydantic model
             resolved_variable_responses.append(resolved_variable_response)
             
-            if not resolved_variable_response.session_storage_source and not resolved_variable_response.transaction_source:
-                logger.info(f"[WARNING] Not able to resolve variable: {resolved_variable_response.variable.name}. Harcoding to observed value: {resolved_variable_response.variable.observed_value}")
+            resolved_transaction_source = resolved_variable_response.transaction_source
+            logger.info(f"Resolved transaction source: {resolved_transaction_source}")
+            resolved_session_storage_source = resolved_variable_response.session_storage_source
+            logger.info(f"Resolved session storage source: {resolved_session_storage_source}")
+            resolved_window_property_source = resolved_variable_response.window_property_source
+            logger.info(f"Resolved window property source: {resolved_window_property_source}")
+            
+            # number of sources resolved
+            sources = [resolved_transaction_source, resolved_session_storage_source, resolved_window_property_source]
+            sources = [source for source in sources if source is not None]
+            num_sources_resolved = sources.count(True)
+            logger.info(f"Number of sources resolved: {num_sources_resolved}")
+            
+            if num_sources_resolved == 0:
+                logger.info(f"[WARNING] Not able to resolve variable: {variable.name}. Hardcoding to observed value: {variable.observed_value}")
+            elif num_sources_resolved == 1:
+                logger.info(f"[INFO] Variable: {variable.name} is resolved from one source. It is reasonable to use that source.")
+            elif num_sources_resolved >= 2:
+                logger.info(f"[INFO] Variable: {variable.name} is resolved from multiple sources (will prioritize transaction > session storage > window property).")
                 
-            if resolved_variable_response.session_storage_source and resolved_variable_response.transaction_source:
-                logger.info(f"[INFO] Variable: {resolved_variable_response.variable.name} is resolved from both session storage and transaction. It is reasonable to use either source (fetch is slower but more stable)")
             
         return resolved_variable_responses
 
-    def construct_routine(self, routine_transactions: dict, max_attempts: int = 3) -> Routine:
+    def construct_routine(self, routine_transactions: dict, resolved_variables: list[ResolvedVariableResponse] = [], max_attempts: int = 3) -> Routine:
         """
         Construct the routine from the routine transactions.
         """
         message = (
-            f"Please construct the routine from the routine transactions: {routine_transactions}. "
+            f"Please construct the routine from the routine transactions: {routine_transactions}."
+            f"These are the resolved variables: {resolved_variables}"
             f"First step of the routine should be to navigate to the target web page and sleep for a bit of time (2-3 seconds). "
             f"Parameters are only the most important arguments. "
             f"You can inject variables by using placeholders. CRITICAL: PLACEHOLDERS ARE REPLACED AT RUNTIME AND THE RESULT MUST BE VALID JSON! "
@@ -539,7 +558,7 @@ class RoutineDiscoveryAgent(BaseModel):
             f"Example: \\\"quantity\\\": \\\"{{{{count}}}}\\\" with value 5 becomes \\\"quantity\\\": 5 (JSON number). "
             f"For NULL: \\\"metadata\\\": \\\"{{{{optional_field}}}}\\\" with null value becomes \\\"metadata\\\": null (JSON null). "
             f"REMEMBER: After placeholder replacement, the JSON must be valid and parseable! "
-            f"Placeholder types: {{{{parameter_name}}}} for parameters, {{{{cookie:cookie_name}}}} for cookies, {{{{sessionStorage:key.path.to.0.value}}}} for session storage, {{{{localStorage:local_storage_name}}}} for local storage. "
+            f"Placeholder types: {{{{parameter_name}}}} for parameters, {{{{cookie:cookie_name}}}} for cookies, {{{{sessionStorage:key.path.to.0.value}}}} for session storage, {{{{localStorage:local_storage_name}}}} for local storage, {{{{windowProperty:key}}}} for window properties. "
             f"You can hardcode unresolved variables to their observed values. "
             f"You will want to navigate to the target page, then perform the fetch operations in the proper order. "
             f"Browser variables should be hardcoded to observed values. "
