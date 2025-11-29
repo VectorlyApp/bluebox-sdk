@@ -366,7 +366,7 @@ web-hacker-discover \
   --task "Recover API endpoints for searching for trains and their prices" \
   --cdp-captures-dir ./cdp_captures \
   --output-dir ./routine_discovery_output \
-  --llm-model gpt-5
+  --llm-model gpt-5.1
 ```
 
 **Windows (PowerShell):**
