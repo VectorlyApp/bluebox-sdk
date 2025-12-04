@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from web_hacker.config import Config
 from web_hacker.routine_discovery.context_manager import ContextManager
-from web_hacker.utils.llm_utils import llm_parse_text_to_model, collect_text_from_response, manual_llm_parse_text_to_model
+from web_hacker.utils.llm_utils import collect_text_from_response, manual_llm_parse_text_to_model
 from web_hacker.data_models.llm_responses import (
     TransactionIdentificationResponse,
     ExtractedVariableResponse,
@@ -155,6 +155,9 @@ class RoutineDiscoveryAgent(BaseModel):
 
         # storing data for all transactions necessary for the routine construction
         routine_transactions = {}
+        
+        # storing all resolved variables
+        all_resolved_variables = []
 
         # processing the transaction queue (breadth-first search)
         while (len(transaction_queue) > 0):
@@ -182,6 +185,7 @@ class RoutineDiscoveryAgent(BaseModel):
             # resolve cookies and tokens
             logger.info("Resolving cookies and tokens...")
             resolved_variables = self.resolve_variables(extracted_variables)
+            all_resolved_variables.extend(resolved_variables)
             resolved_variables_json = [resolved_variable.model_dump() for resolved_variable in resolved_variables]
             
             # save the resolved variables
@@ -204,8 +208,12 @@ class RoutineDiscoveryAgent(BaseModel):
                     if new_transaction_id not in routine_transactions:
                         transaction_queue.append(new_transaction_id)
 
-        # construct the routine
-        routine = self.construct_routine(routine_transactions)
+        # construct the routine from the routine transactions and resolved variables
+        # REVERSE the order of transactions because the queue processing discovers dependencies LAST (Target -> Dep1 -> Dep2),
+        # but we need to execute dependencies FIRST (Dep2 -> Dep1 -> Target).
+        ordered_transactions = dict(reversed(list(routine_transactions.items())))
+        
+        routine = self.construct_routine(routine_transactions=ordered_transactions, resolved_variables=all_resolved_variables)
 
         # save the routine
         save_path = os.path.join(self.output_dir, f"routine.json")
@@ -251,10 +259,6 @@ class RoutineDiscoveryAgent(BaseModel):
                     "role": "user",
                     "content": f"These are the possible network transaction ids you can choose from: {self.context_manager.get_all_transaction_ids()}"
                 },
-                {
-                    "role": "user",
-                    "content": f"Please respond in the following format: {TransactionIdentificationResponse.model_json_schema()}"
-                }
             ]
         else:
             message = (
@@ -268,39 +272,26 @@ class RoutineDiscoveryAgent(BaseModel):
         logger.debug(f"\n\nMessage history:\n{self.message_history}\n")
 
         # call to the LLM API
-        response = self.client.responses.create(
+        response = self.client.responses.parse(
             model=self.llm_model,
             input=self.message_history if self.current_transaction_identification_attempt == 0 else [self.message_history[-1]],
             previous_response_id=self.last_response_id,
             tools=self.tools,
             tool_choice="required",
+            text_format=TransactionIdentificationResponse
         )
+        transaction_identification_response = response.output_parsed
+        logger.info(f"\nTransaction identification response:\n{transaction_identification_response.model_dump()}")
 
-        # save the response id
+        # save the response id and add to the message history
         self.last_response_id = response.id
+        self._add_to_message_history("assistant", transaction_identification_response.model_dump_json())
 
-        # collect the text from the response
-        response_text = collect_text_from_response(response)
-        self._add_to_message_history("assistant", response_text)
-        
-        logger.debug(f"\nResponse text:\n{response_text}\n\n")
-
-        # TODO FIXME BUG
-        # parse the response to the pydantic model
-        parsed_response = llm_parse_text_to_model(
-            text=response_text,
-            context="\n".join([f"{msg['role']}: {msg['content']}" for msg in self.message_history[-2:]]),
-            pydantic_model=TransactionIdentificationResponse,
-            client=self.client,
-            llm_model='gpt-5-nano'
-        )
-        self._add_to_message_history("assistant", parsed_response.model_dump_json())
-        
-        logger.debug(f"\nParsed response:\n{parsed_response.model_dump_json()}")
+        logger.debug(f"\nParsed response:\n{transaction_identification_response.model_dump_json()}")
         logger.debug(f"New chat history:\n{self.message_history}\n")
 
         # return the parsed response
-        return parsed_response
+        return transaction_identification_response
 
     def confirm_identified_transaction(
         self,
@@ -334,36 +325,25 @@ class RoutineDiscoveryAgent(BaseModel):
             f"{identified_transaction.transaction_id} have been added to the vectorstore in full (including response bodies)."
             "Please confirm that the identified transaction is correct and that it directly corresponds to the user's requested task:"
             f"{self.task}"
-            f"Please respond in the following format:\n{TransactionConfirmationResponse.model_json_schema()}"
         )
         self._add_to_message_history("user", message)
         
         # call to the LLM API for confirmation that the identified transaction is correct
-        response = self.client.responses.create(
+        response = self.client.responses.parse(
             model=self.llm_model,
             input=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
             tools=tools,
             tool_choice="required", # forces the LLM to look at the newly added files to the vectorstore
+            text_format=TransactionConfirmationResponse
         )
+        transaction_confirmation_response = response.output_parsed
         
-        # save the response id
+        # save the response id and add to the message history
         self.last_response_id = response.id
+        self._add_to_message_history("assistant", transaction_confirmation_response.model_dump_json())
         
-        # collect the text from the response
-        response_text = collect_text_from_response(response)
-        self._add_to_message_history("assistant", response_text)
-        
-        # parse the response to the pydantic model
-        parsed_response = llm_parse_text_to_model(
-            text=response_text,
-            context="\n".join([f"{msg['role']}: {msg['content']}" for msg in self.message_history[-2:]]),
-            pydantic_model=TransactionConfirmationResponse,
-            client=self.client,
-            llm_model='gpt-5-nano'
-        )
-        
-        return parsed_response
+        return transaction_confirmation_response
 
     def extract_variables(self, transaction_id: str) -> ExtractedVariableResponse:
         """
@@ -397,61 +377,48 @@ class RoutineDiscoveryAgent(BaseModel):
                 else:
                     response_body = response_body_str
             
-            transactions.append(
-                {
-                    "request": transaction["request"],
-                    # "response": transaction["response"],
-                    # "response_body": response_body
-                }
-            )
+            transactions.append({"request": transaction["request"]})
         
         # add message to the message history
         message = (
-            f"Please extract the variables from only these network requests (requests only!): {transactions}"
-            f"Please respond in the following format: {ExtractedVariableResponse.model_json_schema()}"
-            "Mark each variable with requires_resolution=True if we need to dynamically resolve this variable at runtime."
-            "If we can most likely hardcode this value, mark requires_resolution=False."
-            "system variables are related to the device or browser environment, and are not used to identify the user."
-            "token and cookie values are not used to identify the user: these may need to be resolved at runtime."
-            "Only the actual values of the variables (token/cookies, etc.) should be placed into the observed_value field."
-            "The values of values_to_scan_for will then be used to scan the storage and transactions for the source of the variable so only include the actual values of the variables."
-            "values_to_scan_for should be possible substrings that will likely be present in the response body of a network transaction or a storage entry value."
-            "This is necessary to figure out where the variable is coming from."
+            f"Extract variables from these network REQUESTS only: {transactions}\n\n"
+            "CRITICAL RULES:\n"
+            "1. **requires_resolution=False (STATIC_VALUE)**: Default to this. HARDCODE values whenever possible.\n"
+            "   - Includes: App versions, constants, User-Agents, device info.\n"
+            "   - **API CONTEXT**: Fields like 'hl' (language), 'gl' (region), 'clientName', 'timeZone' are STATIC_VALUE, NOT parameters.\n"
+            "   - **TELEMETRY**: Fields like 'adSignals', 'screenHeight', 'clickTrackingParams' are STATIC_VALUE.\n"
+            "2. **requires_resolution=True (DYNAMIC_TOKEN)**: ONLY for dynamic security tokens that change per session.\n"
+            "   - Includes: CSRF tokens, JWTs, Auth headers, 'visitorData', 'session_id'.\n"
+            "   - **TRACE/REQUEST IDs**: 'x-trace-id', 'request-id', 'correlation-id' MUST be marked as DYNAMIC_TOKEN.\n"
+            "   - **ALSO INCLUDE**: IDs, hashes, or blobs that are NOT user inputs but are required for the request (e.g. 'browseId', 'params' strings, 'clientVersion' if dynamic).\n"
+            "   - 'values_to_scan_for' must contain the EXACT raw string value seen in the request.\n"
+            "   - **RULE**: If it looks like a generated ID or state blob, IT IS A TOKEN, NOT A PARAMETER.\n"
+            "3. **Parameters (PARAMETER)**: ONLY for values that represent the USER'S INTENT or INPUT.\n"
+            "   - Examples: 'search_query', 'videoId', 'channelId', 'cursor', 'page_number'.\n"
+            "   - If the user wouldn't explicitly provide it, it's NOT a parameter.\n"
         )
 
         self._add_to_message_history("user", message)
 
         # call to the LLM API for extraction of the variables
-        response = self.client.responses.create(
+        response = self.client.responses.parse(
             model=self.llm_model,
             input=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
             tools=self.tools,
             tool_choice="required" if len(transactions) > 1 else "auto",
+            text_format=ExtractedVariableResponse
         )
+        extracted_variable_response = response.output_parsed
 
-        # save the response id
+        # save the response id and add to the message history
         self.last_response_id = response.id
-
-        # collect the text from the response
-        response_text = collect_text_from_response(response)
-        self.message_history.append({"role": "assistant","content": response_text})
-
-        # TODO FIXME BUG
-        # parse the response to the pydantic model
-        parsed_response = llm_parse_text_to_model(
-            text=response_text,
-            context="\n".join([f"{msg['role']}: {msg['content']}" for msg in self.message_history[-2:]]),
-            pydantic_model=ExtractedVariableResponse,
-            client=self.client,
-            llm_model="gpt-5-nano"
-        )
-        self._add_to_message_history("assistant", parsed_response.model_dump_json())
+        self._add_to_message_history("assistant", extracted_variable_response.model_dump_json())
 
         # override the transaction_id with the one passed in, since the LLM may return an incorrect format
-        parsed_response.transaction_id = original_transaction_id
+        extracted_variable_response.transaction_id = original_transaction_id
 
-        return parsed_response
+        return extracted_variable_response
     
     def resolve_variables(self, extracted_variables: ExtractedVariableResponse) -> list[ResolvedVariableResponse]:
         """
@@ -465,10 +432,7 @@ class RoutineDiscoveryAgent(BaseModel):
             var for var in extracted_variables.variables
             if (
                 var.requires_resolution
-                and var.type in [
-                    VariableType.COOKIE,
-                    VariableType.TOKEN
-                ]
+                and var.type == VariableType.DYNAMIC_TOKEN
             )
         ]
 
@@ -485,9 +449,17 @@ class RoutineDiscoveryAgent(BaseModel):
                     value=value,
                 )
                 storage_objects.extend(storage_sources)
-
+                
             if len(storage_objects) > 0:
                 logger.info(f"Found {len(storage_objects)} storage sources that contain the value")
+
+            # get the window properties that contain the value and are before the latest timestamp
+            window_properties = []
+            for value in variable.values_to_scan_for:
+                window_properties.extend(self.context_manager.scan_window_properties_for_value(value))
+                
+            if len(window_properties) > 0:
+                logger.info(f"Found {len(window_properties)} window properties that contain the value")
 
             # get the transaction ids that contain the value and are before the latest timestamp
             transaction_ids = []
@@ -516,13 +488,13 @@ class RoutineDiscoveryAgent(BaseModel):
             message = (
                 f"Please resolve the variable: {variable.observed_value}"
                 f"The variable was found in the following storage sources: {storage_objects}"
+                f"The variable was found in the following window properties: {window_properties}"
                 f"The variable was found in the following transactions ids: {transaction_ids}"
                 f"These transactions are added to the vectorstore in full (including response bodies)."
-                f"Please respond in the following format: {ResolvedVariableResponse.model_json_schema()}"
-                f"Dot paths should be like this: 'key.data.items[0].id', 'path.to.valiable.0.value', etc."
+                f"Dot paths should be like this: 'key.data.items[0].id', 'path.to.variable.0.value', etc."
                 f"For paths in transaction responses, start with the first key of the response body"
                 f"For paths in storage, start with the cookie, local storage, or session storage entry name"
-                f"If the variable is found in both storage and transactions, you should indicate both sources and resolve them accordinly!"
+                f"If the variable is found in multiple places you need to resolve all of them!"
             )
             self._add_to_message_history("user", message)
 
@@ -540,51 +512,62 @@ class RoutineDiscoveryAgent(BaseModel):
             ]
             
             # call to the LLM API for resolution of the variable
-            response = self.client.responses.create(
+            response = self.client.responses.parse(
                 model=self.llm_model,
                 input=[self.message_history[-1]],
                 previous_response_id=self.last_response_id,
                 tools=tools,
                 tool_choice="required",
+                text_format=ResolvedVariableResponse
             )
-            
+            resolved_variable_response = response.output_parsed
+
             # save the response id
             self.last_response_id = response.id
-            
-            # collect the text from the response
-            response_text = collect_text_from_response(response)
-            self._add_to_message_history("assistant", response_text)
+            self._add_to_message_history("assistant", resolved_variable_response.model_dump_json())
             
             # parse the response to the pydantic model
-            parsed_response = llm_parse_text_to_model(
-                text=response_text,
-                context="\n".join([f"{msg['role']}: {msg['content']}" for msg in self.message_history[-2:]]),
-                pydantic_model=ResolvedVariableResponse,
-                client=self.client,
-                llm_model="gpt-5-nano"
-            )
-            self._add_to_message_history("assistant", parsed_response.model_dump_json())
+            resolved_variable_responses.append(resolved_variable_response)
             
-            resolved_variable_responses.append(parsed_response)
+            logger.info(f"Resolved variable response: {resolved_variable_response.model_dump()}")
             
-            if not parsed_response.session_storage_source and not parsed_response.transaction_source:
-                logger.info(f"[WARNING] Not able to resolve variable: {parsed_response.variable.name}. Harcoding to observed value: {parsed_response.variable.observed_value}")
+            
+            resolved_transaction_source = resolved_variable_response.transaction_source
+            logger.info(f"Resolved transaction source: {resolved_transaction_source}")
+            resolved_session_storage_source = resolved_variable_response.session_storage_source
+            logger.info(f"Resolved session storage source: {resolved_session_storage_source}")
+            resolved_window_property_source = resolved_variable_response.window_property_source
+            logger.info(f"Resolved window property source: {resolved_window_property_source}")
+            
+            # number of sources resolved
+            sources = [resolved_transaction_source, resolved_session_storage_source, resolved_window_property_source]
+            
+            logger.info(f"Sources: {sources}")
+            sources = [source for source in sources if source is not None]
+            logger.info(f"Sources after filtering: {sources}")
+            num_sources_resolved = sources.count(True)
+            logger.info(f"Number of sources resolved: {num_sources_resolved}")
+            
+            if num_sources_resolved == 0:
+                logger.info(f"[WARNING] Not able to resolve variable: {variable.name}. Hardcoding to observed value: {variable.observed_value}")
+            elif num_sources_resolved == 1:
+                logger.info(f"[INFO] Variable: {variable.name} is resolved from one source. It is reasonable to use that source.")
+            elif num_sources_resolved >= 2:
+                logger.info(f"[INFO] Variable: {variable.name} is resolved from multiple sources (will prioritize transaction > session storage > window property).")
                 
-            if parsed_response.session_storage_source and parsed_response.transaction_source:
-                logger.info(f"[INFO] Variable: {parsed_response.variable.name} is resolved from both session storage and transaction. It is reasonable to use either source (fetch is slower but more stable)")
             
         return resolved_variable_responses
 
-    def construct_routine(self, routine_transactions: dict, max_attempts: int = 3) -> Routine:
+    def construct_routine(self, routine_transactions: dict, resolved_variables: list[ResolvedVariableResponse] = [], max_attempts: int = 3) -> Routine:
         """
         Construct the routine from the routine transactions.
         """
         message = (
-            f"Please construct the routine from the routine transactions: {routine_transactions}. "
-            f"Please respond in the following format: {Routine.model_json_schema()}. "
-            f"Fetch operations (1 to 1 with transactions) should be constructed as follows: {RoutineFetchOperation.model_json_schema()}. "
+            f"Please construct the routine from the routine transactions: {routine_transactions}."
+            f"These are the resolved variables: {resolved_variables}"
+            f"IMPORTANT: The transactions are listed in EXECUTION ORDER (Dependencies first -> Target last). "
+            f"You should generally create fetch operations in the order provided."
             f"First step of the routine should be to navigate to the target web page and sleep for a bit of time (2-3 seconds). "
-            f"All fetch operations should be constructed as follows: {RoutineFetchOperation.model_json_schema()}. "
             f"Parameters are only the most important arguments. "
             f"You can inject variables by using placeholders. CRITICAL: PLACEHOLDERS ARE REPLACED AT RUNTIME AND THE RESULT MUST BE VALID JSON! "
             f"For STRING values: Use \\\"{{{{parameter_name}}}}\\\" format (escaped quote + placeholder + escaped quote). "
@@ -594,7 +577,7 @@ class RoutineDiscoveryAgent(BaseModel):
             f"Example: \\\"quantity\\\": \\\"{{{{count}}}}\\\" with value 5 becomes \\\"quantity\\\": 5 (JSON number). "
             f"For NULL: \\\"metadata\\\": \\\"{{{{optional_field}}}}\\\" with null value becomes \\\"metadata\\\": null (JSON null). "
             f"REMEMBER: After placeholder replacement, the JSON must be valid and parseable! "
-            f"Placeholder types: {{{{parameter_name}}}} for parameters, {{{{cookie:cookie_name}}}} for cookies, {{{{sessionStorage:key.path.to.0.value}}}} for session storage, {{{{localStorage:local_storage_name}}}} for local storage. "
+            f"Placeholder types: {{{{parameter_name}}}} for parameters, {{{{cookie:cookie_name}}}} for cookies, {{{{sessionStorage:key.path.to.0.value}}}} for session storage, {{{{localStorage:local_storage_name}}}} for local storage, {{{{windowProperty:key}}}} for window properties. "
             f"You can hardcode unresolved variables to their observed values. "
             f"You will want to navigate to the target page, then perform the fetch operations in the proper order. "
             f"Browser variables should be hardcoded to observed values. "
@@ -603,7 +586,8 @@ class RoutineDiscoveryAgent(BaseModel):
             f"Endpoints of the fetch operations should mimick observed network traffic requests! "
             f"Every fetch operation result is written to session storage. "
             f"At the end of the routine return the proper session storage value (likely containing the last fetch operation result). "
-            f"To feed output of a fetch into a subsequent fetch, you can save result to session storage and then use {{sessionStorage:key.to.path}}. "
+            f"To feed output of a fetch into a subsequent fetch, you can save result to session storage and then use {{{{sessionStorage:key.to.path}}}}. "
+            f"Credentials should be set to same-origin if possible. If not possible, set to include. The absolute last resort is to set to omit."
         )
         self._add_to_message_history("user", message)
 
@@ -612,31 +596,20 @@ class RoutineDiscoveryAgent(BaseModel):
             current_attempt += 1
             
             # call to the LLM API for construction of the routine
-            response = self.client.responses.create(
+            response = self.client.responses.parse(
                 model=self.llm_model,
                 input=[self.message_history[-1]],
                 previous_response_id=self.last_response_id,
                 tools=self.tools,
                 tool_choice="required",
+                text_format=Routine
             )
+            routine = response.output_parsed
+            logger.info(f"\nRoutine:\n{routine.model_dump()}")
             
             # save the response id
             self.last_response_id = response.id
-            
-            # collect the text from the response
-            response_text = collect_text_from_response(response)
-            self._add_to_message_history("assistant", response_text)
-            
-            # parse the response to the pydantic model
-            routine = llm_parse_text_to_model(
-                text=response_text,
-                context="\n".join([f"{msg['role']}: {msg['content']}" for msg in self.message_history[-2:]]),
-                pydantic_model=Routine,
-                client=self.client,
-                llm_model=self.llm_model
-            )
             self._add_to_message_history("assistant", routine.model_dump_json())
-            
             
             # validate the routine
             successful, errors, exception = routine.validate()
@@ -661,9 +634,8 @@ class RoutineDiscoveryAgent(BaseModel):
             ProductionRoutine: The productionized routine.
         """
         message = (
-            f"Please productionize the routine (from previosu step): {routine.model_dump_json()}"
+            f"Please productionize the routine (from previous step): {routine.model_dump_json()}"
             f"You need to clean up this routine to follow the following format: {ProductionRoutine.model_json_schema()}"
-            f"Please respond in the following format: {ProductionRoutine.model_json_schema()}"
             f"You immediate output needs to be a valid JSON object that conforms to the production routine schema."
             f"CRITICAL: PLACEHOLDERS ARE REPLACED AT RUNTIME AND MUST RESULT IN VALID JSON! "
             f"EXPLANATION: Placeholders like {{{{key}}}} are replaced at runtime with actual values. The format you choose determines the resulting JSON type. "
@@ -703,6 +675,9 @@ class RoutineDiscoveryAgent(BaseModel):
             llm_model=self.llm_model
         )
         
+        # fix the placeholders in the production routine
+        production_routine.fix_placeholders()
+        
         return production_routine
 
     def get_test_parameters(self, routine: ProductionRoutine) -> TestParametersResponse:
@@ -717,30 +692,20 @@ class RoutineDiscoveryAgent(BaseModel):
         self._add_to_message_history("user", message)
         
         # call to the LLM API for getting the test parameters
-        response = self.client.responses.create(
+        response = self.client.responses.parse(
             model=self.llm_model,
             input=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
+            text_format=TestParametersResponse
         )
+        test_parameters_response = response.output_parsed
         
         # save the response id
         self.last_response_id = response.id
+        self._add_to_message_history("assistant", test_parameters_response.model_dump_json())
         
-        # collect the text from the response
-        response_text = collect_text_from_response(response)
-        self._add_to_message_history("assistant", response_text)
-        
-        # parse the response to the pydantic model
-        parsed_response = llm_parse_text_to_model(
-            text=response_text,
-            context="\n".join([f"{msg['role']}: {msg['content']}" for msg in self.message_history[-2:]]),
-            pydantic_model=TestParametersResponse,
-            client=self.client,
-            llm_model="gpt-5-nano"
-        )
-        self._add_to_message_history("assistant", parsed_response.model_dump_json())
-        
-        return parsed_response
+        # return the test parameters response
+        return test_parameters_response
 
     def _add_to_message_history(self, role: str, content: str) -> None:
         """

@@ -165,69 +165,99 @@ class Routine(BaseModel):
     
     
     def validate(self) -> tuple[bool, list[str], Exception | None]:
+        """
+        Validate the routine.
+        
+        Returns:
+            tuple[bool, list[str], Exception | None]: A tuple containing:
+                - result: True if the routine is valid, False otherwise
+                - errors: A list of error messages if the routine is not valid
+                - exception: An exception if an error occurs
+        """
+        
         
         result = True
         errors = []
+        exception = None
         
-        # must have at least 3 operations (navigate, fetch, return)
-        if len(self.operations) < 3:
-            result = False
-            errors.append("Must have at least 3 operations (navigate, fetch, return)")
-            return result, errors, None
-        
-        # first operation should be a navigate operation
-        if not isinstance(self.operations[0], RoutineNavigateOperation):
-            result = False
-            errors.append("First operation should be a navigate operation")
-            
-        # last operation should be a return operation
-        if not isinstance(self.operations[-1], RoutineReturnOperation):
-            result = False
-            errors.append("Last operation should be a return operation")
-            
-        # second to last operation should be a fetch operation
-        if not isinstance(self.operations[-2], RoutineFetchOperation):
-            result = False
-            errors.append("Second to last operation should be a fetch operation")
-            
-        # get all placeholders
-        all_placeholders = self._get_all_placeholders(self.model_dump_json())
-            
-        # check that every parameter is used at least once
-        routine_string = self.model_dump_json()
-        for parameter in self.parameters:
-            if parameter.name not in all_placeholders:
+        try: 
+            # must have at least 3 operations (navigate, fetch, return)
+            if len(self.operations) < 3:
                 result = False
-                errors.append(f"Parameter '{parameter.name}' is not used in the routine operations...")
-            else:
-                all_placeholders.remove(parameter.name)
+                errors.append("Must have at least 3 operations (navigate, fetch, return)")
+            
+            # first operation should be a navigate operation
+            if not isinstance(self.operations[0], RoutineNavigateOperation):
+                result = False
+                errors.append("First operation should be a navigate operation")
                 
-        # all remaining placeholders should be session storage keys, cookies, local storage
-        for placeholder in all_placeholders:
-            if placeholder.split(":")[0] not in ["sessionStorage", "cookie", "localStorage"]:
+            # last operation should be a return operation
+            if not isinstance(self.operations[-1], RoutineReturnOperation):
                 result = False
-                errors.append(f"Placeholder '{placeholder}' is not a session storage key, cookie, or local storage key, or a parameter name...")
+                errors.append("Last operation should be a return operation")
+                
+            # second to last operation should be a fetch operation
+            if not isinstance(self.operations[-2], RoutineFetchOperation):
+                result = False
+                errors.append("Second to last operation should be a fetch operation")
+                
+            # get all placeholders (as a set for easier operations)
+            all_placeholders = set(self._get_all_placeholders(self.model_dump_json()))
+                
+            # check that every parameter is used at least once
+            defined_parameters = {p.name for p in self.parameters}
+            unused_parameters = defined_parameters - all_placeholders
+            if unused_parameters:
+                result = False
+                for param_name in unused_parameters:
+                    errors.append(f"Parameter '{param_name}' is not used in the routine operations...")
+            
+            # remaining placeholders are those that are NOT parameters
+            remaining_placeholders = all_placeholders - defined_parameters
                     
-        # get all used session storage keys
-        all_session_storage_keys = []
-        for placeholder in all_placeholders:
-            if placeholder.split(":")[0] == "sessionStorage":
-                all_session_storage_keys.append(placeholder.split(":")[1].split(".")[0])
-        
-        # check that every fetch session storage key is used at least once
-        for session_storage_key in all_session_storage_keys:
-            if session_storage_key not in all_session_storage_keys:
-                result = False
-                errors.append(f"Session storage key '{session_storage_key}' is not used in the fetch operations. Fetch may not be necessary for this operation.")
-                
-        # session storage key of the last fetch operation should be the same as the return operation's session storage key
-        if self.operations[-1].session_storage_key != self.operations[-2].session_storage_key:
-            result = False
-            errors.append("Session storage key of the last fetch operation should be the same as the return operation's session storage key")
-            return result, errors, None
+            # all remaining placeholders should be session storage keys, cookies, local storage
+            for placeholder in remaining_placeholders:
+                if placeholder.split(":")[0] not in ["sessionStorage", "cookie", "localStorage", "uuid", "epoch_milliseconds", "meta", "windowProperty"]:
+                    result = False
+                    errors.append(f"Placeholder '{placeholder}' is not a session storage key, cookie, local storage key, uuid, epoch_milliseconds, meta, or window property...")
+                        
+            # get all used session storage keys (from placeholders)
+            used_session_storage_keys = set()
+            for placeholder in all_placeholders: # Iterate over ALL placeholders (including params if any overlap? No, params don't start with sessionStorage:)
+                if placeholder.split(":")[0] == "sessionStorage":
+                    used_session_storage_keys.add(placeholder.split(":")[1].split(".")[0])
             
-        # return result, errors
-        return result, errors, None
+            # also consider the return operation's key as "used"
+            if isinstance(self.operations[-1], RoutineReturnOperation):
+                used_session_storage_keys.add(self.operations[-1].session_storage_key)
+                    
+            # get all fetch session storage keys (produced keys)
+            all_fetch_session_storage_keys = set()
+            for operation in self.operations:
+                if isinstance(operation, RoutineFetchOperation):
+                    all_fetch_session_storage_keys.add(operation.session_storage_key)
+            
+            # check that every fetch session storage key is used at least once
+            unused_keys = all_fetch_session_storage_keys - used_session_storage_keys
+            if unused_keys:
+                result = False
+                for key in unused_keys:
+                    errors.append(f"Fetch session storage key '{key}' is not used in the routine operations. Fetch may not be necessary for this routine.")
+                    
+            # session storage key of the last fetch operation should be the same as the return operation's session storage key
+            # Ensure we have enough operations and they are of correct types before checking keys
+            if len(self.operations) >= 3 and isinstance(self.operations[-1], RoutineReturnOperation) and isinstance(self.operations[-2], RoutineFetchOperation):
+                if self.operations[-1].session_storage_key != self.operations[-2].session_storage_key:
+                    result = False
+                    errors.append("Session storage key of the last fetch operation should be the same as the return operation's session storage key")
+            
+        except Exception as e:
+            result = False
+            errors.append(f"Exception: {e}")
+            exception = e
+            
+        # return the validation result, errors, and exception
+        return result, errors, exception
     
     
     def _get_all_placeholders(self, routine_string: str) -> list[str]:

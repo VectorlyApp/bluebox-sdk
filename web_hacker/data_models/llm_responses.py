@@ -52,11 +52,9 @@ class TransactionConfirmationResponse(BaseModel):
 
 
 class VariableType(StrEnum):
-    ARGUMENT = "argument"
-    COOKIE = "cookie"
-    TOKEN = "token"
-    BROWSER_VARIABLE = "browser_variable"
-    # CONSTANT = "constant"
+    PARAMETER = "parameter"          # User input (e.g. query, item_id)
+    DYNAMIC_TOKEN = "dynamic_token"  # Auth tokens, CSRF, rotating cookies
+    STATIC_VALUE = "static_value"    # Hardcoded constants, version strings, user-agent parts
     
 
 class Variable(BaseModel):
@@ -92,6 +90,12 @@ class SessionStorageSource(BaseModel):
     """
     type: SessionStorageType = Field(description="The type of the session storage.")
     dot_path: str = Field(description="The dot path to the variable in the session storage.")
+    
+class WindowPropertySource(BaseModel):
+    """
+    Source of the window property.
+    """
+    dot_path: str = Field(description="The dot path to the variable in the window property (key of the window property dictionary)")
 
 
 class TransactionSource(BaseModel):
@@ -109,6 +113,7 @@ class ResolvedVariableResponse(BaseModel):
     variable: Variable
     session_storage_source: SessionStorageSource | None = None
     transaction_source: TransactionSource | None = None
+    window_property_source: WindowPropertySource | None = None
     explanation: str
 
 

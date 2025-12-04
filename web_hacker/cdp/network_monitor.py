@@ -623,17 +623,86 @@ class NetworkMonitor:
 
     @staticmethod
     def _guess_extension(mime_type: str) -> str:
-        mt = (mime_type or "").lower()
+        mt = (mime_type or "").lower().strip()
+
+        # Common direct matches
         if "json" in mt: return ".json"
         if "html" in mt: return ".html"
         if "javascript" in mt or "ecmascript" in mt: return ".js"
         if "css" in mt: return ".css"
-        if "png" in mt: return ".png"
-        if "jpeg" in mt or "jpg" in mt: return ".jpg"
-        if "svg" in mt: return ".svg"
         if "xml" in mt: return ".xml"
         if "plain" in mt: return ".txt"
-        return ".bin"
+        if "csv" in mt: return ".csv"
+        if "yaml" in mt or "yml" in mt: return ".yaml"
+
+        # Images
+        if "png" in mt: return ".png"
+        if "jpeg" in mt or "jpg" in mt: return ".jpg"
+        if "gif" in mt: return ".gif"
+        if "bmp" in mt: return ".bmp"
+        if "webp" in mt: return ".webp"
+        if "tiff" in mt or "tif" in mt: return ".tiff"
+        if "svg" in mt: return ".svg"
+        if "ico" in mt: return ".ico"
+        if "heic" in mt: return ".heic"
+        if "avif" in mt: return ".avif"
+
+        # PDFs / Documents
+        if "pdf" in mt: return ".pdf"
+        if "msword" in mt: return ".doc"
+        if "vnd.openxmlformats-officedocument.wordprocessingml" in mt: return ".docx"
+        if "vnd.ms-excel" in mt: return ".xls"
+        if "vnd.openxmlformats-officedocument.spreadsheetml" in mt: return ".xlsx"
+        if "vnd.ms-powerpoint" in mt: return ".ppt"
+        if "vnd.openxmlformats-officedocument.presentationml" in mt: return ".pptx"
+        if "rtf" in mt: return ".rtf"
+        if "markdown" in mt or "md" in mt: return ".md"
+
+        # Audio
+        if "mpeg" in mt and "audio" in mt: return ".mp3"
+        if "aac" in mt: return ".aac"
+        if "wav" in mt: return ".wav"
+        if "ogg" in mt: return ".ogg"
+        if "flac" in mt: return ".flac"
+        if "midi" in mt: return ".mid"
+        if "webm" in mt and "audio" in mt: return ".weba"
+
+        # Video
+        if "mp4" in mt: return ".mp4"
+        if "x-matroska" in mt or "matroska" in mt: return ".mkv"
+        if "webm" in mt and "video" in mt: return ".webm"
+        if "quicktime" in mt: return ".mov"
+        if "avi" in mt: return ".avi"
+        if "mpeg" in mt and "video" in mt: return ".mpeg"
+
+        # Archives / Binary bundles
+        if "zip" in mt: return ".zip"
+        if "tar" in mt: return ".tar"
+        if "gzip" in mt or "x-gzip" in mt: return ".gz"
+        if "rar" in mt: return ".rar"
+        if "7z" in mt: return ".7z"
+
+        # Fonts
+        if "font" in mt or "opentype" in mt: return ".otf"
+        if "truetype" in mt: return ".ttf"
+        if "woff2" in mt: return ".woff2"
+        if "woff" in mt: return ".woff"
+
+        # Other structured data
+        if "protobuf" in mt: return ".proto"
+        if "msgpack" in mt: return ".msgpack"
+        if "bson" in mt: return ".bson"
+
+        # Images disguised as octet-stream
+        if "octet-stream" in mt:
+            # Some common patterns inside the name
+            if "exe" in mt: return ".exe"
+            if "dll" in mt: return ".dll"
+            if "bin" in mt: return ".bin"
+
+        # Last resort
+        return ".txt"
+
 
     def _should_block_url(self, url: str) -> bool:
         """Check if a URL should be blocked based on block_patterns."""

@@ -16,24 +16,8 @@ from web_hacker.data_models.window_property import WindowProperty, WindowPropert
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Native browser API prefixes - used to identify native vs application objects
-NATIVE_PREFIXES = [
-    "HTML", "SVG", "MathML", "RTC", "IDB", "Media", "Audio", "Video",
-    "WebGL", "Canvas", "Crypto", "File", "Blob", "Form", "Input",
-    "Mutation", "Intersection", "Resize", "Performance", "Navigation",
-    "Storage", "Location", "History", "Navigator", "Screen", "Window",
-    "Document", "Element", "Node", "Event", "Promise", "Array",
-    "String", "Number", "Boolean", "Date", "RegExp", "Error", "Function",
-    "Map", "Set", "WeakMap", "WeakSet", "Proxy", "Reflect", "Symbol",
-    "Intl", "JSON", "Math", "Console", "TextEncoder", "TextDecoder",
-    "ReadableStream", "WritableStream", "TransformStream", "AbortController",
-    "URL", "URLSearchParams", "Headers", "Request", "Response", "Fetch",
-    "Worker", "SharedWorker", "ServiceWorker", "BroadcastChannel",
-    "MessageChannel", "MessagePort", "ImageData", "ImageBitmap",
-    "OffscreenCanvas", "Path2D", "CanvasGradient", "CanvasPattern",
-    "Geolocation", "Notification", "PushManager", "Cache", "IndexedDB"
-]
-
+# Native browser API prefixes - used to identify native vs application objects (moved to JS)
+# See _collect_window_properties for the JS implementation
 
 class WindowPropertyMonitor:
     """Monitors window properties using CDP, tracking changes over time."""
@@ -151,154 +135,27 @@ class WindowPropertyMonitor:
             return True
         
         return False
-    
-    def _is_application_object(self, className, name):
-        """Heuristically determine if an object is an application object."""
-        if not name:
-            return False
-        
-        # First, check if className matches native patterns
-        if className:
-            for prefix in NATIVE_PREFIXES:
-                if className.startswith(prefix):
-                    return False
-        
-        # If name looks like a native API, it's native
-        if name.startswith(("HTML", "SVG", "RTC", "IDB", "WebGL", "Media", "Audio", "Video")):
-            return False
-        
-        # Skip common native browser globals
-        native_globals = [
-            "window", "self", "top", "parent", "frames", "document", "navigator",
-            "location", "history", "screen", "console", "localStorage", "sessionStorage",
-            "indexedDB", "caches", "performance", "fetch", "XMLHttpRequest", "WebSocket",
-            "Blob", "File", "FileReader", "FormData", "URL", "URLSearchParams",
-            "Headers", "Request", "Response", "AbortController", "Event", "CustomEvent",
-            "Promise", "Map", "Set", "WeakMap", "WeakSet", "Proxy", "Reflect",
-            "Symbol", "Intl", "JSON", "Math", "Date", "RegExp", "Error", "Array",
-            "String", "Number", "Boolean", "Object", "Function", "ArrayBuffer",
-            "DataView", "Int8Array", "Uint8Array", "Int16Array", "Uint16Array",
-            "Int32Array", "Uint32Array", "Float32Array", "Float64Array"
-        ]
-        if name in native_globals:
-            return False
-        
-        # If className is "Object" or empty, and it passed the blacklist checks above, it is likely an application object
-        if className == "Object" or not className:
-            return True
-        
-        return True
-    
-    def _fully_resolve_object_flat(self, cdp_session, object_id, base_path, flat_dict, visited=None, depth=0, max_depth=10):
-        """Recursively resolve an object and add all properties to a flat dictionary with dot paths. Non-blocking, fail-fast."""
-        # Check abort flag at start
-        if self.abort_collection:
-            return
-        
-        if visited is None:
-            visited = set()
-        
-        if depth > max_depth or object_id in visited:
-            return
-        
-        visited.add(object_id)
-        
-        try:
-            # Very short timeout - if page changed, object IDs are invalid, just skip
-            props_result = cdp_session.send_and_wait("Runtime.getProperties", {
-                "objectId": object_id,
-                "ownProperties": True
-            }, timeout=0.5)  # Fail fast - if page changed, too bad so sad
-            
-            # Check abort flag after CDP call
-            if self.abort_collection:
-                return
-            
-            props_list = props_result.get("result", [])
-            
-            for prop in props_list:
-                # Check abort flag periodically during processing
-                if self.abort_collection:
-                    return
-                name = prop["name"]
-                value = prop.get("value", {})
-                value_type = value.get("type", "unknown")
-                className = value.get("className", "")
-                
-                # Skip native APIs at deeper levels
-                is_app_obj = self._is_application_object(className, name)
-                if depth > 0 and not is_app_obj:
-                    continue
-                
-                prop_path = f"{base_path}.{name}" if base_path else name
-                
-                # Only store actual values, no metadata
-                if value_type == "string":
-                    flat_dict[prop_path] = value.get("value")
-                elif value_type in ["number", "boolean"]:
-                    flat_dict[prop_path] = value.get("value")
-                elif value_type == "object":
-                    if value.get("subtype") == "null":
-                        flat_dict[prop_path] = None
-                    elif value.get("objectId"):
-                        nested_obj_id = value.get("objectId")
-                        if is_app_obj:
-                            self._fully_resolve_object_flat(cdp_session, nested_obj_id, prop_path, flat_dict, visited.copy(), depth + 1, max_depth)
-                elif value_type == "function":
-                    pass  # Skip functions
-                else:
-                    flat_dict[prop_path] = value.get("value")
-        
-        except Exception as e:
-            # During navigation, object IDs become invalid - this is expected
-            # Too bad, so sad - just skip it, don't wait, don't log
-            error_str = str(e)
-            if "-32000" in error_str or "Cannot find context" in error_str or "context" in error_str.lower() or "TimeoutError" in str(type(e).__name__):
-                # Silently skip - object ID became invalid due to navigation or timeout
-                return
-            # Only log truly unexpected errors (not timeouts or navigation errors)
-            if "TimeoutError" not in str(type(e).__name__):
-                logger.debug(f"Error resolving object {base_path}: {e}")
-    
+
     def _get_current_url(self, cdp_session):
-        """Get current page URL using CDP. Non-blocking, fail-fast."""
-        # Check abort flag first
-        if self.abort_collection:
-            return "unknown"
-        
-        try:
-            # Try Page.getFrameTree first - this works even if JavaScript isn't ready
-            # Very short timeout - fail fast if page changed
-            frame_tree = cdp_session.send_and_wait("Page.getFrameTree", {}, timeout=0.5)
-            if frame_tree and "frameTree" in frame_tree:
-                current_url = frame_tree.get("frameTree", {}).get("frame", {}).get("url")
-                if current_url:
-                    return current_url
-        except Exception:
-            # Too bad, so sad - skip fallbacks if first attempt fails
-            return "unknown"
-        
-        # Only try one fallback with very short timeout
-        if self.abort_collection:
-            return "unknown"
-        
+        """Get current page URL safely."""
         try:
             result = cdp_session.send_and_wait("Runtime.evaluate", {
-                "expression": "window.location.href",
+                "expression": "location.href",
                 "returnByValue": True
-            }, timeout=0.5)  # Very short timeout
-            if result and "result" in result:
-                current_url = result["result"].get("value")
-                if current_url:
-                    return current_url
+            }, timeout=1.0)
+            
+            if result and "result" in result and "value" in result["result"]:
+                return result["result"]["value"]
         except Exception:
-            # Too bad, so sad - can't get URL
             pass
-        
         return "unknown"
-    
+
     def _collect_window_properties(self, cdp_session):
-        """Collect all window properties into a flat dictionary. Fully non-blocking, fail-fast."""
+        """Collect all window properties into a flat dictionary using a single JS evaluation.
+        
+        This runs entirely in the browser context to avoid thousands of CDP roundtrips
+        that would otherwise freeze the page.
+        """
         # Reset abort flag at start of collection
         self.abort_collection = False
         
@@ -308,17 +165,12 @@ class WindowPropertyMonitor:
                 return
             
             try:
-                test_result = cdp_session.send_and_wait("Runtime.evaluate", {
+                # Simple check if runtime is responsive
+                cdp_session.send_and_wait("Runtime.evaluate", {
                     "expression": "1+1",
                     "returnByValue": True
-                }, timeout=0.5)  # Very short timeout
-                if not test_result:
-                    return
-                if isinstance(test_result, dict):
-                    if "error" in test_result or "result" not in test_result:
-                        return
+                }, timeout=0.5)
             except (TimeoutError, Exception):
-                # Too bad, so sad - Runtime not ready, skip collection
                 return
             
             # Check abort flag before continuing
@@ -327,96 +179,142 @@ class WindowPropertyMonitor:
             
             current_url = self._get_current_url(cdp_session)
             
-            # Check abort flag
             if self.abort_collection:
                 return
             
-            # Get window object (very short timeout)
+            # JavaScript script to traverse and serialize window properties efficiently
+            # This replicates the logic of the previous Python implementation but runs in-browser
+            js_script = r"""
+            (function() {
+                const MAX_DEPTH = 10;
+                const START_TIME = Date.now();
+                const TIME_LIMIT = 500; // 500ms hard limit to ensure we never freeze the page
+                
+                const NATIVE_PREFIXES = [
+                    "HTML", "SVG", "MathML", "RTC", "IDB", "Media", "Audio", "Video",
+                    "WebGL", "Canvas", "Crypto", "File", "Blob", "Form", "Input",
+                    "Mutation", "Intersection", "Resize", "Performance", "Navigation",
+                    "Storage", "Location", "History", "Navigator", "Screen", "Window",
+                    "Document", "Element", "Node", "Event", "Promise", "Array",
+                    "String", "Number", "Boolean", "Date", "RegExp", "Error", "Function",
+                    "Map", "Set", "WeakMap", "WeakSet", "Proxy", "Reflect", "Symbol",
+                    "Intl", "JSON", "Math", "Console", "TextEncoder", "TextDecoder",
+                    "ReadableStream", "WritableStream", "TransformStream", "AbortController",
+                    "URL", "URLSearchParams", "Headers", "Request", "Response", "Fetch",
+                    "Worker", "SharedWorker", "ServiceWorker", "BroadcastChannel",
+                    "MessageChannel", "MessagePort", "ImageData", "ImageBitmap",
+                    "OffscreenCanvas", "Path2D", "CanvasGradient", "CanvasPattern",
+                    "Geolocation", "Notification", "PushManager", "Cache", "IndexedDB"
+                ];
+                
+                const IGNORED_GLOBALS = new Set([
+                    "window", "self", "top", "parent", "frames", "document", "navigator",
+                    "location", "history", "screen", "console", "localStorage", "sessionStorage",
+                    "indexedDB", "caches", "performance", "fetch", "XMLHttpRequest", "WebSocket",
+                    "Blob", "File", "FileReader", "FormData", "URL", "URLSearchParams",
+                    "Headers", "Request", "Response", "AbortController", "Event", "CustomEvent",
+                    "Promise", "Map", "Set", "WeakMap", "WeakSet", "Proxy", "Reflect",
+                    "Symbol", "Intl", "JSON", "Math", "Date", "RegExp", "Error", "Array",
+                    "String", "Number", "Boolean", "Object", "Function", "ArrayBuffer",
+                    "DataView", "Int8Array", "Uint8Array", "Int16Array", "Uint16Array",
+                    "Int32Array", "Uint32Array", "Float32Array", "Float64Array",
+                    "alert", "confirm", "prompt", "print", "postMessage", "close", "stop", "focus", "blur", "open"
+                ]);
+
+                const flatDict = {};
+                const visited = new Set();
+
+                function isNative(obj) {
+                    if (obj === null || obj === undefined) return false;
+                    const ctor = obj.constructor;
+                    if (!ctor || !ctor.name) return false;
+                    const name = ctor.name;
+                    for (let i = 0; i < NATIVE_PREFIXES.length; i++) {
+                        if (name.startsWith(NATIVE_PREFIXES[i])) return true;
+                    }
+                    return false;
+                }
+
+                function traverse(obj, path, depth) {
+                    if (depth > MAX_DEPTH) return;
+                    // Check time limit every few iterations to ensure non-blocking
+                    if (depth === 0 && Date.now() - START_TIME > TIME_LIMIT) return;
+                    
+                    if (visited.has(obj)) return;
+                    visited.add(obj);
+                    
+                    let keys = [];
+                    try { 
+                        keys = Object.getOwnPropertyNames(obj); 
+                    } catch(e) { return; }
+                    
+                    for (const key of keys) {
+                        // Skip internal properties
+                        if (key.startsWith("__") || key === "constructor" || key === "prototype") continue;
+                        
+                        let val;
+                        try { val = obj[key]; } catch(e) { continue; }
+                        
+                        const valType = typeof val;
+                        const newPath = path ? path + "." + key : key;
+                        
+                        if (val === null) {
+                            flatDict[newPath] = null;
+                        } else if (valType === 'string' || valType === 'number' || valType === 'boolean') {
+                            flatDict[newPath] = val;
+                        } else if (valType === 'object') {
+                            if (!isNative(val)) {
+                                traverse(val, newPath, depth + 1);
+                            }
+                        }
+                    }
+                }
+
+                // Top level window scan
+                try {
+                    const keys = Object.getOwnPropertyNames(window);
+                    for (const key of keys) {
+                        if (IGNORED_GLOBALS.has(key) || key.startsWith("on") || key.startsWith("webkit")) continue;
+                        
+                        let val;
+                        try { val = window[key]; } catch(e) { continue; }
+                        
+                        if (val === null || val === undefined) continue;
+                        
+                        // Check if it's a native type instance
+                        if (typeof val === 'object' && isNative(val)) continue;
+                        
+                        // If it passed checks, traverse or add
+                        const valType = typeof val;
+                        if (valType === 'object') {
+                            traverse(val, key, 0);
+                        } else if (valType !== 'function') {
+                            flatDict[key] = val;
+                        }
+                    }
+                } catch(e) {}
+                
+                return flatDict;
+            })()
+            """
+
+            # Execute the script - single round trip!
             try:
                 result = cdp_session.send_and_wait("Runtime.evaluate", {
-                    "expression": "window",
-                    "returnByValue": False
-                }, timeout=0.5)  # Very short timeout - fail fast
+                    "expression": js_script,
+                    "returnByValue": True,
+                    "timeout": 1000  # Allow script to run
+                }, timeout=2.0) # Overall timeout
             except (TimeoutError, Exception):
-                # Too bad, so sad - can't get window object, skip
                 return
-            
-            if not result or not result.get("result", {}).get("objectId"):
-                return
-            
-            # Check abort flag
+
             if self.abort_collection:
                 return
-            
-            window_obj = result["result"]["objectId"]
-            
-            # Get all properties of window (short timeout - this is the biggest operation)
-            if self.abort_collection:
+                
+            if not result or "result" not in result or "value" not in result["result"]:
                 return
-            
-            try:
-                props_result = cdp_session.send_and_wait("Runtime.getProperties", {
-                    "objectId": window_obj,
-                    "ownProperties": True
-                }, timeout=1.0)  # Short timeout - if page changed, too bad so sad
-            except (TimeoutError, Exception) as e:
-                # If navigation happens during collection, object IDs become invalid
-                # Too bad, so sad - just abort collection silently
-                error_str = str(e)
-                if "-32000" in error_str or "Cannot find context" in error_str or "TimeoutError" in str(type(e).__name__):
-                    return  # Silently abort collection
-                # Only log truly unexpected errors
-                logger.debug(f"Error getting window properties: {e}")
-                return
-            
-            # Check abort flag after getting properties
-            if self.abort_collection:
-                return
-            
-            flat_dict = {}
-            all_props = props_result.get("result", [])
-            
-            total_props = len(all_props)
-            
-            skipped_count = 0
-            processed_count = 0
-            
-            for prop in all_props:
-                # Check abort flag frequently during processing
-                if self.abort_collection:
-                    return
-                name = prop["name"]
-                value = prop.get("value", {})
-                value_type = value.get("type", "unknown")
-                className = value.get("className", "")
-                
-                is_app_object = self._is_application_object(className, name)
-                
-                if not is_app_object:
-                    skipped_count += 1
-                    continue
-                
-                # Only store actual values, no metadata
-                if value_type == "string":
-                    flat_dict[name] = value.get("value")
-                elif value_type in ["number", "boolean"]:
-                    flat_dict[name] = value.get("value")
-                elif value_type == "object" and value.get("objectId"):
-                    # Check abort before recursive call
-                    if self.abort_collection:
-                        return
-                    obj_id = value.get("objectId")
-                    # Recursive resolution with fail-fast timeout (handled inside)
-                    self._fully_resolve_object_flat(cdp_session, obj_id, name, flat_dict, max_depth=10)
-                    # Check abort after recursive call
-                    if self.abort_collection:
-                        return
-                elif value_type == "function":
-                    pass  # Skip functions
-                else:
-                    flat_dict[name] = value.get("value")
-                
-                processed_count += 1
+
+            flat_dict = result["result"]["value"]
             
             # Update history
             current_ts = time.time()

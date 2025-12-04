@@ -49,7 +49,8 @@ def main() -> None:
         tmp_dir=os.path.join(args.output_dir, "tmp"),
         transactions_dir=os.path.join(args.cdp_captures_dir, "network/transactions"),
         consolidated_transactions_path=os.path.join(args.cdp_captures_dir, "network/consolidated_transactions.json"),
-        storage_jsonl_path=os.path.join(args.cdp_captures_dir, "storage/events.jsonl")
+        storage_jsonl_path=os.path.join(args.cdp_captures_dir, "storage/events.jsonl"),
+        window_properties_path=os.path.join(args.cdp_captures_dir, "window_properties/window_properties.json"),
     )
     logger.info("Context manager initialized.")
 

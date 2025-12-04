@@ -304,11 +304,11 @@ class Endpoint(BaseModel):
     description: str | None = Field(default=None, description="Human-readable description the fetch request")
     method: HTTPMethod = Field(..., description="HTTP method")
     headers: dict[str, Any] = Field(
-        ...,
+        default={},
         description="Dictionary of headers, with parameter placeholders for later interpolation"
     )
     body: dict[str, Any] = Field(
-        ...,
+        default={},
         description="Dictionary of request body, with parameter placeholders for later interpolation"
     )
     credentials: CREDENTIALS = Field(
@@ -440,6 +440,118 @@ class Routine(ResourceBase):
         default_factory=list,
         description="List of parameters"
     )
+
+    def fix_placeholders(self) -> None:
+        """
+        Fix placeholders in the routine operations.
+        Ensures that string parameters are wrapped in escaped quotes and other parameters are not.
+        """
+        # Map parameter names to their types
+        param_types = {param.name: param.type for param in self.parameters}
+        
+        # Define which types are considered "strings" that need quoting
+        string_types = {
+            ParameterType.STRING, 
+            ParameterType.DATE, 
+            ParameterType.DATETIME, 
+            ParameterType.EMAIL, 
+            ParameterType.URL, 
+            ParameterType.ENUM
+        }
+        
+        def should_be_quoted(param_name: str) -> bool:
+            """Determine if a parameter should be quoted based on its type."""
+            # Check builtins
+            if param_name == "uuid":
+                return True
+            if param_name == "epoch_milliseconds":
+                return False # treat as number
+            
+            # Check storage/application parameters (assume string)
+            if ":" in param_name:
+                return True
+                
+            # Check defined parameters
+            if param_name in param_types:
+                return param_types[param_name] in string_types
+            
+            # Default to string if unknown (safer for JSON usually)
+            return True
+
+        def fix_string(text: str) -> str:
+            """
+            Fix placeholders in a string.
+            Finds {{param}} and ensures it is quoted if needed.
+            """
+            # Regex to find {{param}} placeholders
+            # Capture the parameter name inside
+            pattern = r'{{([^}]+)}}'
+            
+            def replacer(match):
+                full_match = match.group(0)
+                param_name = match.group(1).strip()
+                
+                # Check if it needs quoting
+                if should_be_quoted(param_name):
+                    # Check if already quoted with escaped quotes in the source text
+                    # We look at the text around the match using the match object's indices
+                    start, end = match.span()
+                    
+                    # check for preceding \"
+                    preceded_by_quote = False
+                    if start >= 2 and text[start-2:start] == '\\"':
+                        preceded_by_quote = True
+                    elif start >= 1 and text[start-1] == '"' and (start < 2 or text[start-2] != '\\'):
+                         preceded_by_quote = True
+                         
+                    # check for following \"
+                    followed_by_quote = False
+                    if end <= len(text) - 2 and text[end:end+2] == '\\"':
+                        followed_by_quote = True
+                    elif end < len(text) and text[end] == '"':
+                        followed_by_quote = True
+                        
+                    if preceded_by_quote and followed_by_quote:
+                        return full_match # already quoted
+                    
+                    # It needs quotes and doesn't have them. Add quotes.
+                    return f'"{full_match}"'
+                else:
+                    # It does NOT need quotes (e.g. integer).
+                    # Return as is (or strip quotes if we wanted to be aggressive, but prompt only asked to force escaped quotes for strings)
+                    return full_match
+
+            return re.sub(pattern, replacer, text)
+
+        def fix_value(value: Any) -> Any:
+            """Recursively fix values in dicts/lists."""
+            if isinstance(value, str):
+                return fix_string(value)
+            elif isinstance(value, dict):
+                return {k: fix_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [fix_value(v) for v in value]
+            return value
+
+        # Iterate over operations and fix headers/body/url
+        for op in self.operations:
+            if op.type == RoutineOperationTypes.NAVIGATE:
+                # Fix URL
+                op.url = fix_string(op.url)
+                
+            elif op.type == RoutineOperationTypes.FETCH:
+                # Fix URL
+                op.endpoint.url = fix_string(op.endpoint.url)
+                
+                # Fix Headers
+                if op.endpoint.headers:
+                    op.endpoint.headers = fix_value(op.endpoint.headers)
+                
+                # Fix Body
+                if op.endpoint.body:
+                    op.endpoint.body = fix_value(op.endpoint.body)
+                    
+        return
 
     @model_validator(mode='after')
     def validate_parameter_usage(self) -> 'Routine':
