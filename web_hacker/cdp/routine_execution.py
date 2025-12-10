@@ -62,6 +62,7 @@ def _generate_fetch_js(
     body_js_literal: str,
     endpoint_method: str,
     endpoint_credentials: str,
+    session_storage_key: str | None = None,
 ) -> str:
     """Generate JavaScript code for fetch operation."""
     hdrs_json = json.dumps(
@@ -137,24 +138,21 @@ def _generate_fetch_js(
         "    const parts = path.trim().split('.');",
         "    let obj = window;",
         "    for (const part of parts) {",
-        "      if (obj == null || obj === undefined) return undefined;",
+        "      if (obj == null) return undefined;",
         "      obj = obj[part];",
         "    }",
-        "    // Convert the final value to a string if it's not null/undefined",
-        "    if (obj == null || obj === undefined) return undefined;",
         "    return obj;",
         "  }",
         "  function resolveOne(token){",
         "    const [lhs, rhs] = token.split('||');",
         "    const [kind, path] = lhs.split(':');",
         "    let val;",
-        "    switch(kind.trim()){",
+        "    switch(kind){",
         "      case 'sessionStorage': val = readStorage(window.sessionStorage, path.trim()); break;",
         "      case 'localStorage':   val = readStorage(window.localStorage, path.trim()); break;",
         "      case 'cookie':         val = getCookie(path.trim()); break;",
         "      case 'meta':           val = getMeta(path.trim()); break;",
         "      case 'windowProperty': val = getWindowProperty(path.trim()); break;",
-        "      default: val = undefined;",
         "    }",
         "    if ((val === undefined || val === null || val === '') && rhs){",
         "      if (rhs.trim() === 'uuid' && 'randomUUID' in crypto){",
@@ -180,13 +178,10 @@ def _generate_fetch_js(
         "      const isQuoted = startsWithEscaped && endsWithEscaped;",
         "      if (isQuoted) {",
         "        // Quoted: strings use raw value (no quotes), objects use JSON.stringify",
-        "        if (typeof v === 'string') return v;",
-        "        if (typeof v === 'object') return JSON.stringify(v);",
-        "        return String(v);",
+        "        return (typeof v === 'string') ? v : JSON.stringify(v);",
         "      } else {",
         "        // Unquoted: always stringify",
-        "        if (typeof v === 'object') return JSON.stringify(v);",
-        "        return String(v);",
+        "        return (typeof v === 'object') ? JSON.stringify(v) : String(v);",
         "      }",
         "    });",
         "  }",
@@ -243,7 +238,9 @@ def _generate_fetch_js(
         "  try {",
         "    const resp = await fetch(resolvedUrl, opts);",
         "    const status = resp.status;",
-        "    const val = await resp.text(); return {status, value: val};",
+        "    const val = await resp.text();",
+        f"    if ({'true' if session_storage_key else 'false'}) {{ try {{ window.sessionStorage.setItem({json.dumps(session_storage_key) if session_storage_key else 'null'}, JSON.stringify(val)); }} catch(e) {{ return {{ __err: 'SessionStorage Error: ' + String(e) }}; }} }}",
+        "    return {status, value: 'success'};",
         "  } catch(e) {",
         "    return { __err: 'fetch failed: ' + String(e) };",
         "  }",
@@ -373,6 +370,7 @@ def _execute_fetch_in_session(
     send_cmd: callable,
     recv_until: callable,
     timeout: float,
+    session_storage_key: str | None = None,
 ):
     """
     Execute a fetch operation within an existing CDP session.
@@ -386,6 +384,7 @@ def _execute_fetch_in_session(
         send_cmd: Function to send CDP commands.
         recv_until: Function to receive CDP responses.
         timeout: Request timeout.
+        session_storage_key: Optional session storage key to store the result.
 
     Returns:
         dict: Result with "ok" status and "result" data.
@@ -433,9 +432,11 @@ def _execute_fetch_in_session(
         body_js_literal=body_js_literal,
         endpoint_method=endpoint.method,
         endpoint_credentials=endpoint.credentials,
+        session_storage_key=session_storage_key,
     )
 
     # Execute the fetch
+    logger.info(f"Sending Runtime.evaluate for fetch with timeout={timeout}s")
     eval_id = send_cmd(
         "Runtime.evaluate",
         {
@@ -449,11 +450,15 @@ def _execute_fetch_in_session(
 
     reply = recv_until(lambda m: m.get("id") == eval_id, time.time() + timeout)
     if "error" in reply:
+        logger.error(f"Error in execute_fetch_in_session (CDP error): {reply['error']}")
         return {"ok": False, "result": reply["error"]}
     payload = reply["result"]["result"].get("value")
 
     if isinstance(payload, dict) and payload.get("__err"):
+        logger.error(f"Error in execute_fetch_in_session (JS error): {payload.get('__err')}")
         return {"ok": False, "status": payload.get("status"), "result": payload.get("__err")}
+    
+    logger.info(f"Payload in execute_fetch_in_session: {str(payload)[:1000]}...")  # Truncate for safety
 
     return {"ok": True, "status": payload.get("status"), "result": payload}
 
@@ -775,15 +780,8 @@ def execute_routine(
                     send_cmd=send_cmd,
                     recv_until=recv_until,
                     timeout=timeout,
+                    session_storage_key=operation.session_storage_key,
                 )
-
-                # Store result in session storage if key provided
-                if operation.session_storage_key and fetch_result.get("ok"):
-                    result_data = fetch_result.get("result", {}).get("value", {})
-                    js = f"window.sessionStorage.setItem('{operation.session_storage_key}', JSON.stringify({json.dumps(result_data)}));"
-                    send_cmd(
-                        "Runtime.evaluate", {"expression": js}, session_id=session_id
-                    )
 
             elif isinstance(operation, RoutineReturnOperation):
                 # Get result from session storage
