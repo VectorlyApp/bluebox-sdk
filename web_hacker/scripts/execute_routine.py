@@ -70,6 +70,8 @@ def main(routine_path: str | None = None, parameters_path: str | None = None, pa
         )
         logger.info(f"Result: {result}")
         
+        print(result)
+        
     except Exception as e:
         logger.error("Error executing routine: %s", e)
 

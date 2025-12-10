@@ -77,6 +77,7 @@ def _generate_fetch_js(
         f"  const url = {json.dumps(fetch_url)};",
         f"  const rawHeaders = {hdrs_json};",
         f"  const BODY_LITERAL = {body_js_literal};",
+        "  const resolvedValues = {};",
         "",
         "  // Simple tokens (computed locally, no source lookup)",
         "  function replaceSimpleTokens(str){",
@@ -170,6 +171,7 @@ def _generate_fetch_js(
         "    // Follow test.py pattern: for quoted placeholders, strings use raw value, objects use JSON.stringify",
         "    return str.replace(PLACEHOLDER, (m, _k, inner) => {",
         "      const v = resolveOne(`${_k}:${inner}`);",
+        "      resolvedValues[`${_k}:${inner}`] = (v === undefined) ? null : v;",
         "      if (v === undefined || v === null) return m;",
         "      // Check if match was quoted - could be \"{{...}}\" or \\\"{{...}}\\\"",
         "      // Check for escaped quote \\\" at start/end, or simple quote \"",
@@ -240,7 +242,7 @@ def _generate_fetch_js(
         "    const status = resp.status;",
         "    const val = await resp.text();",
         f"    if ({'true' if session_storage_key else 'false'}) {{ try {{ window.sessionStorage.setItem({json.dumps(session_storage_key) if session_storage_key else 'null'}, JSON.stringify(val)); }} catch(e) {{ return {{ __err: 'SessionStorage Error: ' + String(e) }}; }} }}",
-        "    return {status, value: 'success'};",
+        "    return {status, value: 'success', resolvedValues};",
         "  } catch(e) {",
         "    return { __err: 'fetch failed: ' + String(e) };",
         "  }",
@@ -460,7 +462,12 @@ def _execute_fetch_in_session(
     
     logger.info(f"Payload in execute_fetch_in_session: {str(payload)[:1000]}...")  # Truncate for safety
 
-    return {"ok": True, "status": payload.get("status"), "result": payload}
+    return {
+        "ok": True, 
+        "status": payload.get("status"), 
+        "result": payload.get("value"),
+        "placeholder_resolution": payload.get("resolvedValues", {})
+    }
 
 
 def _apply_params(text: str, parameters_dict: dict | None) -> str:
@@ -739,6 +746,7 @@ def execute_routine(
         # Execute operations
         result = None
         current_url = None
+        all_placeholder_resolution = {}
 
         logger.info(f"Executing routine with {len(routine.operations)} operations")
         for i, operation in enumerate(routine.operations):
@@ -782,6 +790,10 @@ def execute_routine(
                     timeout=timeout,
                     session_storage_key=operation.session_storage_key,
                 )
+                
+                # Collect resolved values from the fetch operation
+                if fetch_result.get("ok") and "placeholder_resolution" in fetch_result:
+                    all_placeholder_resolution.update(fetch_result["placeholder_resolution"])
 
             elif isinstance(operation, RoutineReturnOperation):
                 # Get result from session storage
@@ -841,7 +853,7 @@ def execute_routine(
                         result = stored_value
 
 
-        return {"ok": True, "result": result}
+        return {"ok": True, "result": result, "placeholder_resolution": all_placeholder_resolution}
 
     except Exception as e:
         return {"ok": False, "result": f"Routine execution failed: {e}"}
