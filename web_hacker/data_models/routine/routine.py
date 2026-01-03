@@ -1,0 +1,373 @@
+"""
+web_hacker/data_models/routine/routine.py
+
+Routine data model.
+"""
+
+import ast
+import json
+import time
+from enum import StrEnum
+
+from pydantic import Field, model_validator
+
+from cdpkit.data_models.resource_base import ResourceBase
+from cdpkit.data_models.routine.execution import RoutineExecutionContext, RoutineExecutionResult
+from cdpkit.data_models.routine.operation import (
+    RoutineFetchOperation,
+    RoutineNavigateOperation,
+    RoutineOperationUnion,
+)
+from cdpkit.data_models.routine.parameter import (
+    Parameter,
+    ParameterType,
+    BUILTIN_PARAMETERS,
+    VALID_PLACEHOLDER_PREFIXES,
+)
+from cdpkit.utils.cdp_utils import cdp_new_tab, dispose_context
+from cdpkit.utils.data_utils import (
+    extract_base_url_from_url,
+    extract_placeholders_from_json_str,
+    PlaceholderQuoteType,
+)
+from cdpkit.utils.logger import get_logger
+from cdpkit.utils.web_socket_utils import send_cmd, recv_until
+
+logger = get_logger(name=__name__)
+
+
+# Enums ___________________________________________________________________________________________
+
+class RoutineStatus(StrEnum):
+    ACTIVE = "active"
+    ARCHIVED = "archived"  # user wants to hide them
+    DELETED = "deleted"    # soft deletes
+    DRAFT = "draft"        # work in progress
+
+
+# Routine model ___________________________________________________________________________________
+
+class Routine(ResourceBase):
+    """
+    Routine model with comprehensive parameter validation.
+
+    DynamoDB Table: Routines
+
+    Table Structure:
+    - Partition Key: id (string)
+    - No Sort Key
+
+    Global Secondary Indices (GSI):
+    - project_id-updated_at-index
+      - Partition Key: project_id
+      - Sort Key: updated_at (number; Unix timestamp in seconds)
+    - public_status-updated_at-index (sparse: only when public_status is set)
+      - Partition Key: public_status (string; e.g., 'public#active' when is_public=true and routine_status='active')
+      - Sort Key: updated_at (number; Unix timestamp in seconds)
+    - public_status-popularity_sort-index (sparse)
+      - Partition Key: public_status (string; e.g., 'public#active' when is_public=true and routine_status='active')
+      - Sort Key: popularity_sort (string; lexicographically sortable string derived from fork_count and updated_at)    
+    """
+    # metadata
+    created_by: str = Field(
+        description="User ID of the user who created the routine (from Clerk)"
+    )
+    project_id: str = Field(
+        description="Project ID of the project the routine belongs to"
+    )
+    cdp_captures_id: str | None = Field(
+        default=None,
+        description="CDP session ID of the routine"
+    )
+    discovery_job_id: str | None = Field(
+        default=None,
+        description="Routine discovery job ID that discovered the routine"
+    )
+    is_public: bool = Field(
+        default=False,
+        description="Whether the creator of the routine has made the routine publicly viewable"
+    )
+    routine_status: RoutineStatus = Field(
+        default=RoutineStatus.ACTIVE,
+        description="Status of the routine (active, archived, deleted, draft)"
+    )
+    parent_routine_id: str | None = Field(
+        default=None,
+        description="ID of the parent routine this was forked from"
+    )
+    child_routine_ids: list[str] | None = Field(
+        default=None,
+        description="IDs of child routines forked from this one"
+    )
+    tags: list[str] | None = Field(
+        default_factory=list,
+        description="List of tags for the routine (e.g., 'travel')"
+    )
+    is_mcp_tool_designated: bool | None = Field(
+        default=True,
+        description="Whether the routine is to be registered as an MCP tool. Assume False if None."
+    )
+
+    # for indexing
+    fork_count: int = Field(
+        default=0,
+        description=(
+            "Denormalized number of forks of the routine (precompute instead of computing "
+            "length of child_routine_ids on reads). Precompute instead of computing on reads."
+        )
+    )
+    public_status: str | None = Field(
+        default=None,
+        description="Public status value for the routine"
+    )
+    popularity_sort: str | None = Field(
+        default=None,
+        description="Popularity sort value for the routine"
+    )
+    base_urls: str | None = Field(
+        default=None,
+        description="Comma-separated list of unique base URLs extracted from navigate and fetch operations"
+    )
+
+    # routine details
+    name: str
+    description: str
+    operations: list[RoutineOperationUnion]
+    incognito: bool = Field(
+        default=True,
+        description="Whether to use incognito mode when executing the routine"
+    )
+    parameters: list[Parameter] = Field(
+        default_factory=list,
+        description="List of parameters"
+    )
+
+    @model_validator(mode='after')
+    def validate_parameter_usage(self) -> 'Routine':
+        """
+        Pydantic model validator to ensure all defined parameters are used in the routine
+        and no undefined parameters are used.
+        Raises ValueError if unused parameters are found or undefined parameters are used.
+        Also automatically computes base_urls from operations.
+        """
+        # Convert the entire routine to JSON string for searching
+        routine_json = self.model_dump_json()
+
+        # Build lookup maps for parameters
+        defined_parameters = {param.name for param in self.parameters}
+        param_type_map = {param.name: param.type for param in self.parameters}
+        builtin_parameter_names = {bp.name for bp in BUILTIN_PARAMETERS}
+        
+        # Types that allow both quoted "{{...}}" and escape-quoted \"{{...}}\"
+        non_string_types = {
+            ParameterType.INTEGER,
+            ParameterType.NUMBER, 
+            ParameterType.BOOLEAN
+        }
+
+        # Extract all placeholders with their quote types
+        placeholders = extract_placeholders_from_json_str(routine_json)
+
+        # Track used parameters
+        used_parameters: set[str] = set()
+        
+        # Validate each placeholder
+        for placeholder in placeholders:
+            content = placeholder.content
+            quote_type = placeholder.quote_type
+            
+            # Check if it's a storage/meta/window placeholder (has colon prefix)
+            if ":" in content:
+                prefix, path = [p.strip() for p in content.split(":", 1)]
+                if prefix not in VALID_PLACEHOLDER_PREFIXES:
+                    raise ValueError(f"Invalid prefix in placeholder: {prefix}")
+                if not path:
+                    raise ValueError(f"Path is required for {prefix}: placeholder")
+                # Storage/meta/window placeholders can use either QUOTED or ESCAPE_QUOTED - valid
+                continue
+            
+            # Check if it's a builtin parameter
+            if content in builtin_parameter_names:
+                # Builtins can use either QUOTED or ESCAPE_QUOTED - valid
+                continue
+            
+            # It's a regular user-defined parameter
+            used_parameters.add(content)
+            
+            # Get the parameter type (if defined)
+            param_type = param_type_map.get(content)
+            
+            if param_type is not None:
+                # Validate quote type based on parameter type
+                if param_type in non_string_types:
+                    # int, number, bool: can use either "{{...}}" or \"{{...}}\"
+                    pass  # Both QUOTED and ESCAPE_QUOTED are valid
+                else:
+                    # string types: MUST use escape-quoted \"{{...}}\"
+                    if quote_type != PlaceholderQuoteType.ESCAPE_QUOTED:
+                        raise ValueError(
+                            f"String parameter '{{{{{content}}}}}' in routine '{self.name}' must use escape-quoted format. "
+                            f"Use '\\\"{{{{{{content}}}}}}\\\"' instead of '\"{{{{{{content}}}}}}\"'."
+                        )
+
+        # Check 1: All defined parameters must be used
+        unused_parameters = defined_parameters - used_parameters
+        if unused_parameters:
+            raise ValueError(
+                f"Unused parameters found in routine '{self.name}': {list(unused_parameters)}. "
+                f"All defined parameters must be used somewhere in the routine operations."
+            )
+
+        # Check 2: No undefined parameters should be used
+        undefined_parameters = used_parameters - defined_parameters
+        if undefined_parameters:
+            raise ValueError(
+                f"Undefined parameters found in routine '{self.name}': {list(undefined_parameters)}. "
+                f"All parameters used in the routine must be defined in parameters."
+            )
+
+        # Automatically compute base_urls from operations
+        self.base_urls = self.compute_base_urls_from_operations()
+
+        return self
+
+    def compute_base_urls_from_operations(self) -> str | None:
+        """
+        Computes comma-separated base URLs from routine operations.
+        Extracts unique base URLs from navigate and fetch operations.
+        
+        Returns:
+            Comma-separated string of unique base URLs (sorted), or None if none found.
+        """
+        base_urls: set[str] = set()
+        
+        for operation in self.operations:
+            # Extract from navigate operations
+            if isinstance(operation, RoutineNavigateOperation):
+                if operation.url:
+                    base_url = extract_base_url_from_url(operation.url)
+                    if base_url:
+                        base_urls.add(base_url)
+            
+            # Extract from fetch operations
+            elif isinstance(operation, RoutineFetchOperation):
+                if operation.endpoint and operation.endpoint.url:
+                    base_url = extract_base_url_from_url(operation.endpoint.url)
+                    if base_url:
+                        base_urls.add(base_url)
+        
+        if len(base_urls) == 0:
+            return None
+        
+        # Return comma-separated unique base URLs (sorted for consistency)
+        return ','.join(sorted(base_urls))
+
+    def fix_placeholders(self) -> None:
+        """
+        Fix placeholders in the routine operations.
+        Ensures that string parameters are wrapped in escaped quotes and other parameters are not.
+        """
+        pass # TODO: Implement this
+
+    def execute(
+        self,
+        parameters_dict: dict | None = None,
+        remote_debugging_address: str = "http://127.0.0.1:9222",
+        timeout: float = 180.0,
+        close_tab_when_done: bool = True,
+    ) -> RoutineExecutionResult:
+        """
+        Execute this routine using Chrome DevTools Protocol.
+
+        Executes a sequence of operations (navigate, sleep, fetch, return) in a browser
+        session, maintaining state between operations.
+
+        Args:
+            parameters_dict: Parameters for URL/header/body interpolation.
+            remote_debugging_address: Chrome debugging server address.
+            timeout: Operation timeout in seconds.
+            close_tab_when_done: Whether to close the tab when finished.
+
+        Returns:
+            RoutineExecutionResult: Result of the routine execution.
+        """
+        if parameters_dict is None:
+            parameters_dict = {}
+
+        # Create a new tab for the routine
+        try:
+            target_id, browser_context_id, ws = cdp_new_tab(
+                remote_debugging_address=remote_debugging_address,
+                incognito=self.incognito,
+                url="about:blank",
+            )
+        except Exception as e:
+            return RoutineExecutionResult(
+                ok=False,
+                error=f"Failed to create tab: {e}"
+            )
+
+        try:
+            # Attach to target
+            attach_id = send_cmd(ws, "Target.attachToTarget", {"targetId": target_id, "flatten": True})
+            reply = recv_until(ws, lambda m: m.get("id") == attach_id, time.time() + timeout)
+            session_id = reply["result"]["sessionId"]
+
+            # Enable domains
+            send_cmd(ws, "Page.enable", session_id=session_id)
+            send_cmd(ws, "Runtime.enable", session_id=session_id)
+            send_cmd(ws, "Network.enable", session_id=session_id)
+            send_cmd(ws, "DOM.enable", session_id=session_id)
+
+            # Create execution context
+            routine_execution_context = RoutineExecutionContext(
+                session_id=session_id,
+                ws=ws,
+                send_cmd=lambda method, params=None, **kwargs: send_cmd(ws, method, params, **kwargs),
+                recv_until=lambda predicate, deadline: recv_until(ws, predicate, deadline),
+                parameters_dict=parameters_dict,
+                timeout=timeout,
+            )
+
+            # Execute operations
+            logger.info(f"Executing routine '{self.name}' with {len(self.operations)} operations")
+            for i, operation in enumerate(self.operations):
+                logger.info(
+                    f"Executing operation {i+1}/{len(self.operations)}: {type(operation).__name__}"
+                )
+                operation.execute(routine_execution_context)
+                
+            # Try to parse string results as JSON or Python literals (skip for base64)
+            result = routine_execution_context.result
+            if isinstance(result.data, str) and not result.is_base64:
+                try:
+                    result.data = json.loads(result.data)
+                except Exception:
+                    try:
+                        result_literal = ast.literal_eval(result.data)
+                        if isinstance(result_literal, (dict, list)):
+                            result.data = result_literal
+                    except Exception:
+                        pass  # Keep as string if both fail
+
+            return routine_execution_context.result
+
+        except Exception as e:
+            return RoutineExecutionResult(
+                ok=False,
+                error=f"Routine execution failed: {e}",
+            )
+
+        finally:
+            try:
+                if close_tab_when_done:
+                    send_cmd(ws, "Target.closeTarget", {"targetId": target_id})
+                    if browser_context_id and self.incognito:
+                        dispose_context(remote_debugging_address, browser_context_id)
+            except Exception:
+                pass
+            try:
+                ws.close()
+            except Exception:
+                pass
+

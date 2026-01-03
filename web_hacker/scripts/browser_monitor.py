@@ -14,7 +14,7 @@ import sys
 
 from web_hacker.config import Config
 from web_hacker.cdp.cdp_session import CDPSession
-from web_hacker.data_models.network import ResourceType
+from web_hacker.data_models.routine.endpoint import ResourceType
 from web_hacker.cdp.tab_managements import cdp_new_tab, dispose_context
 
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)

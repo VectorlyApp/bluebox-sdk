@@ -15,7 +15,7 @@ import requests
 
 from ..cdp.cdp_session import CDPSession
 from ..cdp.tab_managements import cdp_new_tab, dispose_context
-from ..data_models.network import ResourceType
+from ..data_models.routine.endpoint import ResourceType
 from ..utils.exceptions import BrowserConnectionError
 
 logger = logging.getLogger(__name__)

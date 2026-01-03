@@ -9,7 +9,7 @@ from openai import OpenAI
 
 from ..routine_discovery.agent import RoutineDiscoveryAgent
 from ..routine_discovery.context_manager import ContextManager
-from ..data_models.production_routine import Routine
+from ..data_models.routine.routine import Routine
 
 
 class RoutineDiscovery:

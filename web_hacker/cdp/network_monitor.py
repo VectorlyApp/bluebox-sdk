@@ -35,7 +35,6 @@ from web_hacker.utils.cdp_utils import (
     write_json_file,
     write_jsonl,
 )
-from web_hacker.data_models.network import Stage
 
 
 logging.basicConfig(level=Config.LOG_LEVEL, format=Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT)
@@ -83,8 +82,8 @@ class NetworkMonitor:
         # Response stage: for capturing response bodies
         cdp_session.send("Fetch.enable", {
             "patterns": [
-                {"urlPattern": "*", "requestStage": Stage.REQUEST},
-                {"urlPattern": "*", "requestStage": Stage.RESPONSE},
+                {"urlPattern": "*", "requestStage": "Request"},
+                {"urlPattern": "*", "requestStage": "Response"},
             ]
         })
 

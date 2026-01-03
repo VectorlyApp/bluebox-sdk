@@ -1,6 +1,6 @@
 
 """
-web_hacker/data_models/ui_elements.py
+web_hacker/data_models/monitor/ui_elements.py
 
 UI element data models for robust element identification and replay.
 """
