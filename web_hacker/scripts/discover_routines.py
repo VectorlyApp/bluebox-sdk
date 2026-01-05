@@ -34,7 +34,7 @@ def main() -> None:
 
     logger.info(f"\n{'-' * 100}")
     logger.info("Starting routine discovery for task:\n%s", args.task)
-    logger.info(f"{'-' * 100}\n")
+    logger.info(f"\n{'-' * 100}\n")
 
     # initialize OpenAI client
     openai_client = OpenAI(api_key=Config.OPENAI_API_KEY)
@@ -69,7 +69,7 @@ def main() -> None:
 
     logger.info(f"\n{'-' * 100}")
     logger.info("Running routine discovery agent.")
-    logger.info(f"{'-' * 100}\n")
+    logger.info(f"\n{'-' * 100}\n")
 
     # run the routine discovery agent
     routine_discovery_agent.run()

@@ -119,7 +119,7 @@ class Routine(BaseModel):
                     if quote_type != PlaceholderQuoteType.ESCAPE_QUOTED:
                         raise ValueError(
                             f"String parameter '{{{{{content}}}}}' in routine '{self.name}' must use escape-quoted format. "
-                            f"Use '\\\"{{{{{{content}}}}}}\\\"' instead of '\"{{{{{{content}}}}}}\"'."
+                            f"Use '\\\"{{{{content}}}}\\\"' instead of '\"{{{{content}}}}\"'."
                         )
 
         # Check 1: All defined parameters must be used

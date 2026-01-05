@@ -40,8 +40,8 @@ class Parameter(BaseModel):
         type (ParameterType): Parameter data type
         required (bool): Whether parameter is required
         description (str): Human-readable parameter description
-        default (Any | None): Default value if not provided
-        examples (list[Any]): Example values
+        default (str | int | float | bool | None): Default value if not provided
+        examples (list[str | int | float | bool]): Example values
         min_length (int | None): Minimum length for strings
         max_length (int | None): Maximum length for strings
         min_value (int | float | None): Minimum value for numbers
@@ -68,11 +68,11 @@ class Parameter(BaseModel):
         description="Whether parameter is required"
     )
     description: str = Field(..., description="Human-readable parameter description")
-    default: Any | None = Field(
+    default: str | int | float | bool | None = Field(
         default=None,
         description="Default value if not provided"
     )
-    examples: list[Any] = Field(
+    examples: list[str | int | float | bool] = Field(
         default_factory=list,
         description="Example values"
     )

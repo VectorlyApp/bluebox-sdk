@@ -673,10 +673,7 @@ class RoutineDiscoveryAgent(BaseModel):
             client=self.client,
             llm_model=self.llm_model
         )
-        
-        # fix the placeholders in the production routine
-        production_routine.fix_placeholders()
-        
+
         return production_routine
 
     def get_test_parameters(self, routine: ProductionRoutine) -> TestParametersResponse:
