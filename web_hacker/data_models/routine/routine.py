@@ -36,15 +36,6 @@ from web_hacker.utils.web_socket_utils import send_cmd, recv_until
 logger = get_logger(name=__name__)
 
 
-# Enums ___________________________________________________________________________________________
-
-class RoutineStatus(StrEnum):
-    ACTIVE = "active"
-    ARCHIVED = "archived"  # user wants to hide them
-    DELETED = "deleted"    # soft deletes
-    DRAFT = "draft"        # work in progress
-
-
 # Routine model ___________________________________________________________________________________
 
 class Routine(BaseModel):
