@@ -74,16 +74,18 @@ class BrowserMonitor:
         self.start_time = time.time()
         
         # Create output directory structure
-        paths = {
-            # Main directories
+        # Directories to create
+        directories = {
             "output_dir": self.output_dir,
             "network_dir": str(Path(self.output_dir) / "network"),
             "transactions_dir": str(Path(self.output_dir) / "network" / "transactions"),
             "storage_dir": str(Path(self.output_dir) / "storage"),
             "interaction_dir": str(Path(self.output_dir) / "interaction"),
             "window_properties_dir": str(Path(self.output_dir) / "window_properties"),
-            
-            # File paths (all static output files)
+        }
+        
+        # File paths (do NOT mkdir these - they are files, not directories)
+        file_paths = {
             "storage_jsonl_path": str(Path(self.output_dir) / "storage" / "events.jsonl"),
             "interaction_jsonl_path": str(Path(self.output_dir) / "interaction" / "events.jsonl"),
             "window_properties_json_path": str(Path(self.output_dir) / "window_properties" / "window_properties.json"),
@@ -93,8 +95,11 @@ class BrowserMonitor:
             "summary_path": str(Path(self.output_dir) / "session_summary.json"),
         }
         
-        # Create directories
-        for path in paths.values():
+        # Combine for paths dict (used by CDPSession)
+        paths = {**directories, **file_paths}
+        
+        # Create only directories (not file paths!)
+        for path in directories.values():
             Path(path).mkdir(parents=True, exist_ok=True)
         
         # Get or create browser tab
