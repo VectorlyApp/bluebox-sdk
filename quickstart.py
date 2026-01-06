@@ -4,7 +4,7 @@ Quickstart: Full workflow for web-hacker using the Python SDK.
 This script guides you through: Launch Chrome → Monitor → Discover → Execute
 
 Usage:
-    python quickstart_sdk.py
+    python quickstart.py
 """
 
 import json

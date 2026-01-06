@@ -83,7 +83,7 @@ class BrowserMonitor:
             "interaction_dir": str(Path(self.output_dir) / "interaction"),
             "window_properties_dir": str(Path(self.output_dir) / "window_properties"),
         }
-        
+
         # File paths (do NOT mkdir these - they are files, not directories)
         file_paths = {
             "storage_jsonl_path": str(Path(self.output_dir) / "storage" / "events.jsonl"),
