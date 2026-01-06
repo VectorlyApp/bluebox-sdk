@@ -183,9 +183,3 @@ class DevRoutine(BaseModel):
         """
         placeholders = re.findall(r'{{.*?}}', routine_string)
         return [placeholder[2:-2] for placeholder in set(placeholders)]
-
-
-# Backward-compatible aliases for existing imports 
-# (SPECIFICALLY FOR production DISCOVERY AGENT)
-#TODO: Remove this once the production discovery agent is updated
-Routine = DevRoutine
