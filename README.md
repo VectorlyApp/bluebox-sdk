@@ -437,7 +437,7 @@ web-hacker-discover \
 
 ```powershell
 # Simple task (no quotes inside):
-web-hacker-discover --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5
+web-hacker-discover --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5.1
 ```
 
 **Example tasks:**
@@ -452,7 +452,7 @@ Arguments:
 - **--task**: A clear description of what you want to automate. This guides the AI agent to identify which network requests to extract and convert into a Routine. Examples: searching for products, booking appointments, submitting forms, etc.
 - **--cdp-captures-dir**: Root of prior CDP capture output (default: `./cdp_captures`)
 - **--output-dir**: Directory to write results (default: `./routine_discovery_output`)
-- **--llm-model**: LLM to use for reasoning/parsing (default: `gpt-5`)
+- **--llm-model**: LLM to use for reasoning/parsing (default: `gpt-5.1`)
 
 Outputs (under `--output-dir`):
 
@@ -630,3 +630,17 @@ See `quickstart.py` for a complete interactive example.
 #### Data
 
 - **return_screenshot** — capture and return a screenshot of the page as base64
+
+## Contributing 🤝
+
+We welcome contributions! Here's how to get started:
+
+1. **Report bugs or request features** — Open an [issue](https://github.com/VectorlyApp/web-hacker/issues)
+2. **Submit code** — Fork the repo and open a [pull request](https://github.com/VectorlyApp/web-hacker/pulls)
+3. **Test your code** — Add unit tests and make sure all tests pass:
+
+```bash
+pytest tests/ -v
+```
+
+Please follow existing code style and include tests for new features.

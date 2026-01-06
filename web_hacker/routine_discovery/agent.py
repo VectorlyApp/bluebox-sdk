@@ -37,7 +37,7 @@ class RoutineDiscoveryAgent(BaseModel):
     client: OpenAI
     context_manager: ContextManager
     task: str
-    llm_model: str = "gpt-5-mini"
+    llm_model: str = "gpt-5.1"
     message_history: list[dict] = Field(default_factory=list)
     output_dir: str
     last_response_id: str | None = None
