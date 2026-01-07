@@ -1,5 +1,6 @@
 from pydantic import BaseModel, field_validator, Field, ConfigDict
 from openai import OpenAI
+from abc import ABC, abstractmethod
 import os
 import json
 import time
@@ -8,7 +9,73 @@ import shutil
 from web_hacker.utils.data_utils import get_text_from_html
 
 
-class ContextManager(BaseModel):
+class ContextManager(BaseModel, ABC):
+    """Abstract base class for managing context data."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @abstractmethod
+    def make_vectorstore(self) -> None:
+        """Make a vectorstore from the context."""
+        pass
+
+    @abstractmethod
+    def get_all_transaction_ids(self) -> list[str]:
+        """Get all transaction ids from the context manager."""
+        pass
+
+    @abstractmethod
+    def get_transaction_by_id(self, transaction_id: str, clean_response_body: bool = False) -> dict:
+        """Get a transaction by id from the context manager."""
+        pass
+
+    @abstractmethod
+    def delete_vectorstore(self) -> None:
+        """Delete the vectorstore from the context manager."""
+        pass
+
+    @abstractmethod
+    def add_transaction_to_vectorstore(self, transaction_id: str, metadata: dict) -> None:
+        """Add a single transaction to the vectorstore."""
+        pass
+
+    @abstractmethod
+    def add_file_to_vectorstore(self, file_path: str, metadata: dict) -> None:
+        """Add a file to the vectorstore."""
+        pass
+
+    @abstractmethod
+    def get_transaction_ids_by_request_url(self, request_url: str) -> list[str]:
+        """Get all transaction ids by request url."""
+        pass
+
+    @abstractmethod
+    def extract_timestamp_from_transaction_id(self, transaction_id: str) -> int:
+        """Get the timestamp of a transaction."""
+        pass
+
+    @abstractmethod
+    def scan_transaction_responses(self, value: str, max_timestamp: int | None = None) -> list[str]:
+        """Scan the network transaction responses for a value."""
+        pass
+
+    @abstractmethod
+    def scan_storage_for_value(self, value: str, max_timestamp: int | None = None) -> list[str]:
+        """Scan the storage for a value."""
+        pass
+
+    @abstractmethod
+    def scan_window_properties_for_value(self, value: str) -> dict:
+        """Scan the window properties for a value."""
+        pass
+
+    @abstractmethod
+    def get_response_body_file_extension(self, transaction_id: str) -> str:
+        """Get the extension of the response body file for a transaction."""
+        pass
+
+
+class LocalContextManager(ContextManager):
 
     client: OpenAI
     tmp_dir: str
@@ -26,8 +93,6 @@ class ContextManager(BaseModel):
     ])
     cached_transaction_ids: list[str] | None = Field(default=None, exclude=True)
     uploaded_transaction_ids: set[str] = Field(default_factory=set, exclude=True)
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @field_validator('transactions_dir', 'consolidated_transactions_path', 'storage_jsonl_path', 'window_properties_path')
     @classmethod

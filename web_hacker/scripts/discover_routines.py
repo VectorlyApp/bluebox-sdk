@@ -12,7 +12,7 @@ from openai import OpenAI
 from web_hacker.config import Config
 from web_hacker.utils.exceptions import ApiKeyNotFoundError
 from web_hacker.routine_discovery.agent import RoutineDiscoveryAgent
-from web_hacker.routine_discovery.context_manager import ContextManager
+from web_hacker.routine_discovery.context_manager import LocalContextManager
 from web_hacker.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -43,7 +43,7 @@ def main() -> None:
     os.makedirs(args.output_dir, exist_ok=True)
 
     # initialize context manager
-    context_manager = ContextManager(
+    context_manager = LocalContextManager(
         client=openai_client,
         tmp_dir=os.path.join(args.output_dir, "tmp"),
         transactions_dir=os.path.join(args.cdp_captures_dir, "network/transactions"),
