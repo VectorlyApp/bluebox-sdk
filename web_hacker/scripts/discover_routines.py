@@ -6,6 +6,7 @@ Script for discovering routines from the network transactions.
 
 from argparse import ArgumentParser
 import os
+import json
 
 from openai import OpenAI
 
@@ -13,6 +14,10 @@ from web_hacker.config import Config
 from web_hacker.utils.exceptions import ApiKeyNotFoundError
 from web_hacker.routine_discovery.agent import RoutineDiscoveryAgent
 from web_hacker.routine_discovery.context_manager import LocalContextManager
+from web_hacker.data_models.routine_discovery.message import (
+    RoutineDiscoveryMessage,
+    RoutineDiscoveryMessageType,
+)
 from web_hacker.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -57,11 +62,26 @@ def main() -> None:
     context_manager.make_vectorstore()
     logger.info("Vectorstore created: %s", context_manager.vectorstore_id)
 
+    # define message handler for progress updates
+    def handle_discovery_message(message: RoutineDiscoveryMessage) -> None:
+        """Handle routine discovery progress messages."""
+        if message.type == RoutineDiscoveryMessageType.INITIATED:
+            logger.info(f"🚀 {message.content}")
+        elif message.type == RoutineDiscoveryMessageType.PROGRESS_THINKING:
+            logger.info(f"🤔 {message.content}")
+        elif message.type == RoutineDiscoveryMessageType.PROGRESS_RESULT:
+            logger.info(f"✅ {message.content}")
+        elif message.type == RoutineDiscoveryMessageType.FINISHED:
+            logger.info(f"🎉 {message.content}")
+        elif message.type == RoutineDiscoveryMessageType.ERROR:
+            logger.error(f"❌ {message.content}")
+
     # initialize routine discovery agent
     routine_discovery_agent = RoutineDiscoveryAgent(
         client=openai_client,
         context_manager=context_manager,
         task=args.task,
+        emit_message_callable=handle_discovery_message,
         llm_model=args.llm_model,
         output_dir=args.output_dir,
     )
@@ -71,9 +91,33 @@ def main() -> None:
     logger.info("Running routine discovery agent.")
     logger.info(f"\n{'-' * 100}\n")
 
-    # run the routine discovery agent
-    routine_discovery_agent.run()
-    logger.info("Routine discovery agent run complete.")
+    # run the routine discovery agent and get the routine
+    try:
+        routine = routine_discovery_agent.run()
+        logger.info("Routine discovery agent run complete.")
+
+        # save the final routine to output
+        routine_path = os.path.join(args.output_dir, "production_routine.json")
+        with open(routine_path, mode="w", encoding="utf-8") as f:
+            json.dump(routine.model_dump(), f, ensure_ascii=False, indent=2)
+        logger.info(f"Production routine saved to: {routine_path}")
+
+        # optionally get test parameters
+        logger.info("Generating test parameters...")
+        test_parameters = routine_discovery_agent.get_test_parameters(routine)
+        test_parameters_dict = {param.name: param.value for param in test_parameters.parameters}
+
+        # save test parameters
+        test_params_path = os.path.join(args.output_dir, "test_parameters.json")
+        with open(test_params_path, mode="w", encoding="utf-8") as f:
+            json.dump(test_parameters_dict, f, ensure_ascii=False, indent=2)
+        logger.info(f"Test parameters saved to: {test_params_path}")
+
+    finally:
+        # clean up the vectorstore
+        logger.info("Cleaning up vectorstore...")
+        context_manager.clean_up()
+        logger.info("Vectorstore cleaned up.")
 
 
 if __name__ == "__main__":

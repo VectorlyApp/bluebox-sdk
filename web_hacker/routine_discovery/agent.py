@@ -7,6 +7,7 @@ Agent for discovering routines from the network transactions.
 import json
 from uuid import uuid4
 import os
+from typing import Callable
 
 from openai import OpenAI
 from pydantic import BaseModel, Field, ConfigDict
@@ -14,13 +15,17 @@ from pydantic import BaseModel, Field, ConfigDict
 from web_hacker.config import Config
 from web_hacker.routine_discovery.context_manager import ContextManager
 from web_hacker.utils.llm_utils import collect_text_from_response, manual_llm_parse_text_to_model
-from web_hacker.data_models.llm_responses import (
+from web_hacker.data_models.routine_discovery.llm_responses import (
     TransactionIdentificationResponse,
     ExtractedVariableResponse,
     TransactionConfirmationResponse,
     VariableType,
     ResolvedVariableResponse,
     TestParametersResponse
+)
+from web_hacker.data_models.routine_discovery.message import (
+    RoutineDiscoveryMessage,
+    RoutineDiscoveryMessageType,
 )
 from web_hacker.data_models.routine.routine import Routine
 from web_hacker.data_models.routine.dev_routine import DevRoutine
@@ -37,14 +42,15 @@ class RoutineDiscoveryAgent(BaseModel):
     client: OpenAI
     context_manager: ContextManager
     task: str
-    llm_model: str = "gpt-5.1"
+    emit_message_callable: Callable[[RoutineDiscoveryMessage], None]
+    llm_model: str = Field(default="gpt-5.1")
     message_history: list[dict] = Field(default_factory=list)
-    output_dir: str
-    last_response_id: str | None = None
+    output_dir: str | None = Field(default=None)
+    last_response_id: str | None = Field(default=None)
     tools: list[dict] = Field(default_factory=list)
-    n_transaction_identification_attempts: int = 3
-    current_transaction_identification_attempt: int = 0
-
+    n_transaction_identification_attempts: int = Field(default=3)
+    current_transaction_identification_attempt: int = Field(default=1)
+    timeout: int = Field(default=600)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     SYSTEM_PROMPT_IDENTIFY_TRANSACTIONS: str = f"""
@@ -54,15 +60,58 @@ class RoutineDiscoveryAgent(BaseModel):
     (cookies, localStorage, sessionStorage, etc.).
     """
 
-    def run(self) -> None:
+    def _save_to_output_dir(self, relative_path: str, data: dict) -> None:
+        """Save data to output_dir if it is specified."""
+        if self.output_dir is not None:
+            save_path = os.path.join(self.output_dir, relative_path)
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, mode="w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.info(f"Saved to: {save_path}")
+
+    def _handle_transaction_identification_failure(self) -> None:
+        """Handle failure to identify a valid transaction."""
+        logger.error(
+            "_handle_transaction_identification_failure: current_transaction_identification_attempt: %d, n_transaction_identification_attempts: %d",
+            self.current_transaction_identification_attempt,
+            self.n_transaction_identification_attempts
+        )
+        error_message = (
+            "Failed to identify the network transactions that directly correspond to your task.\n\n"
+            "Possible fixes:\n"
+            "1. Make the task description more specific and detailed.\n"
+            "2. Streamline the browser session to reduce noise (close unrelated tabs, avoid extraneous clicks).\n"
+        )
+        logger.error(error_message)
+
+        if self.current_transaction_identification_attempt >= self.n_transaction_identification_attempts:
+            self.emit_message_callable(RoutineDiscoveryMessage(
+                type=RoutineDiscoveryMessageType.ERROR,
+                content=error_message
+            ))
+            raise TransactionIdentificationFailedError(error_message)
+
+        self.current_transaction_identification_attempt += 1
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+            content=f"Retrying transaction identification (attempt {self.current_transaction_identification_attempt})..."
+        ))
+
+    def run(self) -> Routine:
         """
         Run the routine discovery agent.
+
+        Returns:
+            Routine: The discovered and productionized routine.
         """
-        # make the output dir if specified
-        os.makedirs(self.output_dir, exist_ok=True)
-        
         # validate the context manager
         assert self.context_manager.vectorstore_id is not None, "Vectorstore ID is not set"
+
+        # Push initial message
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.INITIATED,
+            content=f"Discovery initiated for task: {self.task}"
+        ))
 
         # construct the tools
         self.tools = [
@@ -79,128 +128,128 @@ class RoutineDiscoveryAgent(BaseModel):
         self._add_to_message_history("user", f"Task description: {self.task}")
         self._add_to_message_history("user", f"These are the possible network transaction ids you can choose from: {self.context_manager.get_all_transaction_ids()}")
 
-        logger.info("Identifying the network transaction that directly corresponds to the user's requested task...")
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+            content="Identifying relevant network transactions"
+        ))
         logger.debug(f"\n\nMessage history:\n{self.message_history}\n\n")
 
         identified_transaction = None
         while identified_transaction is None:
-            
+
             # identify the transaction
             identified_transaction = self.identify_transaction()
             logger.debug(f"\nIdentified transaction:\n{identified_transaction.model_dump_json()}")
 
             # ensure the identified transaction not None
-            if identified_transaction.transaction_id is None:
-                # get vars
-                description = identified_transaction.description if identified_transaction.description is not None else 'No description provided'
-                explanation = identified_transaction.explanation if identified_transaction.explanation is not None else 'No explanation provided'
-                url = identified_transaction.url if identified_transaction.url is not None else 'No URL provided'
-                confidence_level = identified_transaction.confidence_level if identified_transaction.confidence_level is not None else 'No confidence level provided'
+            if identified_transaction.transaction_id in [None, "None", ""]:
+                self._handle_transaction_identification_failure()
+                identified_transaction = None
+                continue
 
-                # construct the error message
-                error_message = (
-                    "Failed to identify the network transactions that directly correspond to the user's requested task.\n"
-                    f"- Description: {description}\n"
-                    f"- Explanation: {explanation}\n"
-                    f"- URL: {url}\n"
-                    f"- Confidence level: {confidence_level}\n"
-                )
-                logger.error(error_message)
-                
-                if self.current_transaction_identification_attempt == self.n_transaction_identification_attempts:
-                    raise TransactionIdentificationFailedError(error_message)
-                else:
-                    self.current_transaction_identification_attempt += 1
-                    continue
-                
             # ensure the identified transaction is in the context manager (not hallucinated)
             if identified_transaction.transaction_id not in self.context_manager.get_all_transaction_ids():
                 logger.error(f"Identified transaction: {identified_transaction.transaction_id} is not in the context manager.")
-                if self.current_transaction_identification_attempt == self.n_transaction_identification_attempts:
-                    raise TransactionIdentificationFailedError("Identified transaction is not in the context manager.")
-                else:
-                    self.current_transaction_identification_attempt += 1
-                    continue
+                self._handle_transaction_identification_failure()
+                identified_transaction = None
+                continue
 
             # confirm the identified transaction is correct and directly corresponds to the user's requested task
+            self.emit_message_callable(RoutineDiscoveryMessage(
+                type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+                content=f"Confirming identified network transaction"
+            ))
             confirmation_response = self.confirm_identified_transaction(identified_transaction)
             logger.debug(f"\nConfirmation response:\n{confirmation_response.model_dump_json()}")
 
             # if the identified transaction is not correct, try again
             if not confirmation_response.is_correct:
                 identified_transaction = None
-                self.current_transaction_identification_attempt += 1
+                self._handle_transaction_identification_failure()
                 logger.debug(
                     "Trying again to identify the network transaction that directly corresponds to the user's requested task... "
                     f"(attempt {self.current_transaction_identification_attempt})"
                 )
 
         if identified_transaction is None:
-            logger.error("Failed to identify the network transactions that directly correspond to the user's requested task.")
-            raise TransactionIdentificationFailedError(
-                "Failed to identify the network transactions that directly correspond to the user's requested task."
-            )
+            error_msg = "Failed to identify the network transactions that directly correspond to the user's requested task."
+            logger.error(error_msg)
+            self.emit_message_callable(RoutineDiscoveryMessage(
+                type=RoutineDiscoveryMessageType.ERROR,
+                content=error_msg
+            ))
+            raise TransactionIdentificationFailedError(error_msg)
+
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.PROGRESS_RESULT,
+            content=f"Successfully identified network transaction relevant to the task"
+        ))
         logger.info(f"Identified transaction: {identified_transaction.transaction_id}")
 
-        # save the indentified transactions
-        save_path = os.path.join(self.output_dir, "root_transaction.json")
-        with open(save_path, mode="w", encoding="utf-8") as f:
-            json.dump(obj=identified_transaction.model_dump(), fp=f, ensure_ascii=False, indent=2)
-
-        logger.info(f"Identified transaction: {identified_transaction.transaction_id} saved to: {save_path}")
+        # save the indentified transaction (optional)
+        self._save_to_output_dir("root_transaction.json", identified_transaction.model_dump())
 
         # populating the transaction queue with the identified transaction
         transaction_queue = [identified_transaction.transaction_id]
 
         # storing data for all transactions necessary for the routine construction
         routine_transactions = {}
-        
+
         # storing all resolved variables
         all_resolved_variables = []
 
         # processing the transaction queue (breadth-first search)
         while (len(transaction_queue) > 0):
 
-            # make the output directory for the transaction
-            os.makedirs(os.path.join(self.output_dir, f"transaction_{len(routine_transactions)}"), exist_ok=True)
-
             # dequeue the transaction
             transaction_id = transaction_queue.pop(0)
-            logger.info(f"Processing transaction: {transaction_id}")
+            self.emit_message_callable(RoutineDiscoveryMessage(
+                type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+                content=f"Processing network transaction {len(routine_transactions) + 1}"
+            ))
+            logger.info("Processing transaction: %s", transaction_id)
 
-            # get the transaction
-            transaction = self.context_manager.get_transaction_by_id(transaction_id)
-            
             # extract variables from the transaction
+            self.emit_message_callable(RoutineDiscoveryMessage(
+                type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+                content="Extracting variables (args, cookies, tokens, browser variables)"
+            ))
             logger.info("Extracting variables (args, cookies, tokens, browser variables) from the identified transaction...")
             extracted_variables = self.extract_variables(transaction_id)
-            
-            # save the extracted variables
-            save_path = os.path.join(self.output_dir, f"transaction_{len(routine_transactions)}", "extracted_variables.json")
-            with open(save_path, mode="w", encoding="utf-8") as f:
-                json.dump(extracted_variables.model_dump(), f, ensure_ascii=False, indent=2)
-            logger.info(f"Extracted variables saved to: {save_path}")
-                
+
             # resolve cookies and tokens
+            self.emit_message_callable(RoutineDiscoveryMessage(
+                type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+                content="Resolving cookies, tokens, and api keys"
+            ))
             logger.info("Resolving cookies and tokens...")
             resolved_variables = self.resolve_variables(extracted_variables)
             all_resolved_variables.extend(resolved_variables)
             resolved_variables_json = [resolved_variable.model_dump() for resolved_variable in resolved_variables]
-            
-            # save the resolved variables
-            save_path = os.path.join(self.output_dir, f"transaction_{len(routine_transactions)}", "resolved_variables.json")
-            with open(save_path, mode="w", encoding="utf-8") as f:
-                json.dump(resolved_variables_json, f, ensure_ascii=False, indent=2)
-            logger.info(f"Resolved variables saved to: {save_path}")
+
+            self.emit_message_callable(RoutineDiscoveryMessage(
+                type=RoutineDiscoveryMessageType.PROGRESS_RESULT,
+                content=f"Successfully processed network transaction {len(routine_transactions) + 1}"
+            ))
+
+            # save the extracted and resolved variables (optional)
+            self._save_to_output_dir(
+                f"transaction_{len(routine_transactions)}/extracted_variables.json",
+                extracted_variables.model_dump()
+            )
+            self._save_to_output_dir(
+                f"transaction_{len(routine_transactions)}/resolved_variables.json",
+                resolved_variables_json
+            )
 
             # adding transaction data to the routine transactions
             routine_transactions[transaction_id] = {
-                "request": transaction["request"],
+                "request": self.context_manager.get_transaction_by_id(transaction_id),
                 "extracted_variables": extracted_variables.model_dump(),
                 "resolved_variables": [resolved_variable.model_dump() for resolved_variable in resolved_variables]
             }
 
-            # adding transaction that need to be processed to the queue
+            # adding transactions that need to be processed to the queue
             for resolved_variable in resolved_variables:
                 if resolved_variable.transaction_source is not None:
                     new_transaction_id = resolved_variable.transaction_source.transaction_id
@@ -210,33 +259,48 @@ class RoutineDiscoveryAgent(BaseModel):
         # construct the routine from the routine transactions and resolved variables
         # REVERSE the order of transactions because the queue processing discovers dependencies LAST (Target -> Dep1 -> Dep2),
         # but we need to execute dependencies FIRST (Dep2 -> Dep1 -> Target).
-        ordered_transactions = dict(reversed(list(routine_transactions.items())))
-        
-        routine = self.construct_routine(routine_transactions=ordered_transactions, resolved_variables=all_resolved_variables)
+        # Reverse the items and create a new dict to preserve order (Python 3.7+ preserves dict insertion order)
+        ordered_transactions = {k: v for k, v in reversed(list(routine_transactions.items()))}
 
-        # save the routine
-        save_path = os.path.join(self.output_dir, f"routine.json")
-        with open(save_path, mode="w", encoding="utf-8") as f:
-            json.dump(routine.model_dump(), f, ensure_ascii=False, indent=2) 
-        logger.info(f"Routine saved to: {save_path}")
-        
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+            content="Constructing the template of the routine"
+        ))
+        dev_routine = self.construct_routine(
+            routine_transactions=ordered_transactions,
+            resolved_variables=all_resolved_variables
+        )
+
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.PROGRESS_RESULT,
+            content="Successfully constructed the template of the routine"
+        ))
+
         # productionize the routine
-        logger.info(f"Productionizing the routine...")
-        routine = self.productionize_routine(routine)
-        with open(save_path, mode="w", encoding="utf-8") as f:
-            json.dump(routine.model_dump(), f, ensure_ascii=False, indent=2) 
-        logger.info(f"Routine saved to: {save_path}")
-    
-        # get the test parameters
-        logger.info(f"Getting test parameters...")
-        test_parameters = self.get_test_parameters(routine)
-        test_parameters_dict = {value.name: value.value for value in test_parameters.parameters}
-        
-        # save the test parameters
-        save_path = os.path.join(self.output_dir, f"test_parameters.json")
-        with open(save_path, mode="w", encoding="utf-8") as f:
-            json.dump(test_parameters_dict, f, ensure_ascii=False, indent=2)
-        logger.info(f"Test parameters saved to: {save_path}")
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
+            content="Productionizing the routine"
+        ))
+        logger.info(f"Productionizing the routine")
+        production_routine = self.productionize_routine(dev_routine)
+
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.PROGRESS_RESULT,
+            content=f"Productionized the routine"
+        ))
+        logger.info("Productionized the routine")
+
+        # save the routines (optional)
+        self._save_to_output_dir("dev_routine.json", dev_routine.model_dump())
+        self._save_to_output_dir("routine.json", production_routine.model_dump())
+
+        # Mark as finished
+        self.emit_message_callable(RoutineDiscoveryMessage(
+            type=RoutineDiscoveryMessageType.FINISHED,
+            content="Routine generated successfully"
+        ))
+
+        return production_routine
 
     def identify_transaction(self) -> TransactionIdentificationResponse:
         """
@@ -424,7 +488,7 @@ class RoutineDiscoveryAgent(BaseModel):
         Resolve the variables from the extracted variables.
         """
         # get the latest timestamp
-        max_timestamp = self.context_manager.extract_timestamp_from_transaction_id(extracted_variables.transaction_id)
+        max_timestamp = self.context_manager.get_transaction_timestamp(extracted_variables.transaction_id)
 
         # get a list of cookies and tokens that require resolution
         variables_to_resolve = [
@@ -710,5 +774,9 @@ class RoutineDiscoveryAgent(BaseModel):
         self.message_history.append(
             {"role": role, "content": content}
         )
-        with open(os.path.join(self.output_dir, "message_history.json"), mode="w", encoding="utf-8") as f:
-            json.dump(self.message_history, f, ensure_ascii=False, indent=2)
+        # Optionally save message history
+        if self.output_dir is not None:
+            save_path = os.path.join(self.output_dir, "message_history.json")
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            with open(save_path, mode="w", encoding="utf-8") as f:
+                json.dump(self.message_history, f, ensure_ascii=False, indent=2)
