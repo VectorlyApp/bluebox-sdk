@@ -426,19 +426,10 @@ class RoutineDiscoveryAgent(BaseModel):
 
         # get the transaction
         transaction = self.context_manager.get_transaction_by_id(transaction_id)
-
-        # get all transaction ids by request url
-        transaction_ids = self.context_manager.get_transaction_ids_by_request_url(request_url=transaction["request"]["url"])
-
-        # get the requests of the identified transactions
-        transactions = []
-        for transaction_id in transaction_ids:
-            transaction = self.context_manager.get_transaction_by_id(transaction_id)
-            transactions.append({"request": transaction["request"]})
         
         # add message to the message history
         message = (
-            f"Extract variables from these network REQUESTS only: {encode(transactions)}\n\n"
+            f"Extract variables from these network REQUESTS only: {encode(transaction)}\n\n"
             "CRITICAL RULES:\n"
             "1. **requires_dynamic_resolution=False (STATIC_VALUE)**: Default to this. HARDCODE values whenever possible.\n"
             "   - Includes: App versions, constants, User-Agents, device info.\n"
