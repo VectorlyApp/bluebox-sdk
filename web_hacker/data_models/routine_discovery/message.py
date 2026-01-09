@@ -10,7 +10,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 
-class RoutineDiscoveryMessageType(str, StrEnum):
+class RoutineDiscoveryMessageType(StrEnum):
     """
     Enum for routine discovery message types.
     """
