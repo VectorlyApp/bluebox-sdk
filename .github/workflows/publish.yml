@@ -36,6 +36,19 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Check version not already published
+        if: github.event_name == 'release'
+        run: |
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "Package version: $VERSION"
+          
+          # Check if version exists on PyPI
+          if pip index versions web-hacker 2>/dev/null | grep -q "$VERSION"; then
+            echo "::error::Version $VERSION already exists on PyPI! Update version in pyproject.toml"
+            exit 1
+          fi
+          echo "✓ Version $VERSION is new and ready to publish"
+
       - name: List built artifacts
         run: ls -la dist/
 
