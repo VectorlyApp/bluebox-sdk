@@ -10,6 +10,7 @@ import argparse
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -93,6 +94,7 @@ def main():
 
     args = parser.parse_args()
 
+    start_timestamp = datetime.now(timezone.utc).isoformat()
     output_dir = Path(args.output_dir)
 
     print_colored("=" * 60, BLUE)
@@ -235,11 +237,15 @@ def main():
             continue
 
     # Save summary to _summary.json
+    end_timestamp = datetime.now(timezone.utc).isoformat()
     summary_file = output_dir / "_summary.json"
     success_count = sum(1 for r in results_summary if r["status"] == "SUCCESS")
     total_count = len(results_summary)
 
     final_summary = {
+        "model": args.model,
+        "start_timestamp": start_timestamp,
+        "end_timestamp": end_timestamp,
         "total": total_count,
         "succeeded": success_count,
         "failed": total_count - success_count,

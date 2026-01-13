@@ -847,7 +847,10 @@ class RoutineDiscoveryEvaluation(BaseModel):
         self._print_if_verbose(f"\n{'='*60}")
         self._print_if_verbose("Summary:")
         self._print_if_verbose(f"{'='*60}")
-        self._print_if_verbose(json.dumps(self.summary, indent=2))
+        det = self.summary.get("deterministic_tests", {})
+        llm = self.summary.get("llm_tests", {})
+        self._print_if_verbose(f"  Deterministic: {det.get('passed', 0)}/{det.get('total', 0)} ({det.get('pass_rate', 0)*100:.0f}%)")
+        self._print_if_verbose(f"  LLM: {llm.get('passed', 0)}/{llm.get('total', 0)} ({llm.get('pass_rate', 0)*100:.0f}%)")
 
         return self
 
