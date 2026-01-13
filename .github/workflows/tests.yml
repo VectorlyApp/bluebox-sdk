@@ -43,3 +43,63 @@ jobs:
 
       - name: Run tests
         run: uv run pytest tests/ -v
+
+  test-install:
+    name: Test package install mechanism
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build uv
+
+      - name: Build package
+        run: python -m build
+
+      - name: Test --no-deps installs only the package
+        run: |
+          # Create fresh venv
+          python -m venv test-venv
+          source test-venv/bin/activate
+          
+          # Count packages before install (pip is pre-installed)
+          BEFORE_COUNT=$(pip list --format=freeze | wc -l)
+          
+          # Install with --no-deps
+          uv pip install dist/*.whl --no-deps
+          
+          # Count packages after install (should be exactly 1 more: web-hacker)
+          AFTER_COUNT=$(pip list --format=freeze | wc -l)
+          INSTALLED=$((AFTER_COUNT - BEFORE_COUNT))
+          
+          if [[ "$INSTALLED" -ne 1 ]]; then
+            echo "ERROR: Expected 1 new package, got $INSTALLED"
+            pip list
+            exit 1
+          fi
+          echo "✓ --no-deps installed exactly 1 package (no dependencies)"
+
+      - name: Test full install from PyPI deps
+        run: |
+          source test-venv/bin/activate
+          
+          # Now install normally - deps should come from PyPI
+          uv pip install dist/*.whl
+          
+          # Verify import works
+          python -c "import web_hacker; print('✓ web_hacker imported successfully')"
+          
+          # Verify deps were installed
+          PACKAGE_COUNT=$(pip list --format=freeze | wc -l)
+          if [[ "$PACKAGE_COUNT" -lt 10 ]]; then
+            echo "ERROR: Expected many packages, got $PACKAGE_COUNT"
+            exit 1
+          fi
+          echo "✓ Full install succeeded with $PACKAGE_COUNT packages"

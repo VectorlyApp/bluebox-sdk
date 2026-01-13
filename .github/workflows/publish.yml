@@ -104,8 +104,9 @@ jobs:
 
       - name: Test install from TestPyPI
         run: |
-          # Use uv with TestPyPI as extra index (PyPI is default, avoids malicious packages)
-          uv pip install --system --extra-index-url https://test.pypi.org/simple/ web-hacker
+          # Install web-hacker from TestPyPI WITHOUT deps, then deps from PyPI
+          uv pip install --system --index-url https://test.pypi.org/simple/ --no-deps web-hacker
+          uv pip install --system web-hacker  # Installs deps from PyPI (package already installed)
           python -c "import web_hacker; print('Successfully imported web_hacker')"
 
   publish-pypi:
