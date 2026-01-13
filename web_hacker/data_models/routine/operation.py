@@ -15,7 +15,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field, field_validator
 
 from web_hacker.data_models.routine.endpoint import Endpoint
-from web_hacker.data_models.routine.execution import RoutineExecutionContext, FetchExecutionResult
+from web_hacker.data_models.routine.execution import RoutineExecutionContext, FetchExecutionResult, OperationExecutionMetadata
 from web_hacker.data_models.routine.parameter import VALID_PLACEHOLDER_PREFIXES, BUILTIN_PARAMETERS
 from web_hacker.data_models.ui_elements import MouseButton, ElementState, ScrollBehavior, HTMLScope
 from web_hacker.utils.data_utils import apply_params, assert_balanced_js_delimiters
@@ -85,16 +85,44 @@ class RoutineOperation(BaseModel):
 
     def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
         """
-        Execute this operation.
+        Execute this operation with automatic metadata collection.
 
-        Subclasses should override this method to implement their specific behavior.
+        This method wraps _execute_operation() to collect execution metadata (type, duration).
+        Subclasses should override _execute_operation() to implement their specific behavior.
+        Subclasses can add operation-specific data via:
+            routine_execution_context.current_operation_metadata.details["key"] = value
+
+        Args:
+            routine_execution_context: Execution context containing parameters, CDP functions, and mutable state.
+        """
+        # Create metadata and set on context so _execute_operation can add details
+        routine_execution_context.current_operation_metadata = OperationExecutionMetadata(
+            type=self.type,
+            duration_seconds=0.0,
+        )
+        start = time.perf_counter()
+        try:
+            self._execute_operation(routine_execution_context)
+        finally:
+            duration = time.perf_counter() - start
+            routine_execution_context.current_operation_metadata.duration_seconds = duration
+            routine_execution_context.result.operations_metadata.append(
+                routine_execution_context.current_operation_metadata
+            )
+            routine_execution_context.current_operation_metadata = None
+
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
+        """
+        Implementation of operation execution.
+
+        Subclasses must override this method to implement their specific behavior.
         Operations modify routine_execution_context directly (e.g., routine_execution_context.result, routine_execution_context.current_url).
         Errors should be raised as exceptions.
 
         Args:
             routine_execution_context: Execution context containing parameters, CDP functions, and mutable state.
         """
-        raise NotImplementedError(f"execute() not implemented for {type(self).__name__}")
+        raise NotImplementedError(f"_execute_operation() not implemented for {type(self).__name__}")
 
 
 # Operation classes _______________________________________________________________________________
@@ -118,7 +146,7 @@ class RoutineNavigateOperation(RoutineOperation):
         description="Seconds to wait after navigation for page to load (allows JS to execute and populate storage)"
     )
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Navigate to the specified URL."""
         url = apply_params(self.url, routine_execution_context.parameters_dict)
         routine_execution_context.send_cmd("Page.navigate", {"url": url}, session_id=routine_execution_context.session_id)
@@ -144,7 +172,7 @@ class RoutineSleepOperation(RoutineOperation):
     type: Literal[RoutineOperationTypes.SLEEP] = RoutineOperationTypes.SLEEP
     timeout_seconds: float
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Sleep for the specified duration."""
         time.sleep(self.timeout_seconds)
 
@@ -248,7 +276,7 @@ class RoutineFetchOperation(RoutineOperation):
             resolved_values=payload.get("resolvedValues", {}),
         )
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Execute the fetch operation."""
 
         if routine_execution_context.ws is None:
@@ -297,7 +325,7 @@ class RoutineReturnOperation(RoutineOperation):
     type: Literal[RoutineOperationTypes.RETURN] = RoutineOperationTypes.RETURN
     session_storage_key: str
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Get result from session storage and set it as the routine result."""
 
         chunk_size = 256 * 1024  # 256KB chunks
@@ -429,7 +457,7 @@ class RoutineGetCookiesOperation(RoutineOperation):
             raise ValueError("domain_filter cannot be empty")
         return v
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Get all cookies via CDP and store them in session storage."""
         cookies_id = routine_execution_context.send_cmd(
             "Network.getAllCookies",
@@ -502,7 +530,7 @@ class RoutineClickOperation(RoutineOperation):
     timeout_ms: int = 20_000
     ensure_visible: bool = True
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Click on an element by CSS selector."""
         selector = apply_params(self.selector, routine_execution_context.parameters_dict)
         click_js = generate_click_js(selector, self.ensure_visible)
@@ -584,7 +612,7 @@ class RoutineTypeOperation(RoutineOperation):
     clear: bool = False
     timeout_ms: int = 20_000
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Type text into an input element."""
         selector = apply_params(self.selector, routine_execution_context.parameters_dict)
         text = apply_params(self.text, routine_execution_context.parameters_dict)
@@ -636,7 +664,7 @@ class RoutinePressOperation(RoutineOperation):
     type: Literal[RoutineOperationTypes.PRESS] = RoutineOperationTypes.PRESS
     key: str
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Press a keyboard key."""
         key = self.key.lower()
 
@@ -731,7 +759,7 @@ class RoutineWaitForUrlOperation(RoutineOperation):
     url_regex: str
     timeout_ms: int = 20_000
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Wait for URL to match a regex pattern."""
         timeout_sec = self.timeout_ms / 1000
         start_time = time.time()
@@ -803,7 +831,7 @@ class RoutineScrollOperation(RoutineOperation):
     behavior: ScrollBehavior = ScrollBehavior.AUTO
     timeout_ms: int = 20_000
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Scroll the page or a specific element."""
         if self.selector:
             selector = apply_params(self.selector, routine_execution_context.parameters_dict)
@@ -876,7 +904,7 @@ class RoutineReturnHTMLOperation(RoutineOperation):
     selector: str | None = None
     timeout_ms: int = 20_000
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Get HTML from the page or a specific element."""
         if self.scope == HTMLScope.PAGE or not self.selector:
             js = generate_get_html_js()
@@ -936,7 +964,7 @@ class RoutineDownloadOperation(RoutineOperation):
         description="Filename for the downloaded file (e.g., 'report.pdf', 'image.png')"
     )
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Download a file and return it as base64."""
         # Apply parameters to endpoint
         download_url = apply_params(self.endpoint.url, routine_execution_context.parameters_dict)
@@ -1181,7 +1209,7 @@ class RoutineJsEvaluateOperation(RoutineOperation):
             raise ValueError("timeout_seconds cannot exceed 10 seconds")
         return v
 
-    def execute(self, routine_execution_context: RoutineExecutionContext) -> None:
+    def _execute_operation(self, routine_execution_context: RoutineExecutionContext) -> None:
         """Execute JavaScript code and optionally store result in session storage."""
         js_code = apply_params(self.js, routine_execution_context.parameters_dict)
 
