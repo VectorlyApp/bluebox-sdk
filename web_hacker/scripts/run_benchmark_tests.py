@@ -2,19 +2,29 @@
 """
 Script to run benchmark tests against generated routines.
 
-This script loads a test config file, uses the ground truth routine as the
-generated routine (for testing purposes), and runs all deterministic and LLM tests.
+This script:
+1. Loads a test config file with task, ground truth routine, and test definitions
+2. Optionally runs the routine discovery pipeline using WebHacker
+3. Runs deterministic and LLM tests comparing generated vs ground truth routines
 """
 
 import argparse
 import json
-import re
 import sys
+import tempfile
+import time
 from pathlib import Path
 
 from openai import OpenAI
 
-from web_hacker.data_models.benchmarks import DeterministicTest, LLMTest, LLMTestResult
+from web_hacker.data_models.benchmarks import (
+    DeterministicTest,
+    LLMTest,
+    LLMTestResult,
+    RoutineDiscoveryEvaluation,
+)
+from web_hacker.data_models.routine.routine import Routine
+from web_hacker.sdk import WebHacker
 
 
 def load_test_config(config_path: str) -> dict:
@@ -23,129 +33,66 @@ def load_test_config(config_path: str) -> dict:
         return json.load(f)
 
 
-def run_deterministic_tests(
-    tests: list[dict],
-    data: dict,
+def run_routine_discovery(
+    task: str,
+    cdp_captures_dir: str,
+    output_dir: str | None = None,
+    llm_model: str = "gpt-5",
     verbose: bool = False
-) -> tuple[int, int, list[dict]]:
+) -> dict | None:
     """
-    Run deterministic tests against the data.
-
-    Returns:
-        tuple of (passed_count, total_count, results)
-    """
-    results = []
-    passed = 0
-
-    for test_data in tests:
-        test = DeterministicTest.model_validate(test_data)
-        result = test.expression.evaluate(data)
-
-        results.append({
-            "name": test.name,
-            "description": test.description,
-            "passed": result,
-            "expression": test.expression.stringify()
-        })
-
-        if result:
-            passed += 1
-            if verbose:
-                print(f"  ✓ {test.name}")
-        else:
-            if verbose:
-                print(f"  ✗ {test.name}")
-                print(f"    Expression: {test.expression.stringify()}")
-
-    return passed, len(tests), results
-
-
-def interpolate_prompt(prompt: str, data: dict) -> str:
-    """
-    Interpolate placeholders in the prompt with values from data.
-
-    Supports:
-    - {{key}} -> data["key"]
-    - {{key.subkey}} -> data["key"]["subkey"]
-    """
-    def replace_placeholder(match: re.Match) -> str:
-        path = match.group(1)
-        parts = path.split(".")
-        value = data
-        for part in parts:
-            if isinstance(value, dict) and part in value:
-                value = value[part]
-            else:
-                return match.group(0)  # Return original if path not found
-        return json.dumps(value, indent=2) if isinstance(value, (dict, list)) else str(value)
-
-    return re.sub(r"\{\{([^}]+)\}\}", replace_placeholder, prompt)
-
-
-def run_llm_tests(
-    tests: list[dict],
-    data: dict,
-    client: OpenAI,
-    verbose: bool = False
-) -> tuple[int, int, list[dict]]:
-    """
-    Run LLM tests against the data.
+    Run the WebHacker routine discovery pipeline.
 
     Args:
-        tests: List of LLM test configurations
-        data: Data dict containing ground_truth_routine, generated_routine, task
-        client: OpenAI client instance
-        verbose: Whether to print detailed results
+        task: The task description for the routine
+        cdp_captures_dir: Path to the directory containing CDP captures
+        output_dir: Path to the output directory (optional, uses temp dir if not provided)
+        llm_model: The LLM model to use for discovery
+        verbose: Whether to print detailed progress
 
     Returns:
-        tuple of (passed_count, total_count, results)
+        The discovered routine as a dict, or None if discovery failed
     """
-    results = []
-    passed = 0
+    if verbose:
+        print(f"\nRunning routine discovery...")
+        print(f"  Task: {task}")
+        print(f"  CDP captures: {cdp_captures_dir}")
+        print(f"  LLM model: {llm_model}")
 
-    for test_data in tests:
-        test = LLMTest.model_validate(test_data)
+    # Use temp dir if no output dir provided
+    if output_dir is None:
+        output_dir = tempfile.mkdtemp(prefix="benchmark_discovery_")
 
-        # Interpolate placeholders in the prompt
-        interpolated_prompt = interpolate_prompt(test.prompt, data)
+    if verbose:
+        print(f"  Output dir: {output_dir}")
 
-        # Build the full prompt with scoring instructions
-        full_prompt = (
-            f"{interpolated_prompt}\n\n"
-            f"Provide a score between {test.score_range[0]} and {test.score_range[1]}.\n"
-            f"Respond with JSON in this exact format:\n"
-            f'{{"score": <number>, "rationale": "<explanation>"}}'
+    start_time = time.time()
+
+    try:
+        hacker = WebHacker(llm_model=llm_model)
+        result = hacker.discover_routine(
+            task=task,
+            cdp_captures_dir=cdp_captures_dir,
+            output_dir=output_dir,
         )
 
-        # Run the LLM evaluation
-        response = client.responses.parse(
-            model=test.model,
-            input=[{"role": "user", "content": full_prompt}],
-            text_format=LLMTestResult
-        )
-        result = response.output_parsed
-
-        # Check if passed
-        test_passed = result.passed(test.passing_threshold)
-        if test_passed:
-            passed += 1
-
-        results.append({
-            "name": test.name,
-            "description": test.description,
-            "score": result.score,
-            "rationale": result.rationale,
-            "threshold": test.passing_threshold,
-            "passed": test_passed
-        })
+        elapsed = time.time() - start_time
 
         if verbose:
-            status = "✓" if test_passed else "✗"
-            print(f"  {status} {test.name}: {result.score:.2f} (threshold: {test.passing_threshold})")
-            if result.rationale:
-                print(f"    Rationale: {result.rationale[:100]}...")
+            print(f"  Discovery completed in {elapsed:.1f}s")
 
-    return passed, len(tests), results
+        if result and result.routine:
+            return result.routine.model_dump()
+        else:
+            if verbose:
+                print("  Warning: Discovery returned no routine")
+            return None
+
+    except Exception as e:
+        elapsed = time.time() - start_time
+        if verbose:
+            print(f"  Discovery failed after {elapsed:.1f}s: {e}")
+        raise
 
 
 def main():
@@ -175,82 +122,183 @@ def main():
         action="store_true",
         help="Run LLM-based tests (requires OpenAI API key)"
     )
+    parser.add_argument(
+        "--cdp-captures-dir",
+        help="Path to CDP captures directory to run routine discovery"
+    )
+    parser.add_argument(
+        "--output-dir",
+        help="Path to output directory for discovery results (optional, uses temp dir if not provided)"
+    )
+    parser.add_argument(
+        "--llm-model",
+        default="gpt-5",
+        help="LLM model to use for routine discovery (default: gpt-5)"
+    )
+    parser.add_argument(
+        "--skip-discovery",
+        action="store_true",
+        help="Skip routine discovery even if cdp-captures-dir is provided"
+    )
+    parser.add_argument(
+        "--results-file",
+        help="Path to save the full evaluation results as JSON"
+    )
 
     args = parser.parse_args()
 
     # Load the test config
     config = load_test_config(args.config_path)
 
-    # Get the ground truth routine
-    ground_truth = config.get("ground_truth_routine", {})
+    # Create the evaluation object upfront
+    evaluation = RoutineDiscoveryEvaluation(
+        name=config.get("name", "Unknown"),
+        description=config.get("description", ""),
+        task=config.get("task", ""),
+        ground_truth_routine=Routine.model_validate(config.get("ground_truth_routine", {})),
+        deterministic_tests=[DeterministicTest.model_validate(t) for t in config.get("deterministic_tests", [])],
+        llm_tests=[LLMTest.model_validate(t) for t in config.get("llm_tests", [])],
+    )
 
-    # Get or create the generated routine
-    if args.generated_routine:
+    # Determine the generated routine
+    generated = None
+
+    # Option 1: Run routine discovery if CDP captures provided and not skipped
+    if args.cdp_captures_dir and not args.skip_discovery:
+        if not args.json:
+            print(f"\n{'='*60}")
+            print("Routine Discovery")
+            print(f"{'='*60}")
+
+        start_time = time.time()
+        try:
+            generated = run_routine_discovery(
+                task=evaluation.task,
+                cdp_captures_dir=args.cdp_captures_dir,
+                output_dir=args.output_dir,
+                llm_model=args.llm_model,
+                verbose=not args.json
+            )
+            evaluation.discovery_duration = time.time() - start_time
+            if generated is None:
+                evaluation.error = "Discovery returned no routine"
+        except Exception as e:
+            evaluation.discovery_duration = time.time() - start_time
+            evaluation.error = str(e)
+            if not args.json:
+                print(f"  Error: {evaluation.error}")
+
+    # Option 2: Load from provided generated routine file
+    elif args.generated_routine:
         with open(args.generated_routine, "r") as f:
             generated = json.load(f)
+
+    # Option 3: Fall back to ground truth (for testing the test framework itself)
     else:
-        # Use ground truth as generated routine for testing
-        generated = ground_truth.copy()
+        generated = config.get("ground_truth_routine", {}).copy()
+        if not args.json:
+            print("\nNote: Using ground truth as generated routine (no discovery or generated routine provided)")
+
+    # Update evaluation with generated routine
+    if generated:
+        evaluation.generated_routine = Routine.model_validate(generated)
 
     # Build the data object that tests will evaluate against
     data = {
-        "ground_truth_routine": ground_truth,
+        "ground_truth_routine": evaluation.ground_truth_routine.model_dump(),
         "generated_routine": generated,
-        "task": config.get("task", "")
+        "task": evaluation.task
     }
 
-    # Run deterministic tests
-    deterministic_tests = config.get("deterministic_tests", [])
-    llm_tests = config.get("llm_tests", [])
+    # If discovery failed and we have no generated routine, we can't run tests
+    if generated is None:
+        evaluation.summary = evaluation.summarize_results()
+        if args.results_file:
+            with open(args.results_file, "w") as f:
+                json.dump(evaluation.model_dump(), f, indent=2)
+        if args.json:
+            print(evaluation.model_dump_json(indent=2))
+        else:
+            print(f"\nError: Cannot run tests - routine discovery failed: {evaluation.error}")
+        sys.exit(1)
 
     if not args.json:
-        print(f"\nRunning benchmark: {config.get('name', 'Unknown')}")
-        print(f"Description: {config.get('description', 'No description')}")
+        print(f"\nRunning benchmark: {evaluation.name}")
+        print(f"Description: {evaluation.description}")
         print(f"\n{'='*60}")
         print("Deterministic Tests:")
         print(f"{'='*60}")
 
-    det_passed, det_total, det_results = run_deterministic_tests(
-        deterministic_tests,
-        data,
-        verbose=args.verbose or not args.json
-    )
+    # Run deterministic tests using evaluation object
+    det_passed = 0
+    for test in evaluation.deterministic_tests:
+        result = test.run(data)
+        if result:
+            det_passed += 1
+        if args.verbose or not args.json:
+            status = "✓" if result else "✗"
+            print(f"  {status} {test.name}")
+            if not result:
+                print(f"    Expression: {test.expression.stringify()}")
+
+    det_total = len(evaluation.deterministic_tests)
 
     # Run LLM tests if requested
-    llm_passed, llm_total, llm_results = 0, 0, []
-    if args.run_llm_tests and llm_tests:
+    llm_passed, llm_total = 0, 0
+    if args.run_llm_tests and evaluation.llm_tests:
         if not args.json:
             print(f"\n{'='*60}")
             print("LLM Tests:")
             print(f"{'='*60}")
 
         client = OpenAI()
-        llm_passed, llm_total, llm_results = run_llm_tests(
-            llm_tests,
-            data,
-            client,
-            verbose=args.verbose or not args.json
-        )
+        for test in evaluation.llm_tests:
+            # Build the full prompt with routine dumps and scoring instructions
+            ground_truth_dump = json.dumps(evaluation.ground_truth_routine.model_dump(), indent=2)
+            generated_dump = json.dumps(evaluation.generated_routine.model_dump(), indent=2) if evaluation.generated_routine else "null"
+
+            full_prompt = (
+                f"{test.prompt}\n\n"
+                f"Task: {evaluation.task}\n\n"
+                f"Ground Truth Routine:\n{ground_truth_dump}\n\n"
+                f"Generated Routine:\n{generated_dump}\n\n"
+                f"Provide a score between {test.score_range[0]} and {test.score_range[1]}.\n"
+                f"Respond with JSON in this exact format:\n"
+                f'{{"score": <number>, "rationale": "<explanation>"}}'
+            )
+
+            # Run the LLM evaluation
+            response = client.responses.parse(
+                model=test.model,
+                input=[{"role": "user", "content": full_prompt}],
+                text_format=LLMTestResult
+            )
+            result = response.output_parsed
+            test.results.append(result)
+
+            test_passed = result.passed(test.passing_threshold)
+            if test_passed:
+                llm_passed += 1
+            llm_total += 1
+
+            if args.verbose or not args.json:
+                status = "✓" if test_passed else "✗"
+                print(f"  {status} {test.name}: {result.score:.2f} (threshold: {test.passing_threshold})")
+                if result.rationale:
+                    print(f"    Rationale: {result.rationale[:100]}...")
+
+    # Generate summary
+    evaluation.summary = evaluation.summarize_results()
+
+    # Save results file if requested
+    if args.results_file:
+        with open(args.results_file, "w") as f:
+            json.dump(evaluation.model_dump(), f, indent=2)
+        if not args.json:
+            print(f"\nResults saved to: {args.results_file}")
 
     if args.json:
-        output = {
-            "benchmark_name": config.get("name"),
-            "description": config.get("description"),
-            "deterministic_tests": {
-                "passed": det_passed,
-                "total": det_total,
-                "pass_rate": det_passed / det_total if det_total > 0 else 0,
-                "results": det_results
-            }
-        }
-        if args.run_llm_tests:
-            output["llm_tests"] = {
-                "passed": llm_passed,
-                "total": llm_total,
-                "pass_rate": llm_passed / llm_total if llm_total > 0 else 0,
-                "results": llm_results
-            }
-        print(json.dumps(output, indent=2))
+        print(evaluation.model_dump_json(indent=2))
     else:
         print(f"\n{'='*60}")
         print("Summary:")
