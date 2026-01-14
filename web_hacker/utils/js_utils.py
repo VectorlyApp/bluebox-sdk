@@ -10,6 +10,41 @@ through functions in this module for consistency and maintainability.
 import json
 
 
+def _get_body_resolution_js() -> list[str]:
+    """Generate JavaScript code for resolving body placeholders.
+
+    This handles body resolution consistently for both fetch and download operations,
+    including form-urlencoded encoding when appropriate.
+
+    Returns:
+        List of JavaScript code lines for body resolution.
+    """
+    return [
+        "  // Resolve body (if any)",
+        "  if (BODY_LITERAL !== null) {",
+        "    const bodyVal = deepResolve(BODY_LITERAL);",
+        "    ",
+        "    // Check if content-type is application/x-www-form-urlencoded (after interpolation)",
+        "    const contentType = headers['content-type'] || headers['Content-Type'] || '';",
+        "    const isFormUrlEncoded = contentType.toLowerCase().includes('application/x-www-form-urlencoded');",
+        "    ",
+        "    if (isFormUrlEncoded && bodyVal && typeof bodyVal === 'object' && !Array.isArray(bodyVal)) {",
+        "      // Convert object to URL-encoded string",
+        "      const formData = Object.entries(bodyVal).map(([key, value]) => {",
+        "        const encodedKey = encodeURIComponent(String(key));",
+        "        const encodedValue = encodeURIComponent(String(value === null || value === undefined ? '' : value));",
+        "        return `${encodedKey}=${encodedValue}`;",
+        "      }).join('&');",
+        "      opts.body = formData;",
+        "    } else if (typeof bodyVal === 'string' && bodyVal.trim().startsWith('{') && bodyVal.trim().endsWith('}')) {",
+        "      opts.body = bodyVal;",
+        "    } else {",
+        "      opts.body = JSON.stringify(bodyVal);",
+        "    }",
+        "  }",
+    ]
+
+
 def _get_placeholder_resolution_js_helpers() -> list[str]:
     """Generate JavaScript helper functions for placeholder resolution.
 
@@ -167,6 +202,70 @@ def _get_placeholder_resolution_js_helpers() -> list[str]:
     ]
 
 
+def _get_fetch_setup_js(
+    url: str,
+    headers: dict,
+    body_js_literal: str,
+    endpoint_method: str,
+    endpoint_credentials: str,
+) -> list[str]:
+    """Generate common JavaScript setup code for fetch-based operations.
+
+    This shared helper generates the common setup code used by both fetch and download
+    operations: variable declarations, placeholder resolution helpers, URL/header/body
+    resolution, fetch options, and request metadata.
+
+    Args:
+        url: The URL to fetch.
+        headers: Dictionary of HTTP headers.
+        body_js_literal: JavaScript literal for the request body.
+        endpoint_method: HTTP method (GET, POST, etc.).
+        endpoint_credentials: Credentials mode (same-origin, include, omit).
+
+    Returns:
+        List of JavaScript code lines for the fetch setup.
+    """
+    hdrs_json = json.dumps(
+        {str(k): (str(v) if not isinstance(v, str) else v) for k, v in headers.items()}
+    )
+
+    return [
+        "(async () => {",
+        "  const sleep = ms => new Promise(r => setTimeout(r, ms));",
+        "  await sleep(100);",
+        f"  const url = {json.dumps(url)};",
+        f"  const rawHeaders = {hdrs_json};",
+        f"  const BODY_LITERAL = {body_js_literal};",
+        "",
+        *_get_placeholder_resolution_js_helpers(),
+        "",
+        "  // Resolve headers",
+        "  const headers = {};",
+        "  for (const [k, v] of Object.entries(rawHeaders || {})) {",
+        "    headers[k] = (typeof v === 'string') ? resolvePlaceholders(v) : v;",
+        "  }",
+        "",
+        "  // Resolve URL placeholders",
+        "  const resolvedUrl = resolvePlaceholders(url);",
+        "",
+        "  const opts = {",
+        f"    method: {json.dumps(endpoint_method)},",
+        "    headers,",
+        f"    credentials: {json.dumps(endpoint_credentials)}",
+        "  };",
+        "",
+        *_get_body_resolution_js(),
+        "",
+        "  // Build request metadata for debugging",
+        "  const requestMeta = {",
+        "    url: resolvedUrl,",
+        f"    method: {json.dumps(endpoint_method)},",
+        "    headers: headers,",
+        "    body: opts.body || null,",
+        "  };",
+    ]
+
+
 def generate_fetch_js(
     fetch_url: str,
     headers: dict,
@@ -188,65 +287,14 @@ def generate_fetch_js(
     Returns:
         JavaScript code string that performs the fetch operation.
     """
-    hdrs_json = json.dumps(
-        {str(k): (str(v) if not isinstance(v, str) else v) for k, v in headers.items()}
-    )
-
     js_lines = [
-        "(async () => {",
-        "  const sleep = ms => new Promise(r => setTimeout(r, ms));",
-        "  await sleep(100);",
-        f"  const url = {json.dumps(fetch_url)};",
-        f"  const rawHeaders = {hdrs_json};",
-        f"  const BODY_LITERAL = {body_js_literal};",
-        "",
-        *_get_placeholder_resolution_js_helpers(),
-        "",
-        "  // Resolve headers",
-        "  const headers = {};",
-        "  for (const [k, v] of Object.entries(rawHeaders || {})) {",
-        "    headers[k] = (typeof v === 'string') ? resolvePlaceholders(v) : v;",
-        "  }",
-        "",
-        "  // Resolve URL (interpolate placeholders like {{sessionStorage:crumb}})",
-        "  const resolvedUrl = resolvePlaceholders(url);",
-        "",
-        "  const opts = {",
-        f"    method: {json.dumps(endpoint_method)},",
-        "    headers,",
-        f"    credentials: {json.dumps(endpoint_credentials)}",
-        "  };",
-        "",
-        "  // Resolve body (if any)",
-        "  if (BODY_LITERAL !== null) {",
-        "    const bodyVal = deepResolve(BODY_LITERAL);",
-        "    ",
-        "    // Check if content-type is application/x-www-form-urlencoded (after interpolation)",
-        "    const contentType = headers['content-type'] || headers['Content-Type'] || '';",
-        "    const isFormUrlEncoded = contentType.toLowerCase().includes('application/x-www-form-urlencoded');",
-        "    ",
-        "    if (isFormUrlEncoded && bodyVal && typeof bodyVal === 'object' && !Array.isArray(bodyVal)) {",
-        "      // Convert object to URL-encoded string",
-        "      const formData = Object.entries(bodyVal).map(([key, value]) => {",
-        "        const encodedKey = encodeURIComponent(String(key));",
-        "        const encodedValue = encodeURIComponent(String(value === null || value === undefined ? '' : value));",
-        "        return `${encodedKey}=${encodedValue}`;",
-        "      }).join('&');",
-        "      opts.body = formData;",
-        "    } else if (typeof bodyVal === 'string' && bodyVal.trim().startsWith('{') && bodyVal.trim().endsWith('}')) {",
-        "      opts.body = bodyVal;",
-        "    } else {",
-        "      opts.body = JSON.stringify(bodyVal);",
-        "    }",
-        "  }",
-        "",
-        "  // Build request metadata for debugging",
-        "  const requestMeta = {",
-        "    url: resolvedUrl,",
-        f"    method: {json.dumps(endpoint_method)},",
-        "    headers: headers,",
-        "    body: opts.body || null,",
-        "  };",
+        *_get_fetch_setup_js(
+            url=fetch_url,
+            headers=headers,
+            body_js_literal=body_js_literal,
+            endpoint_method=endpoint_method,
+            endpoint_credentials=endpoint_credentials,
+        ),
         "",
         "  try {",
         "    const resp = await fetch(resolvedUrl, opts);",
@@ -296,43 +344,14 @@ def generate_download_js(
         JavaScript code that fetches the URL, converts response to base64,
         stores in window.__downloadData, and returns metadata for chunked retrieval.
     """
-    headers_json = json.dumps(headers)
-
     js_lines = [
-        "(async () => {",
-        f"  const url = {json.dumps(download_url)};",
-        f"  const rawHeaders = {headers_json};",
-        f"  const body = {body_js_literal};",
-        f"  const filename = {json.dumps(filename)};",
-        "",
-        *_get_placeholder_resolution_js_helpers(),
-        "",
-        "  // Resolve URL placeholders",
-        "  const resolvedUrl = resolvePlaceholders(url);",
-        "",
-        "  // Resolve headers",
-        "  const headers = {};",
-        "  for (const [k, v] of Object.entries(rawHeaders || {})) {",
-        "    headers[k] = (typeof v === 'string') ? resolvePlaceholders(v) : v;",
-        "  }",
-        "",
-        "  const opts = {",
-        f"    method: {json.dumps(endpoint_method)},",
-        "    headers: headers,",
-        f"    credentials: {json.dumps(endpoint_credentials)}",
-        "  };",
-        "",
-        "  if (body !== null) {",
-        "    opts.body = typeof body === 'string' ? body : JSON.stringify(body);",
-        "  }",
-        "",
-        "  // Build request metadata for debugging",
-        "  const requestMeta = {",
-        "    url: resolvedUrl,",
-        f"    method: {json.dumps(endpoint_method)},",
-        "    headers: headers,",
-        "    body: opts.body || null,",
-        "  };",
+        *_get_fetch_setup_js(
+            url=download_url,
+            headers=headers,
+            body_js_literal=body_js_literal,
+            endpoint_method=endpoint_method,
+            endpoint_credentials=endpoint_credentials,
+        ),
         "",
         "  try {",
         "    const resp = await fetch(resolvedUrl, opts);",
@@ -374,7 +393,7 @@ def generate_download_js(
         "    return {",
         "      ok: true,",
         "      contentType: contentType,",
-        "      filename: filename,",
+        f"      filename: {json.dumps(filename)},",
         "      size: buffer.byteLength,",
         "      base64Length: base64Data.length,",
         "      request: requestMeta,",
