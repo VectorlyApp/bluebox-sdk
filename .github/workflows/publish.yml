@@ -20,6 +20,8 @@ jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,12 +38,19 @@ jobs:
       - name: Build package
         run: python -m build
 
+      - name: Get version from built package
+        id: get-version
+        run: |
+          VERSION=$(ls dist/*.whl | sed 's/.*web_hacker-\(.*\)-py3.*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Package version: $VERSION"
+
       - name: Check version not already published
         if: github.event_name == 'release'
         run: |
-          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          VERSION="${{ steps.get-version.outputs.version }}"
           echo "Package version: $VERSION"
-          
+
           # Check if version exists on PyPI
           if pip index versions web-hacker 2>/dev/null | grep -q "$VERSION"; then
             echo "::error::Version $VERSION already exists on PyPI! Update version in pyproject.toml"
@@ -63,31 +72,91 @@ jobs:
           name: python-package-distributions
           path: dist/
 
+  build-testpypi:
+    name: Build TestPyPI distribution
+    # Run on PRs into main (not from forks) so we catch issues before merging
+    if: >
+      github.event_name == 'release' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build hatchling
+
+      - name: Add dev suffix to version for TestPyPI
+        run: |
+          # Append .dev{timestamp} to version so TestPyPI never conflicts
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          NEW_VERSION="${VERSION}.dev${TIMESTAMP}"
+          echo "Original version: $VERSION"
+          echo "TestPyPI version: $NEW_VERSION"
+
+          # Update pyproject.toml with new version
+          sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" pyproject.toml
+          echo "TESTPYPI_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Build package for TestPyPI
+        run: python -m build
+
+      - name: Upload TestPyPI distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package-distributions-testpypi
+          path: dist/
+
   publish-testpypi:
     name: Publish to TestPyPI
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
-    needs: build
+    # Run on PRs into main (not from forks) so we catch issues before merging
+    if: >
+      github.event_name == 'release' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
+    needs: build-testpypi
     runs-on: ubuntu-latest
     environment:
       name: release
       url: https://test.pypi.org/p/web-hacker
     permissions:
       id-token: write
+    outputs:
+      testpypi_version: ${{ steps.get-version.outputs.version }}
     steps:
       - name: Download distribution artifacts
         uses: actions/download-artifact@v4
         with:
-          name: python-package-distributions
+          name: python-package-distributions-testpypi
           path: dist/
+
+      - name: Get TestPyPI version from built package
+        id: get-version
+        run: |
+          VERSION=$(ls dist/*.whl | sed 's/.*web_hacker-\(.*\)-py3.*/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "TestPyPI version: $VERSION"
 
       - name: Publish to TestPyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
-  test-install:
+  test-install-testpypi:
     name: Test install from TestPyPI
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
+    # Run on PRs into main (not from forks) so we catch issues before merging
+    if: >
+      github.event_name == 'release' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
     needs: publish-testpypi
     runs-on: ubuntu-latest
     steps:
@@ -99,20 +168,37 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Wait for TestPyPI to index package
-        run: sleep 60
-
-      - name: Test install from TestPyPI
+      - name: Test install from TestPyPI (with retry)
         run: |
-          # Install web-hacker from TestPyPI WITHOUT deps, then deps from PyPI
-          uv pip install --system --index-url https://test.pypi.org/simple/ --no-deps web-hacker
-          uv pip install --system web-hacker  # Installs deps from PyPI (package already installed)
+          VERSION="${{ needs.publish-testpypi.outputs.testpypi_version }}"
+          echo "Installing web-hacker==$VERSION from TestPyPI"
+
+          # Retry loop - TestPyPI can be slow to index
+          MAX_ATTEMPTS=10
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+            if uv pip install --system --pre --index-url https://test.pypi.org/simple/ --no-deps "web-hacker==$VERSION" 2>/dev/null; then
+              echo "Successfully installed from TestPyPI"
+              break
+            fi
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "Failed to install after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            echo "Package not yet indexed, waiting 30 seconds..."
+            sleep 30
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
+          # Install dependencies from PyPI
+          uv pip install --system web-hacker
           python -c "import web_hacker; print('Successfully imported web_hacker')"
 
   publish-pypi:
     name: Publish to PyPI
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
-    needs: test-install
+    needs: [build, test-install-testpypi]
     runs-on: ubuntu-latest
     environment:
       name: release
@@ -129,10 +215,10 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
 
-  verify-pypi:
-    name: Verify install from PyPI
+  test-install-pypi:
+    name: Test install from PyPI
     if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'true')
-    needs: publish-pypi
+    needs: [build, publish-pypi]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
@@ -143,10 +229,27 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - name: Wait for PyPI to index package
-        run: sleep 60
-
-      - name: Test install from PyPI
+      - name: Test install from PyPI (with retry)
         run: |
-          uv pip install --system web-hacker
+          VERSION="${{ needs.build.outputs.version }}"
+          echo "Installing web-hacker==$VERSION from PyPI"
+
+          # Retry loop - PyPI can be slow to index
+          MAX_ATTEMPTS=10
+          ATTEMPT=1
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
+            if uv pip install --system "web-hacker==$VERSION" 2>/dev/null; then
+              echo "Successfully installed from PyPI"
+              break
+            fi
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "Failed to install after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            echo "Package not yet indexed, waiting 30 seconds..."
+            sleep 30
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+
           python -c "import web_hacker; print('Successfully imported web_hacker from PyPI')"
