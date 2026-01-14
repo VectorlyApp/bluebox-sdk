@@ -18,6 +18,7 @@ class OperationExecutionMetadata(BaseModel):
     type: str = Field(description="The operation type (e.g., 'navigate', 'fetch', 'click')")
     duration_seconds: float = Field(description="How long the operation took to execute")
     details: dict = Field(default_factory=dict, description="Operation-specific data")
+    error: str | None = Field(default=None, description="Error message from the operation execution.")
 
 
 class RoutineExecutionResult(BaseModel):

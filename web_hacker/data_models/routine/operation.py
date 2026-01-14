@@ -103,6 +103,8 @@ class RoutineOperation(BaseModel):
         start = time.perf_counter()
         try:
             self._execute_operation(routine_execution_context)
+        except Exception as e:
+            routine_execution_context.current_operation_metadata.error = str(e)
         finally:
             duration = time.perf_counter() - start
             routine_execution_context.current_operation_metadata.duration_seconds = duration
