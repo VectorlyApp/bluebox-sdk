@@ -569,11 +569,20 @@ class RoutineClickOperation(RoutineOperation):
 
         click_data = reply["result"]["result"].get("value", {})
 
+        # Store element profile in metadata
+        if routine_execution_context.current_operation_metadata is not None:
+            routine_execution_context.current_operation_metadata.details["selector"] = selector
+            routine_execution_context.current_operation_metadata.details["element"] = click_data.get("element")
+
         if "error" in click_data:
             raise RuntimeError(click_data["error"])
 
         x = click_data["x"]
         y = click_data["y"]
+
+        # Store click coordinates in metadata
+        if routine_execution_context.current_operation_metadata is not None:
+            routine_execution_context.current_operation_metadata.details["click_coordinates"] = {"x": x, "y": y}
 
         # Perform the click(s) using CDP Input domain
         for _ in range(self.click_count):
@@ -651,6 +660,12 @@ class RoutineTypeOperation(RoutineOperation):
             raise RuntimeError(f"Failed to evaluate type script: {reply['error']}")
 
         type_data = reply["result"]["result"].get("value", {})
+
+        # Store element profile in metadata
+        if routine_execution_context.current_operation_metadata is not None:
+            routine_execution_context.current_operation_metadata.details["selector"] = selector
+            routine_execution_context.current_operation_metadata.details["text_length"] = len(text)
+            routine_execution_context.current_operation_metadata.details["element"] = type_data.get("element")
 
         if "error" in type_data:
             raise RuntimeError(type_data["error"])

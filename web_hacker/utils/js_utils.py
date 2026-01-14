@@ -389,6 +389,45 @@ def generate_download_js(
     return "\n".join(js_lines)
 
 
+def _get_element_profile_js() -> str:
+    """Generate JavaScript helper function to extract element profile.
+
+    Returns:
+        JavaScript function definition for getElementProfile(element).
+    """
+    return """
+    function getElementProfile(el) {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return {
+            tag: el.tagName.toLowerCase(),
+            id: el.id || null,
+            name: el.getAttribute('name') || null,
+            classes: el.className ? el.className.split(/\\s+/).filter(Boolean) : [],
+            type: el.getAttribute('type') || null,
+            placeholder: el.getAttribute('placeholder') || null,
+            value: (el.tagName.toLowerCase() === 'input' || el.tagName.toLowerCase() === 'textarea')
+                ? (el.value ? el.value.substring(0, 100) : null) : null,
+            text: el.textContent ? el.textContent.trim().substring(0, 100) : null,
+            href: el.getAttribute('href') || null,
+            disabled: el.disabled || false,
+            readonly: el.readOnly || false,
+            rect: {
+                x: Math.round(rect.x),
+                y: Math.round(rect.y),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height)
+            },
+            computed: {
+                display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity
+            }
+        };
+    }
+"""
+
+
 def generate_click_js(selector: str, ensure_visible: bool) -> str:
     """Generate JavaScript to find element and get click coordinates.
 
@@ -403,6 +442,7 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
 (function() {{
     const selector = {json.dumps(selector)};
     const element = document.querySelector(selector);
+    {_get_element_profile_js()}
 
     if (!element) {{
         const allInputs = Array.from(document.querySelectorAll('input')).map(el => {{
@@ -414,7 +454,7 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
             }};
         }}).slice(0, 10);
 
-        return {{ 
+        return {{
             error: 'Element not found: ' + selector,
             debug: {{
                 pageTitle: document.title,
@@ -429,7 +469,7 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
 
     const style = window.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {{
-        return {{ error: 'Element is hidden: ' + selector }};
+        return {{ error: 'Element is hidden: ' + selector, element: getElementProfile(element) }};
     }}
 
     if ({json.dumps(ensure_visible)}) {{
@@ -439,14 +479,15 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
     const rect = element.getBoundingClientRect();
 
     if (rect.width === 0 || rect.height === 0) {{
-        return {{ error: 'Element has no dimensions: ' + selector }};
+        return {{ error: 'Element has no dimensions: ' + selector, element: getElementProfile(element) }};
     }}
 
     return {{
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2,
         width: rect.width,
-        height: rect.height
+        height: rect.height,
+        element: getElementProfile(element)
     }};
 }})()
 """
@@ -466,6 +507,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
 (function() {{
     const selector = {json.dumps(selector)};
     const element = document.querySelector(selector);
+    {_get_element_profile_js()}
 
     if (!element) {{
         return {{ error: 'Element not found: ' + selector }};
@@ -473,7 +515,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
 
     const style = window.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {{
-        return {{ error: 'Element is hidden: ' + selector }};
+        return {{ error: 'Element is hidden: ' + selector, element: getElementProfile(element) }};
     }}
 
     const tagName = element.tagName.toLowerCase();
@@ -481,7 +523,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
     const isContentEditable = element.isContentEditable;
 
     if (!isInput && !isContentEditable) {{
-        return {{ error: 'Element is not an input, textarea, or contenteditable: ' + selector }};
+        return {{ error: 'Element is not an input, textarea, or contenteditable: ' + selector, element: getElementProfile(element) }};
     }}
 
     if ({json.dumps(clear)}) {{
@@ -494,7 +536,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
 
     element.focus();
 
-    return {{ success: true }};
+    return {{ success: true, element: getElementProfile(element) }};
 }})()
 """
 
