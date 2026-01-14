@@ -178,7 +178,7 @@ jobs:
           ATTEMPT=1
           while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
             echo "Attempt $ATTEMPT of $MAX_ATTEMPTS..."
-            if uv pip install --system --index-url https://test.pypi.org/simple/ --no-deps "web-hacker==$VERSION" 2>/dev/null; then
+            if uv pip install --system --pre --index-url https://test.pypi.org/simple/ --no-deps "web-hacker==$VERSION" 2>/dev/null; then
               echo "Successfully installed from TestPyPI"
               break
             fi
