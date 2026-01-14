@@ -10,6 +10,41 @@ through functions in this module for consistency and maintainability.
 import json
 
 
+def _get_body_resolution_js() -> list[str]:
+    """Generate JavaScript code for resolving body placeholders.
+
+    This handles body resolution consistently for both fetch and download operations,
+    including form-urlencoded encoding when appropriate.
+
+    Returns:
+        List of JavaScript code lines for body resolution.
+    """
+    return [
+        "  // Resolve body (if any)",
+        "  if (BODY_LITERAL !== null) {",
+        "    const bodyVal = deepResolve(BODY_LITERAL);",
+        "    ",
+        "    // Check if content-type is application/x-www-form-urlencoded (after interpolation)",
+        "    const contentType = headers['content-type'] || headers['Content-Type'] || '';",
+        "    const isFormUrlEncoded = contentType.toLowerCase().includes('application/x-www-form-urlencoded');",
+        "    ",
+        "    if (isFormUrlEncoded && bodyVal && typeof bodyVal === 'object' && !Array.isArray(bodyVal)) {",
+        "      // Convert object to URL-encoded string",
+        "      const formData = Object.entries(bodyVal).map(([key, value]) => {",
+        "        const encodedKey = encodeURIComponent(String(key));",
+        "        const encodedValue = encodeURIComponent(String(value === null || value === undefined ? '' : value));",
+        "        return `${encodedKey}=${encodedValue}`;",
+        "      }).join('&');",
+        "      opts.body = formData;",
+        "    } else if (typeof bodyVal === 'string' && bodyVal.trim().startsWith('{') && bodyVal.trim().endsWith('}')) {",
+        "      opts.body = bodyVal;",
+        "    } else {",
+        "      opts.body = JSON.stringify(bodyVal);",
+        "    }",
+        "  }",
+    ]
+
+
 def _get_placeholder_resolution_js_helpers() -> list[str]:
     """Generate JavaScript helper functions for placeholder resolution.
 
@@ -167,6 +202,70 @@ def _get_placeholder_resolution_js_helpers() -> list[str]:
     ]
 
 
+def _get_fetch_setup_js(
+    url: str,
+    headers: dict,
+    body_js_literal: str,
+    endpoint_method: str,
+    endpoint_credentials: str,
+) -> list[str]:
+    """Generate common JavaScript setup code for fetch-based operations.
+
+    This shared helper generates the common setup code used by both fetch and download
+    operations: variable declarations, placeholder resolution helpers, URL/header/body
+    resolution, fetch options, and request metadata.
+
+    Args:
+        url: The URL to fetch.
+        headers: Dictionary of HTTP headers.
+        body_js_literal: JavaScript literal for the request body.
+        endpoint_method: HTTP method (GET, POST, etc.).
+        endpoint_credentials: Credentials mode (same-origin, include, omit).
+
+    Returns:
+        List of JavaScript code lines for the fetch setup.
+    """
+    hdrs_json = json.dumps(
+        {str(k): (str(v) if not isinstance(v, str) else v) for k, v in headers.items()}
+    )
+
+    return [
+        "(async () => {",
+        "  const sleep = ms => new Promise(r => setTimeout(r, ms));",
+        "  await sleep(100);",
+        f"  const url = {json.dumps(url)};",
+        f"  const rawHeaders = {hdrs_json};",
+        f"  const BODY_LITERAL = {body_js_literal};",
+        "",
+        *_get_placeholder_resolution_js_helpers(),
+        "",
+        "  // Resolve headers",
+        "  const headers = {};",
+        "  for (const [k, v] of Object.entries(rawHeaders || {})) {",
+        "    headers[k] = (typeof v === 'string') ? resolvePlaceholders(v) : v;",
+        "  }",
+        "",
+        "  // Resolve URL placeholders",
+        "  const resolvedUrl = resolvePlaceholders(url);",
+        "",
+        "  const opts = {",
+        f"    method: {json.dumps(endpoint_method)},",
+        "    headers,",
+        f"    credentials: {json.dumps(endpoint_credentials)}",
+        "  };",
+        "",
+        *_get_body_resolution_js(),
+        "",
+        "  // Build request metadata for debugging",
+        "  const requestMeta = {",
+        "    url: resolvedUrl,",
+        f"    method: {json.dumps(endpoint_method)},",
+        "    headers: headers,",
+        "    body: opts.body || null,",
+        "  };",
+    ]
+
+
 def generate_fetch_js(
     fetch_url: str,
     headers: dict,
@@ -188,66 +287,34 @@ def generate_fetch_js(
     Returns:
         JavaScript code string that performs the fetch operation.
     """
-    hdrs_json = json.dumps(
-        {str(k): (str(v) if not isinstance(v, str) else v) for k, v in headers.items()}
-    )
-
     js_lines = [
-        "(async () => {",
-        "  const sleep = ms => new Promise(r => setTimeout(r, ms));",
-        "  await sleep(100);",
-        f"  const url = {json.dumps(fetch_url)};",
-        f"  const rawHeaders = {hdrs_json};",
-        f"  const BODY_LITERAL = {body_js_literal};",
-        "",
-        *_get_placeholder_resolution_js_helpers(),
-        "",
-        "  // Resolve headers",
-        "  const headers = {};",
-        "  for (const [k, v] of Object.entries(rawHeaders || {})) {",
-        "    headers[k] = (typeof v === 'string') ? resolvePlaceholders(v) : v;",
-        "  }",
-        "",
-        "  // Resolve URL (interpolate placeholders like {{sessionStorage:crumb}})",
-        "  const resolvedUrl = resolvePlaceholders(url);",
-        "",
-        "  const opts = {",
-        f"    method: {json.dumps(endpoint_method)},",
-        "    headers,",
-        f"    credentials: {json.dumps(endpoint_credentials)}",
-        "  };",
-        "",
-        "  // Resolve body (if any)",
-        "  if (BODY_LITERAL !== null) {",
-        "    const bodyVal = deepResolve(BODY_LITERAL);",
-        "    ",
-        "    // Check if content-type is application/x-www-form-urlencoded (after interpolation)",
-        "    const contentType = headers['content-type'] || headers['Content-Type'] || '';",
-        "    const isFormUrlEncoded = contentType.toLowerCase().includes('application/x-www-form-urlencoded');",
-        "    ",
-        "    if (isFormUrlEncoded && bodyVal && typeof bodyVal === 'object' && !Array.isArray(bodyVal)) {",
-        "      // Convert object to URL-encoded string",
-        "      const formData = Object.entries(bodyVal).map(([key, value]) => {",
-        "        const encodedKey = encodeURIComponent(String(key));",
-        "        const encodedValue = encodeURIComponent(String(value === null || value === undefined ? '' : value));",
-        "        return `${encodedKey}=${encodedValue}`;",
-        "      }).join('&');",
-        "      opts.body = formData;",
-        "    } else if (typeof bodyVal === 'string' && bodyVal.trim().startsWith('{') && bodyVal.trim().endsWith('}')) {",
-        "      opts.body = bodyVal;",
-        "    } else {",
-        "      opts.body = JSON.stringify(bodyVal);",
-        "    }",
-        "  }",
+        *_get_fetch_setup_js(
+            url=fetch_url,
+            headers=headers,
+            body_js_literal=body_js_literal,
+            endpoint_method=endpoint_method,
+            endpoint_credentials=endpoint_credentials,
+        ),
         "",
         "  try {",
         "    const resp = await fetch(resolvedUrl, opts);",
         "    const status = resp.status;",
+        "    const statusText = resp.statusText;",
+        "    const responseHeaders = {};",
+        "    resp.headers.forEach((v, k) => { responseHeaders[k] = v; });",
         "    const val = await resp.text();",
+        "",
+        "    // Build response metadata for debugging",
+        "    const responseMeta = {",
+        "      status: status,",
+        "      statusText: statusText,",
+        "      headers: responseHeaders,",
+        "    };",
+        "",
         f"    if ({'true' if session_storage_key else 'false'}) {{ try {{ window.sessionStorage.setItem({json.dumps(session_storage_key) if session_storage_key else 'null'}, JSON.stringify(val)); }} catch(e) {{ return {{ __err: 'SessionStorage Error: ' + String(e), resolvedValues }}; }} }}",
-        "    return {status, value: 'success', resolvedValues};",
+        "    return {status, value: 'success', resolvedValues, request: requestMeta, response: responseMeta};",
         "  } catch(e) {",
-        "    return { __err: 'fetch failed: ' + String(e), resolvedValues };",
+        "    return { __err: 'fetch failed: ' + String(e), resolvedValues, request: requestMeta };",
         "  }",
         "})()",
     ]
@@ -277,41 +344,25 @@ def generate_download_js(
         JavaScript code that fetches the URL, converts response to base64,
         stores in window.__downloadData, and returns metadata for chunked retrieval.
     """
-    headers_json = json.dumps(headers)
-
     js_lines = [
-        "(async () => {",
-        f"  const url = {json.dumps(download_url)};",
-        f"  const rawHeaders = {headers_json};",
-        f"  const body = {body_js_literal};",
-        f"  const filename = {json.dumps(filename)};",
-        "",
-        *_get_placeholder_resolution_js_helpers(),
-        "",
-        "  // Resolve URL placeholders",
-        "  const resolvedUrl = resolvePlaceholders(url);",
-        "",
-        "  // Resolve headers",
-        "  const headers = {};",
-        "  for (const [k, v] of Object.entries(rawHeaders || {})) {",
-        "    headers[k] = (typeof v === 'string') ? resolvePlaceholders(v) : v;",
-        "  }",
-        "",
-        "  const opts = {",
-        f"    method: {json.dumps(endpoint_method)},",
-        "    headers: headers,",
-        f"    credentials: {json.dumps(endpoint_credentials)}",
-        "  };",
-        "",
-        "  if (body !== null) {",
-        "    opts.body = typeof body === 'string' ? body : JSON.stringify(body);",
-        "  }",
+        *_get_fetch_setup_js(
+            url=download_url,
+            headers=headers,
+            body_js_literal=body_js_literal,
+            endpoint_method=endpoint_method,
+            endpoint_credentials=endpoint_credentials,
+        ),
         "",
         "  try {",
         "    const resp = await fetch(resolvedUrl, opts);",
+        "    const status = resp.status;",
+        "    const statusText = resp.statusText;",
+        "    const responseHeaders = {};",
+        "    resp.headers.forEach((v, k) => { responseHeaders[k] = v; });",
         "",
         "    if (!resp.ok) {",
-        "      return { __err: 'Download failed with status ' + resp.status };",
+        "      const responseMeta = { status, statusText, headers: responseHeaders };",
+        "      return { __err: 'Download failed with status ' + resp.status, request: requestMeta, response: responseMeta };",
         "    }",
         "",
         "    const contentType = resp.headers.get('content-type') || 'application/octet-stream';",
@@ -332,20 +383,68 @@ def generate_download_js(
         "    // Store base64 data in window for chunked retrieval",
         "    window.__downloadData = base64Data;",
         "",
+        "    // Build response metadata for debugging",
+        "    const responseMeta = {",
+        "      status: status,",
+        "      statusText: statusText,",
+        "      headers: responseHeaders,",
+        "    };",
+        "",
         "    return {",
         "      ok: true,",
         "      contentType: contentType,",
-        "      filename: filename,",
+        f"      filename: {json.dumps(filename)},",
         "      size: buffer.byteLength,",
-        "      base64Length: base64Data.length",
+        "      base64Length: base64Data.length,",
+        "      request: requestMeta,",
+        "      response: responseMeta",
         "    };",
         "  } catch(e) {",
-        "    return { __err: 'Download failed: ' + String(e) };",
+        "    return { __err: 'Download failed: ' + String(e), request: requestMeta };",
         "  }",
         "})()",
     ]
 
     return "\n".join(js_lines)
+
+
+def _get_element_profile_js() -> str:
+    """Generate JavaScript helper function to extract element profile.
+
+    Returns:
+        JavaScript function definition for getElementProfile(element).
+    """
+    return """
+    function getElementProfile(el) {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return {
+            tag: el.tagName.toLowerCase(),
+            id: el.id || null,
+            name: el.getAttribute('name') || null,
+            classes: el.className ? el.className.split(/\\s+/).filter(Boolean) : [],
+            type: el.getAttribute('type') || null,
+            placeholder: el.getAttribute('placeholder') || null,
+            value: (el.tagName.toLowerCase() === 'input' || el.tagName.toLowerCase() === 'textarea')
+                ? (el.value ? el.value.substring(0, 100) : null) : null,
+            text: el.textContent ? el.textContent.trim().substring(0, 100) : null,
+            href: el.getAttribute('href') || null,
+            disabled: el.disabled || false,
+            readonly: el.readOnly || false,
+            rect: {
+                x: Math.round(rect.x),
+                y: Math.round(rect.y),
+                width: Math.round(rect.width),
+                height: Math.round(rect.height)
+            },
+            computed: {
+                display: style.display,
+                visibility: style.visibility,
+                opacity: style.opacity
+            }
+        };
+    }
+"""
 
 
 def generate_click_js(selector: str, ensure_visible: bool) -> str:
@@ -362,6 +461,7 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
 (function() {{
     const selector = {json.dumps(selector)};
     const element = document.querySelector(selector);
+    {_get_element_profile_js()}
 
     if (!element) {{
         const allInputs = Array.from(document.querySelectorAll('input')).map(el => {{
@@ -373,7 +473,7 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
             }};
         }}).slice(0, 10);
 
-        return {{ 
+        return {{
             error: 'Element not found: ' + selector,
             debug: {{
                 pageTitle: document.title,
@@ -388,7 +488,7 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
 
     const style = window.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {{
-        return {{ error: 'Element is hidden: ' + selector }};
+        return {{ error: 'Element is hidden: ' + selector, element: getElementProfile(element) }};
     }}
 
     if ({json.dumps(ensure_visible)}) {{
@@ -398,14 +498,15 @@ def generate_click_js(selector: str, ensure_visible: bool) -> str:
     const rect = element.getBoundingClientRect();
 
     if (rect.width === 0 || rect.height === 0) {{
-        return {{ error: 'Element has no dimensions: ' + selector }};
+        return {{ error: 'Element has no dimensions: ' + selector, element: getElementProfile(element) }};
     }}
 
     return {{
         x: rect.left + rect.width / 2,
         y: rect.top + rect.height / 2,
         width: rect.width,
-        height: rect.height
+        height: rect.height,
+        element: getElementProfile(element)
     }};
 }})()
 """
@@ -425,6 +526,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
 (function() {{
     const selector = {json.dumps(selector)};
     const element = document.querySelector(selector);
+    {_get_element_profile_js()}
 
     if (!element) {{
         return {{ error: 'Element not found: ' + selector }};
@@ -432,7 +534,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
 
     const style = window.getComputedStyle(element);
     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {{
-        return {{ error: 'Element is hidden: ' + selector }};
+        return {{ error: 'Element is hidden: ' + selector, element: getElementProfile(element) }};
     }}
 
     const tagName = element.tagName.toLowerCase();
@@ -440,7 +542,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
     const isContentEditable = element.isContentEditable;
 
     if (!isInput && !isContentEditable) {{
-        return {{ error: 'Element is not an input, textarea, or contenteditable: ' + selector }};
+        return {{ error: 'Element is not an input, textarea, or contenteditable: ' + selector, element: getElementProfile(element) }};
     }}
 
     if ({json.dumps(clear)}) {{
@@ -453,7 +555,7 @@ def generate_type_js(selector: str, clear: bool) -> str:
 
     element.focus();
 
-    return {{ success: true }};
+    return {{ success: true, element: getElementProfile(element) }};
 }})()
 """
 
@@ -646,34 +748,80 @@ def generate_get_html_js(selector: str | None = None) -> str:
     return f"document.querySelector({json.dumps(selector)})?.outerHTML || ''"
 
 
-def generate_js_evaluate_with_storage_js(
+def generate_js_evaluate_wrapper_js(
     iife: str,
-    session_storage_key: str,
+    session_storage_key: str | None = None,
 ) -> str:
     """
-    Wrap IIFE in an outer async IIFE that executes it and stores result in session storage.
-    
-    This allows executing JavaScript AND storing the result in session storage
-    with a SINGLE CDP Runtime.evaluate call.
-    
+    Wrap IIFE in an outer async IIFE that:
+    1. Captures all console.log() calls with timestamps
+    2. Executes the IIFE
+    3. Optionally stores result in session storage
+    4. Returns the result along with captured console logs
+
     Args:
         iife: The IIFE code (already validated to be in IIFE format).
-        session_storage_key: Key to store result in session storage.
-    
+        session_storage_key: Optional key to store result in session storage.
+
     Returns:
-        JavaScript code that executes the IIFE and stores the result.
+        JavaScript code that executes the IIFE and returns:
+        {{
+            result: <IIFE return value>,
+            console_logs: [{{ timestamp: <ms>, message: <string> }}, ...],
+            storage_error: <string or null>
+        }}
     """
-    return f"""(async () => {{
-    // Execute IIFE and await if it returns a promise
-    const __result = await Promise.resolve({iife});
+    storage_code = ""
+    if session_storage_key:
+        storage_code = f"""
+    // Store result in session storage if key provided
     if (__result !== undefined) {{
         try {{
             window.sessionStorage.setItem({json.dumps(session_storage_key)}, JSON.stringify(__result));
         }} catch(e) {{
-            return {{ __err: 'SessionStorage Error: ' + String(e) }};
+            __storageError = 'SessionStorage Error: ' + String(e);
         }}
+    }}"""
+
+    return f"""(async () => {{
+    // Console log capture
+    const __consoleLogs = [];
+    const __originalConsoleLog = console.log;
+    console.log = (...args) => {{
+        __consoleLogs.push({{
+            timestamp: Date.now(),
+            message: args.map(a => {{
+                try {{
+                    return typeof a === 'object' ? JSON.stringify(a) : String(a);
+                }} catch(e) {{
+                    return String(a);
+                }}
+            }}).join(' ')
+        }});
+        __originalConsoleLog.apply(console, args);
+    }};
+
+    let __result;
+    let __storageError = null;
+    let __executionError = null;
+
+    try {{
+        // Execute IIFE and await if it returns a promise
+        __result = await Promise.resolve({iife});
+        {storage_code}
+    }} catch(e) {{
+        __executionError = String(e);
+    }} finally {{
+        // Restore original console.log
+        console.log = __originalConsoleLog;
     }}
-    return true;
+
+    return {{
+        result: __result,
+        console_logs: __consoleLogs,
+        storage_error: __storageError,
+        execution_error: __executionError
+    }};
 }})()"""
 
 

@@ -13,6 +13,14 @@ from websocket import WebSocket
 from web_hacker.data_models.routine.endpoint import MimeType
 
 
+class OperationExecutionMetadata(BaseModel):
+    """Metadata collected during a single operation's execution."""
+    type: str = Field(description="The operation type (e.g., 'navigate', 'fetch', 'click')")
+    duration_seconds: float = Field(description="How long the operation took to execute")
+    details: dict = Field(default_factory=dict, description="Operation-specific data")
+    error: str | None = Field(default=None, description="Error message from the operation execution.")
+
+
 class RoutineExecutionResult(BaseModel):
     """
     Result of a routine execution.
@@ -29,6 +37,7 @@ class RoutineExecutionResult(BaseModel):
     ok: bool = Field(default=True, description="Whether the routine execution was successful.")
     error: str | None = Field(default=None, description="Error message from the routine execution.")
     warnings: list[str] = Field(default_factory=list, description="Warnings from the routine execution.")
+    operations_metadata: list[OperationExecutionMetadata] = Field(default_factory=list, description="Metadata for each operation executed in order")
     placeholder_resolution: dict[str, str | None] = Field(default_factory=dict, description="The placeholder resolution of the routine execution.")
     is_base64: bool = Field(default=False, description="Whether the data is base64-encoded binary content.")
     content_type: MimeType | str | None = Field(default=None, description="MIME type of the data (e.g., 'application/pdf', 'image/png').")
@@ -59,6 +68,9 @@ class RoutineExecutionContext(BaseModel):
 
     # Result (operations update this directly)
     result: RoutineExecutionResult = Field(default_factory=RoutineExecutionResult)
+
+    # Current operation metadata (set by execute(), operations can add to details)
+    current_operation_metadata: OperationExecutionMetadata | None = None
 
 class FetchExecutionResult(BaseModel):
     """
