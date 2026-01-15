@@ -125,10 +125,14 @@ class Routine(BaseModel):
         # Check 1: All defined parameters must be used
         unused_parameters = defined_parameters - used_parameters
         if unused_parameters:
-            raise ValueError(
-                f"Unused parameters found in routine '{self.name}': {list(unused_parameters)}. "
-                f"All defined parameters must be used somewhere in the routine operations."
-            )
+            
+            error_message = f"Unused parameters found in routine '{self.name}': {list(unused_parameters)}. "
+            for unused_parameter in unused_parameters:
+                # scan for unquoted placeholders in the routine...
+                if f"{{{{{unused_parameter}}}}}" in routine_json:
+                    error_message += f"Unquoted placeholder '{{{{{unused_parameter}}}}}' found in routine '{self.name}'"
+                    error_message += "Ensure that all placeholders are surrounded by quotes or escaped quotes."     
+            raise ValueError(error_message)
 
         # Check 2: No undefined parameters should be used
         undefined_parameters = used_parameters - defined_parameters

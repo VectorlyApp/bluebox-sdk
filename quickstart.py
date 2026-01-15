@@ -478,7 +478,7 @@ def main() -> None:
     try:
         hacker = WebHacker(
             remote_debugging_address=REMOTE_DEBUGGING_ADDRESS,
-            llm_model="gpt-5",
+            llm_model="gpt-5.1",
         )
         print_colored("✅ Ready!", GREEN)
     except Exception as e:

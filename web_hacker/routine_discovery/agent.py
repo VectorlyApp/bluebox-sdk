@@ -77,6 +77,7 @@ class RoutineDiscoveryAgent(BaseModel):
         '6. URL with param:   "/api/\\"{{user_id}}\\"/data"       -> "/api/123/data"\n'
         '7. Session storage:  "token": \\"{{sessionStorage:auth.access_token}}\\"\n'
         '8. Cookie:           "sid": \\"{{cookie:session_id}}\\"'
+        'IMPORTANT: YOU MUST ENSURE THAT EACH PLACEHOLDER IS SURROUNDED BY QUOTES OR ESCAPED QUOTES!'
     )
 
     def _save_to_output_dir(self, relative_path: str, data: dict | list | str) -> None:
@@ -688,8 +689,9 @@ class RoutineDiscoveryAgent(BaseModel):
             text=response_text,
             pydantic_model=Routine,
             client=self.client,
-            context=encode(self.message_history[-2:]),
-            llm_model=self.llm_model
+            context=encode(self.message_history[-2:]) + f"\n\n{self.PLACEHOLDER_INSTRUCTIONS}",
+            llm_model=self.llm_model,
+            n_tries=5
         )
 
         return production_routine

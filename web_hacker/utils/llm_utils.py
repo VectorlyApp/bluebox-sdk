@@ -24,7 +24,7 @@ def manual_llm_parse_text_to_model(
     pydantic_model: Type[BaseModel],
     client: OpenAI,
     context: str | None = None,
-    llm_model: str = "gpt-5-nano",
+    llm_model: str = "gpt-5-mini",
     n_tries: int = 3,
 ) -> BaseModel:
     """
