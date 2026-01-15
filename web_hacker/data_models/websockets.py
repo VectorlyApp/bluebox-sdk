@@ -19,7 +19,6 @@ class WebSocketBaseCommandResponseType(StrEnum):
     Common response types shared across all WebSocket endpoints.
     Subapps can extend with their own specific response types.
     """
-
     PONG = "pong"
     SUCCESS = "success"
     WARNING = "warning"
@@ -31,7 +30,6 @@ class WebSocketBaseStreamResponseType(StrEnum):
     Common stream response types shared across all WebSocket endpoints.
     Subapps can extend with their own specific stream types.
     """
-
     SESSION_ENDED = "session_ended"
     TOOL_INVOCATION_REQUEST = "tool_invocation_request"
 
@@ -43,7 +41,6 @@ class WebSocketResponseBase(BaseModel):
     Base shape for all websocket response messages.
     All agent-specific responses should inherit from this.
     """
-
     type: str  # generic string type for base, subclasses narrow to specific literals
     timestamp: float = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc).timestamp(),
@@ -54,16 +51,18 @@ class WebSocketResponseBase(BaseModel):
 # Common command responses ________________________________________________________________________
 
 class WebSocketPongResponse(WebSocketResponseBase):
-    """Response to the ping command."""
-
+    """
+    Response to the ping command.
+    """
     type: Literal[WebSocketBaseCommandResponseType.PONG] = (
         WebSocketBaseCommandResponseType.PONG
     )
 
 
 class WebSocketSuccessResponse(WebSocketResponseBase):
-    """Generic success response for commands that complete successfully."""
-
+    """
+    Generic success response for commands that complete successfully.
+    """
     type: Literal[WebSocketBaseCommandResponseType.SUCCESS] = (
         WebSocketBaseCommandResponseType.SUCCESS
     )
@@ -73,8 +72,9 @@ class WebSocketSuccessResponse(WebSocketResponseBase):
 
 
 class WebSocketWarningResponse(WebSocketResponseBase):
-    """Warning response used for non-fatal cases where the command could not be completed."""
-
+    """
+    Warning response used for non-fatal cases where the command could not be completed.
+    """
     type: Literal[WebSocketBaseCommandResponseType.WARNING] = (
         WebSocketBaseCommandResponseType.WARNING
     )
@@ -84,8 +84,9 @@ class WebSocketWarningResponse(WebSocketResponseBase):
 
 
 class WebSocketErrorResponse(WebSocketResponseBase):
-    """Error envelope used when a command is invalid or fails."""
-
+    """
+    Error envelope used when a command is invalid or fails.
+    """
     type: Literal[WebSocketBaseCommandResponseType.ERROR] = (
         WebSocketBaseCommandResponseType.ERROR
     )
@@ -101,7 +102,6 @@ class WebSocketSessionEndedResponse(WebSocketResponseBase):
     Notification sent to clients when the session is ending.
     Sent before the WebSocket connection is closed.
     """
-
     type: Literal[WebSocketBaseStreamResponseType.SESSION_ENDED] = (
         WebSocketBaseStreamResponseType.SESSION_ENDED
     )
@@ -121,7 +121,6 @@ class WebSocketToolInvocationRequestResponse(WebSocketResponseBase):
     Sent when an agent wants to execute a tool but needs user approval first.
     The client should respond with a confirm or deny command.
     """
-
     type: Literal[WebSocketBaseStreamResponseType.TOOL_INVOCATION_REQUEST] = (
         WebSocketBaseStreamResponseType.TOOL_INVOCATION_REQUEST
     )
