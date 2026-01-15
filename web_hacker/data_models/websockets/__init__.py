@@ -4,7 +4,7 @@ web_hacker/data_models/websockets/__init__.py
 WebSocket message data models.
 """
 
-from data_models.websockets.base_ws import (
+from web_hacker.data_models.websockets.base_ws import (
     WebSocketBaseCommandResponseType,
     WebSocketBaseStreamResponseType,
     WebSocketErrorResponse,
@@ -15,7 +15,7 @@ from data_models.websockets.base_ws import (
     WebSocketToolInvocationRequestResponse,
     WebSocketWarningResponse,
 )
-from data_models.websockets.guide_ws import (
+from web_hacker.data_models.websockets.guide_ws import (
     GuideWebSocketClientCommandType,
     GuideWebSocketCommandResponseType,
     GuideWebSocketMessageResponse,

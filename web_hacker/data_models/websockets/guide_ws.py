@@ -9,7 +9,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, Field
 
-from data_models.websockets.base_ws import (
+from web_hacker.data_models.websockets.base_ws import (
     WebSocketBaseCommandResponseType,
     WebSocketBaseStreamResponseType,
     WebSocketErrorResponse,
