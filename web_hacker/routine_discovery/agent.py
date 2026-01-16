@@ -13,6 +13,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field, ConfigDict
 from toon import encode
 
+from llm_context_manager import LLMContextManager
 from web_hacker.routine_discovery.context_manager import ContextManager
 from web_hacker.utils.llm_utils import collect_text_from_response, manual_llm_parse_text_to_model
 from web_hacker.data_models.routine_discovery.llm_responses import (
@@ -44,9 +45,8 @@ class RoutineDiscoveryAgent(BaseModel):
     task: str
     emit_message_callable: Callable[[RoutineDiscoveryMessage], None]
     llm_model: str = Field(default="gpt-5.1")
-    message_history: list[dict] = Field(default_factory=list)
+    llm_context: LLMContextManager = Field(default_factory=LLMContextManager)
     output_dir: str | None = Field(default=None)
-    last_response_id: str | None = Field(default=None)
     tools: list[dict] = Field(default_factory=list)
     n_transaction_identification_attempts: int = Field(default=3)
     current_transaction_identification_attempt: int = Field(default=1)
@@ -145,18 +145,18 @@ class RoutineDiscoveryAgent(BaseModel):
             }
         ]
 
-        # add the system prompt to the message history
-        self._add_to_message_history("system", self.SYSTEM_PROMPT_IDENTIFY_TRANSACTIONS)
+        # initialize the LLM context with system prompt
+        self.llm_context.start_session(self.SYSTEM_PROMPT_IDENTIFY_TRANSACTIONS)
 
-        # add the user prompt to the message history
-        self._add_to_message_history("user", f"Task description: {self.task}")
-        self._add_to_message_history("user", f"These are the possible network transaction ids you can choose from:\n{encode(self.context_manager.get_all_transaction_ids())}")
+        # add the user prompts to the context
+        self.llm_context.add_user_message(f"Task description: {self.task}")
+        self.llm_context.add_user_message(f"These are the possible network transaction ids you can choose from:\n{encode(self.context_manager.get_all_transaction_ids())}")
 
         self.emit_message_callable(RoutineDiscoveryMessage(
             type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
             content="Identifying relevant network transactions"
         ))
-        logger.debug(f"\n\nMessage history:\n{self.message_history}\n\n")
+        logger.debug(f"\n\nLLM context stats:\n{self.llm_context.get_stats()}\n\n")
 
         identified_transaction = None
         while identified_transaction is None:
@@ -339,15 +339,17 @@ class RoutineDiscoveryAgent(BaseModel):
                 "Try again. The transaction id you provided does not exist or was not relevant. "
                 f"Choose from: {encode(self.context_manager.get_all_transaction_ids())}"
             )
-            self._add_to_message_history("user", message)
+            self.llm_context.add_user_message(message)
 
-        logger.debug(f"\n\nMessage history:\n{self.message_history}\n")
+        logger.debug(f"\n\nLLM context stats:\n{self.llm_context.get_stats()}\n")
 
-        # First attempt: send full history. Retries: send only the last message (uses previous_response_id for context)
+        # Get input from context manager (handles continuation mode automatically)
+        llm_input, previous_response_id = self.llm_context.get_llm_input()
+
         response = self.client.responses.parse(
             model=self.llm_model,
-            input=self.message_history if is_first_attempt else [self.message_history[-1]],
-            previous_response_id=self.last_response_id,
+            input=llm_input,
+            previous_response_id=previous_response_id,
             tools=self.tools,
             tool_choice="required",
             text_format=TransactionIdentificationResponse
@@ -355,12 +357,14 @@ class RoutineDiscoveryAgent(BaseModel):
         transaction_identification_response = response.output_parsed
         logger.info(f"\nTransaction identification response:\n{transaction_identification_response.model_dump()}")
 
-        # save the response id and add to the message history
-        self.last_response_id = response.id
-        self._add_to_message_history("assistant", encode(transaction_identification_response.model_dump()))
+        # add response to context (handles response_id and summarization)
+        self.llm_context.add_assistant_message(
+            encode(transaction_identification_response.model_dump()),
+            response.id
+        )
 
         logger.debug(f"\nParsed response:\n{transaction_identification_response.model_dump_json()}")
-        logger.debug(f"New chat history:\n{self.message_history}\n")
+        logger.debug(f"LLM context stats:\n{self.llm_context.get_stats()}\n")
 
         # return the parsed response
         return transaction_identification_response
@@ -391,31 +395,36 @@ class RoutineDiscoveryAgent(BaseModel):
                 }
             }
         ]
-        
-        # update the message history with request to confirm the identified transaction
+
+        # add the confirmation request to context
         message = (
             f"{identified_transaction.transaction_id} have been added to the vectorstore in full (including response bodies).\n"
             "Confirm the identified transaction is correct and directly corresponds to the user's requested task:\n"
             f"{self.task}\n\n"
             "IMPORTANT: Focus on whether this transaction accomplishes the user's INTENT, not the literal wording. "
         )
-        self._add_to_message_history("user", message)
-        
+        self.llm_context.add_user_message(message)
+
+        # Get input from context manager
+        llm_input, previous_response_id = self.llm_context.get_llm_input()
+
         # call to the LLM API for confirmation that the identified transaction is correct
         response = self.client.responses.parse(
             model=self.llm_model,
-            input=[self.message_history[-1]],
-            previous_response_id=self.last_response_id,
+            input=llm_input,
+            previous_response_id=previous_response_id,
             tools=tools,
             tool_choice="required", # forces the LLM to look at the newly added files to the vectorstore
             text_format=TransactionConfirmationResponse
         )
         transaction_confirmation_response = response.output_parsed
-        
-        # save the response id and add to the message history
-        self.last_response_id = response.id
-        self._add_to_message_history("assistant", encode(transaction_confirmation_response.model_dump()))
-        
+
+        # add response to context
+        self.llm_context.add_assistant_message(
+            encode(transaction_confirmation_response.model_dump()),
+            response.id
+        )
+
         return transaction_confirmation_response
 
     def extract_variables(self, transaction_id: str) -> ExtractedVariableResponse:
@@ -427,8 +436,8 @@ class RoutineDiscoveryAgent(BaseModel):
 
         # get the transaction
         transaction = self.context_manager.get_transaction_by_id(transaction_id)
-        
-        # add message to the message history
+
+        # add message to context
         message = (
             f"Extract variables from these network REQUESTS only: {encode(transaction['request'])}\n\n"
             "CRITICAL RULES:\n"
@@ -448,22 +457,27 @@ class RoutineDiscoveryAgent(BaseModel):
             "   - If the user wouldn't explicitly provide it, it's NOT a parameter.\n"
         )
 
-        self._add_to_message_history("user", message)
+        self.llm_context.add_user_message(message)
+
+        # Get input from context manager
+        llm_input, previous_response_id = self.llm_context.get_llm_input()
 
         # call to the LLM API for extraction of the variables
         response = self.client.responses.parse(
             model=self.llm_model,
-            input=[self.message_history[-1]],
-            previous_response_id=self.last_response_id,
+            input=llm_input,
+            previous_response_id=previous_response_id,
             # tools=self.tools,
             # tool_choice="auto",
             text_format=ExtractedVariableResponse
         )
         extracted_variable_response = response.output_parsed
 
-        # save the response id and add to the message history
-        self.last_response_id = response.id
-        self._add_to_message_history("assistant", encode(extracted_variable_response.model_dump()))
+        # add response to context
+        self.llm_context.add_assistant_message(
+            encode(extracted_variable_response.model_dump()),
+            response.id
+        )
 
         # override the transaction_id with the one passed in, since the LLM may return an incorrect format
         extracted_variable_response.transaction_id = original_transaction_id
@@ -500,7 +514,7 @@ class RoutineDiscoveryAgent(BaseModel):
                 )
                 # scan_storage_for_value returns list[str], so we can use it directly
                 storage_objects.extend(storage_sources_found)
-                
+
             if len(storage_objects) > 0:
                 logger.info(f"Found {len(storage_objects)} storage sources that contain the value")
 
@@ -510,7 +524,7 @@ class RoutineDiscoveryAgent(BaseModel):
                 window_properties_found = self.context_manager.scan_window_properties_for_value(value)
                 # scan_window_properties_for_value returns list[dict], so we can use it directly
                 window_properties.extend(window_properties_found)
-                
+
             if len(window_properties) > 0:
                 logger.info(f"Found {len(window_properties)} window properties that contain the value")
 
@@ -547,7 +561,7 @@ class RoutineDiscoveryAgent(BaseModel):
                 "Use dot paths like 'key.data.items[0].id'. For transaction responses, start with first key. "
                 "For storage, start with entry name. Resolve ALL occurrences if found in multiple places."
             )
-            self._add_to_message_history("user", message)
+            self.llm_context.add_user_message(message)
 
             # custom tools to force the LLM to look at the newly added transactions to the vectorstore
             tools = [
@@ -561,25 +575,30 @@ class RoutineDiscoveryAgent(BaseModel):
                     }
                 }
             ]
-            
+
+            # Get input from context manager
+            llm_input, previous_response_id = self.llm_context.get_llm_input()
+
             # call to the LLM API for resolution of the variable
             response = self.client.responses.parse(
                 model=self.llm_model,
-                input=[self.message_history[-1]],
-                previous_response_id=self.last_response_id,
+                input=llm_input,
+                previous_response_id=previous_response_id,
                 tools=tools,
                 tool_choice="required",
                 text_format=ResolvedVariableResponse
             )
             resolved_variable_response = response.output_parsed
 
-            # save the response id
-            self.last_response_id = response.id
-            self._add_to_message_history("assistant", encode(resolved_variable_response.model_dump()))
-            
+            # add response to context
+            self.llm_context.add_assistant_message(
+                encode(resolved_variable_response.model_dump()),
+                response.id
+            )
+
             # parse the response to the pydantic model
             resolved_variable_responses.append(resolved_variable_response)
-            
+
             # Count resolved sources
             resolved_sources = [
                 s for s in [
@@ -588,14 +607,14 @@ class RoutineDiscoveryAgent(BaseModel):
                     resolved_variable_response.window_property_source,
                 ] if s is not None
             ]
-            
+
             if len(resolved_sources) == 0:
                 logger.warning(f"Unable to resolve variable '{variable.name}'. Hardcoding to: {variable.observed_value}")
             elif len(resolved_sources) == 1:
                 logger.info(f"Variable '{variable.name}' resolved from: {type(resolved_sources[0]).__name__}")
             else:
                 logger.info(f"Variable '{variable.name}' resolved from {len(resolved_sources)} sources (prioritizing: transaction > session storage > window property)")
-            
+
         return resolved_variable_responses
 
     def construct_routine(self, routine_transactions: dict, resolved_variables: list[ResolvedVariableResponse] = [], max_attempts: int = 3) -> DevRoutine:
@@ -604,7 +623,7 @@ class RoutineDiscoveryAgent(BaseModel):
         """
         # Convert resolved_variables to dicts for encoding
         resolved_variables_dicts = [rv.model_dump() for rv in resolved_variables]
-        
+
         message = (
             f"Construct routine from transactions:\n{encode(routine_transactions)}\n\n"
             f"Resolved variables:\n{encode(resolved_variables_dicts)}\n\n"
@@ -618,39 +637,44 @@ class RoutineDiscoveryAgent(BaseModel):
             f"7. Return final sessionStorage value at end\n"
             f"8. Credentials: same-origin > include > omit"
         )
-        self._add_to_message_history("user", message)
+        self.llm_context.add_user_message(message)
 
         current_attempt = 0
         while current_attempt < max_attempts:
             current_attempt += 1
-            
+
+            # Get input from context manager
+            llm_input, previous_response_id = self.llm_context.get_llm_input()
+
             # call to the LLM API for construction of the routine
             response = self.client.responses.parse(
                 model=self.llm_model,
-                input=[self.message_history[-1]],
-                previous_response_id=self.last_response_id,
+                input=llm_input,
+                previous_response_id=previous_response_id,
                 tools=self.tools,
                 tool_choice="required",
                 text_format=DevRoutine
             )
             routine = response.output_parsed
             logger.info(f"\nRoutine:\n{routine.model_dump()}")
-            
-            # save the response id
-            self.last_response_id = response.id
-            self._add_to_message_history("assistant", encode(routine.model_dump()))
-            
+
+            # add response to context
+            self.llm_context.add_assistant_message(
+                encode(routine.model_dump()),
+                response.id
+            )
+
             # validate the routine
             successful, errors, exception = routine.validate()
             if successful:
                 return routine
-            
+
             message = (
                 f"Execution failed with error: {exception}\n\n"
                 f"Routine validation failed:\n{encode(errors)}\n\n"
                 f"Try again to construct the routine."
             )
-            self._add_to_message_history("user", message)
+            self.llm_context.add_user_message(message)
 
         raise Exception(f"Failed to construct the routine after {max_attempts} attempts")
 
@@ -667,29 +691,35 @@ class RoutineDiscoveryAgent(BaseModel):
             f"Output schema:\n{encode(Routine.model_json_schema())}\n\n"
             f"Output valid JSON only. {self.PLACEHOLDER_INSTRUCTIONS}"
         )
-        self._add_to_message_history("user", message)
+        self.llm_context.add_user_message(message)
+
+        # Get input from context manager
+        llm_input, previous_response_id = self.llm_context.get_llm_input()
 
         # call to the LLM API for productionization of the routine
         response = self.client.responses.create(
             model=self.llm_model,
-            input=[self.message_history[-1]],
-            previous_response_id=self.last_response_id,
+            input=llm_input,
+            previous_response_id=previous_response_id,
         )
-        
-        # save the response id
-        self.last_response_id = response.id
-        
+
         # collect the text from the response
         response_text = collect_text_from_response(response)
-        self._add_to_message_history("assistant", response_text)
-        
+
+        # add response to context
+        self.llm_context.add_assistant_message(response_text, response.id)
+
         # parse the response to the pydantic model
-        # context includes the last 2 messages (user prompt + assistant response) to help with parsing
+        # context includes the last user+assistant messages to help with parsing
+        last_messages = [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response_text}
+        ]
         production_routine = manual_llm_parse_text_to_model(
             text=response_text,
             pydantic_model=Routine,
             client=self.client,
-            context=encode(self.message_history[-2:]) + f"\n\n{self.PLACEHOLDER_INSTRUCTIONS}",
+            context=encode(last_messages) + f"\n\n{self.PLACEHOLDER_INSTRUCTIONS}",
             llm_model=self.llm_model,
             n_tries=5
         )
@@ -704,20 +734,25 @@ class RoutineDiscoveryAgent(BaseModel):
             f"Write a dictionary of parameters to test this routine (from previous step):\n{encode(routine.model_dump())}\n\n"
             f"Ensure all parameters are present and have valid values."
         )
-        self._add_to_message_history("user", message)
-        
+        self.llm_context.add_user_message(message)
+
+        # Get input from context manager
+        llm_input, previous_response_id = self.llm_context.get_llm_input()
+
         # call to the LLM API for getting the test parameters
         response = self.client.responses.parse(
             model=self.llm_model,
-            input=[self.message_history[-1]],
-            previous_response_id=self.last_response_id,
+            input=llm_input,
+            previous_response_id=previous_response_id,
             text_format=TestParametersResponse
         )
         test_parameters_response = response.output_parsed
-        
-        # save the response id
-        self.last_response_id = response.id
-        self._add_to_message_history("assistant", encode(test_parameters_response.model_dump()))
+
+        # add response to context
+        self.llm_context.add_assistant_message(
+            encode(test_parameters_response.model_dump()),
+            response.id
+        )
 
         # save test parameters as a simple dict {name: value}
         test_params_dict = {param.name: param.value for param in test_parameters_response.parameters}
@@ -725,10 +760,3 @@ class RoutineDiscoveryAgent(BaseModel):
 
         # return the test parameters response
         return test_parameters_response
-
-    def _add_to_message_history(self, role: str, content: str) -> None:
-        """
-        Add a message to the message history.
-        """
-        self.message_history.append({"role": role, "content": content})
-        self._save_to_output_dir("message_history.json", self.message_history)

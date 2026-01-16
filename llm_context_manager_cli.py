@@ -31,7 +31,8 @@ from rich.markdown import Markdown
 from rich.logging import RichHandler
 from rich import box
 
-from llm_context_manager import LLMContextManager, MessageRole, summary_logger
+from llm_context_manager import LLMContextManager, MessageRole
+from llm_context_manager import summary_logger  # renamed to llm_context_manager logger
 
 # setup summary logger with in-memory handler to capture logs
 class LogCapture(logging.Handler):

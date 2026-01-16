@@ -10,9 +10,18 @@ from openai import OpenAI
 
 load_dotenv()
 
-# dedicated logger for summarization
-summary_logger = logging.getLogger("summary_logs")
+# dedicated logger for summarization with console output
+summary_logger = logging.getLogger("llm_context_manager")
 summary_logger.setLevel(logging.DEBUG)
+
+# add console handler if not already present
+if not summary_logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)  # INFO level for console (DEBUG is too noisy)
+    console_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+    )
+    summary_logger.addHandler(console_handler)
 
 
 class MessageRole(StrEnum):
@@ -44,11 +53,13 @@ class LLMContextManager(BaseModel):
     chat_model: str = Field(default="gpt-5.1", description="The model to use for the chat")
     summary_model: str = Field(default="gpt-5.1", description="The model to use for the summary")
 
-    # context window hyper parameters (tuned for GPT-5 400k context)
-    T_max: int = Field(default=600_000, description="Maximum chars before forced drain (~150k tokens)")
-    T_drain: int = Field(default=400_000, description="Threshold to start async summarization (~125k tokens)")
-    T_target: int = Field(default=250_000, description="Target chars after drain (~62k tokens)")
-    T_summary_max: int = Field(default=100_000, description="Maximum chars for summary (~25k tokens)")
+    # context window hyper parameters (lowered for testing - see comments for production values)
+    # Production values: T_max=600_000, T_drain=400_000, T_target=250_000, T_summary_max=100_000
+    T_max: int = Field(default=50_000, description="Maximum chars before forced drain (~12k tokens)")
+    T_drain: int = Field(default=30_000, description="Threshold to start async summarization (~8k tokens)")
+    T_target: int = Field(default=18_000, description="Target chars after drain (~5k tokens)")
+    T_summary_max: int = Field(default=10_000, description="Maximum chars for summary (~2.5k tokens)")
+    max_message_size: int = Field(default=300_000, description="Maximum chars per single message (~75k tokens)")
 
     # session state
     client: OpenAI = Field(default_factory=lambda: OpenAI(api_key=os.getenv("OPENAI_API_KEY")))
@@ -78,6 +89,11 @@ class LLMContextManager(BaseModel):
         self.current_anchor_idx = None
         self.last_response_id = None
 
+        summary_logger.info(
+            f"[SESSION] Started new session | system_prompt={len(system_prompt):,} chars | "
+            f"T_drain={self.T_drain:,} | T_max={self.T_max:,} | T_target={self.T_target:,}"
+        )
+
     def get_response(self, user_message: str) -> str:
         """
         Get a response from the LLM for the user message.
@@ -87,7 +103,7 @@ class LLMContextManager(BaseModel):
             ValueError: If message exceeds max_message_size
         """
         # enforce max message size - must fit in T_max with room for response
-        max_message_size = self.T_max // 2
+        max_message_size = self.max_message_size
         if len(user_message) > max_message_size:
             raise ValueError(
                 f"Message too large: {len(user_message):,} chars exceeds limit of {max_message_size:,} chars. "
@@ -208,6 +224,12 @@ class LLMContextManager(BaseModel):
         Drain the context when T_current > T_max.
         Reset last_response_id and update anchor to keep context below T_target.
         """
+        pre_drain_size = self.T_current
+        summary_logger.warning(
+            f"[DRAIN] Starting drain | T_current={self.T_current:,} > T_max={self.T_max:,} | "
+            f"target={self.T_target:,} | msgs={len(self.messages)}"
+        )
+
         # set draining flag - this signals any in-progress summarization to stop early
         with self.summarization_lock:
             self.draining = True
@@ -216,7 +238,7 @@ class LLMContextManager(BaseModel):
         if was_in_progress:
             # Don't wait - the draining flag will cause the worker to stop early
             # We'll use whatever summary is already in self.summaries
-            summary_logger.debug("Summarization in progress, draining flag set - will use existing summary")
+            summary_logger.info("[DRAIN] Async summarization was in progress - will use existing summary")
 
         try:
             # First calculate where we'd drain to with current summary
@@ -228,15 +250,14 @@ class LLMContextManager(BaseModel):
             if last_summary_anchor < tentative_anchor:
                 # Existing summary doesn't cover what we're about to delete - need to update it
                 # This prevents losing messages between last_summary_anchor and tentative_anchor
-                summary_logger.info(
-                    f"Summary anchor ({last_summary_anchor}) < drain anchor ({tentative_anchor}), "
-                    f"forcing summary update to avoid losing messages"
+                summary_logger.warning(
+                    f"[DRAIN] Summary anchor ({last_summary_anchor}) < drain anchor ({tentative_anchor}) - "
+                    f"forcing sync summary to avoid losing messages"
                 )
                 self._generate_summary_sync(force=True)
             else:
-                summary_logger.debug(
-                    f"Existing summary (anchor={last_summary_anchor}) covers drain target ({tentative_anchor}), "
-                    f"letting async summarization continue"
+                summary_logger.info(
+                    f"[DRAIN] Existing summary (anchor={last_summary_anchor}) covers drain target ({tentative_anchor})"
                 )
 
             # Recalculate final anchor (summary size may have changed)
@@ -247,13 +268,19 @@ class LLMContextManager(BaseModel):
             self.last_response_id = None  # force fresh context on next call
 
             # mark drained messages as [deleted] to free memory but preserve indices
+            deleted_count = 0
             for i in range(1, self.current_anchor_idx + 1):
                 self.messages[i] = Message(role=self.messages[i].role, content="[deleted]")
+                deleted_count += 1
 
             # recalculate T_current based on what we'll actually send
             self.T_current = overhead + accumulated
 
-            summary_logger.info(f"Context drained: anchor={new_anchor_idx}, T_current={self.T_current}")
+            summary_logger.warning(
+                f"[DRAIN] Complete | {pre_drain_size:,} → {self.T_current:,} chars "
+                f"(freed {pre_drain_size - self.T_current:,}) | "
+                f"deleted {deleted_count} msgs | new_anchor={new_anchor_idx}"
+            )
 
         finally:
             # clear draining flag
@@ -263,22 +290,31 @@ class LLMContextManager(BaseModel):
     def _maybe_start_async_summarization(self) -> None:
         """Start async summarization if not already running or draining."""
         with self.summarization_lock:
-            if self.summarization_in_progress or self.draining:
+            if self.summarization_in_progress:
+                summary_logger.debug("[SUMMARIZE] Skipping - already in progress")
+                return
+            if self.draining:
+                summary_logger.debug("[SUMMARIZE] Skipping - drain in progress")
                 return
             self.summarization_in_progress = True
             self.summarization_done.clear()  # reset event for new summarization
 
+        summary_logger.info("[SUMMARIZE] Starting async summarization in background thread...")
         # run in background thread
         self.executor.submit(self._async_summarization_worker)
 
     def _async_summarization_worker(self) -> None:
         """Background worker for summarization."""
-        summary_logger.info("Async summarization started")
+        import time
+        start_time = time.time()
+        summary_logger.info("[SUMMARIZE] Background worker started")
         try:
             self._generate_summary_sync()
-            summary_logger.info("Async summarization completed successfully")
+            elapsed = time.time() - start_time
+            summary_logger.info(f"[SUMMARIZE] Background worker completed in {elapsed:.1f}s")
         except Exception as e:
-            summary_logger.error(f"Async summarization failed: {e}", exc_info=True)
+            elapsed = time.time() - start_time
+            summary_logger.error(f"[SUMMARIZE] Background worker failed after {elapsed:.1f}s: {e}", exc_info=True)
         finally:
             with self.summarization_lock:
                 self.summarization_in_progress = False
@@ -290,9 +326,12 @@ class LLMContextManager(BaseModel):
         Args:
             force: If True, bypass the draining check (used when drain itself needs a summary)
         """
+        mode = "FORCED" if force else "ASYNC"
+        summary_logger.info(f"[SUMMARY-GEN] Starting ({mode} mode)")
+
         # check if drain requested before even starting (unless forced by drain itself)
         if self.draining and not force:
-            summary_logger.debug("Drain in progress, skipping summary generation")
+            summary_logger.debug("[SUMMARY-GEN] Drain in progress, skipping")
             return
 
         # determine what to summarize
@@ -301,36 +340,43 @@ class LLMContextManager(BaseModel):
             last_summary = self.summaries[-1]
             start_idx = last_summary.anchor_message_idx + 1  # +1 to avoid overlap
             previous_summary = last_summary.summary
-            summary_logger.debug(f"Updating existing summary (start_idx={start_idx}, prev_anchor={last_summary.anchor_message_idx})")
+            summary_logger.info(
+                f"[SUMMARY-GEN] Updating existing summary | "
+                f"prev_anchor={last_summary.anchor_message_idx} | prev_size={len(previous_summary):,} chars"
+            )
         else:
             # first summary - summarize from start (skip system prompt)
             start_idx = 1
             previous_summary = None
-            summary_logger.debug("Creating first summary")
+            summary_logger.info("[SUMMARY-GEN] Creating first summary")
 
         end_idx = len(self.messages) - 1
 
         # nothing new to summarize
         if end_idx <= start_idx:
-            summary_logger.debug(f"Nothing to summarize: end_idx={end_idx}, start_idx={start_idx}")
+            summary_logger.debug(f"[SUMMARY-GEN] Nothing to summarize: end_idx={end_idx}, start_idx={start_idx}")
             return
 
         # build messages to summarize (keep as structured list, not text blob)
         messages_to_summarize = self.messages[start_idx:end_idx + 1]
         total_chars = sum(len(m.content) for m in messages_to_summarize)
 
-        summary_logger.info(f"Summarizing {len(messages_to_summarize)} messages ({total_chars} chars)")
+        summary_logger.info(
+            f"[SUMMARY-GEN] Processing {len(messages_to_summarize)} messages ({total_chars:,} chars) | "
+            f"range=[{start_idx}:{end_idx}]"
+        )
 
         # use configured max summary size
         max_summary_chars = self.T_summary_max
 
         # pass structured messages so LLM clearly sees who said what
+        summary_logger.info(f"[SUMMARY-GEN] Calling LLM to generate summary (max={max_summary_chars:,} chars)...")
         summary_text, summary_response_id = self._call_summary_llm(messages_to_summarize, previous_summary, max_summary_chars)
-        summary_logger.debug(f"LLM returned summary: {len(summary_text)} chars")
+        summary_logger.info(f"[SUMMARY-GEN] LLM returned {len(summary_text):,} chars")
 
         # immediately store/update summary - always have something usable
         self._upsert_summary(end_idx, summary_text)
-        summary_logger.info(f"Summary stored (anchor={end_idx}, size={len(summary_text)} chars)")
+        summary_logger.info(f"[SUMMARY-GEN] Stored summary (anchor={end_idx}, size={len(summary_text):,} chars)")
 
         # iteratively shrink if summary is too large (with early exit on drain)
         # uses continuation mode from the summary call - shrinks just say "too long, shrink it"
@@ -338,25 +384,35 @@ class LLMContextManager(BaseModel):
         max_shrink_attempts = 3
         current_response_id = summary_response_id  # continue from summary session
 
+        if len(summary_text) > max_summary_chars:
+            summary_logger.warning(
+                f"[SUMMARY-GEN] Summary exceeds max ({len(summary_text):,} > {max_summary_chars:,}) - starting shrink loop"
+            )
+
         while len(summary_text) > max_summary_chars and shrink_attempts < max_shrink_attempts:
             # check for drain before each shrink attempt (unless forced by drain itself)
             if self.draining and not force:
-                summary_logger.info(f"Drain requested, stopping compression early (size={len(summary_text)} chars)")
+                summary_logger.info(f"[SUMMARY-GEN] Drain requested, stopping shrink early (size={len(summary_text):,} chars)")
                 break
 
             shrink_attempts += 1
             prev_len = len(summary_text)
-            summary_logger.warning(f"Summary too large ({len(summary_text)} > {max_summary_chars}), shrinking attempt {shrink_attempts}")
+            reduction_needed = prev_len - max_summary_chars
+            reduction_pct = (reduction_needed / prev_len) * 100
+            summary_logger.info(
+                f"[SUMMARY-GEN] Shrink attempt {shrink_attempts}/{max_shrink_attempts} | "
+                f"need to cut {reduction_needed:,} chars ({reduction_pct:.0f}%)"
+            )
             target_chars = max_summary_chars - 100  # aim slightly under
 
             summary_text, current_response_id = self._shrink_summary(
                 summary_text, target_chars, current_response_id
             )
-            summary_logger.debug(f"After shrink: {len(summary_text)} chars")
+            summary_logger.info(f"[SUMMARY-GEN] After shrink: {len(summary_text):,} chars (was {prev_len:,})")
 
             # if LLM failed to shrink (same size or bigger), hard truncate and stop
             if len(summary_text) >= prev_len:
-                summary_logger.warning(f"LLM failed to shrink ({prev_len} -> {len(summary_text)}), hard truncating")
+                summary_logger.warning(f"[SUMMARY-GEN] LLM failed to shrink - hard truncating")
                 summary_text = self._hard_truncate_summary(summary_text, target_chars)
                 self._upsert_summary(end_idx, summary_text)
                 break
@@ -367,9 +423,14 @@ class LLMContextManager(BaseModel):
         # final fallback: hard truncate if still too large
         # (skip if draining asynchronously triggered this, but do it if force=True from drain)
         if len(summary_text) > max_summary_chars and (force or not self.draining):
-            summary_logger.error(f"Summary still too large, hard truncating to {max_summary_chars - 100} chars")
+            summary_logger.error(f"[SUMMARY-GEN] Final fallback - hard truncating to {max_summary_chars - 100:,} chars")
             summary_text = self._hard_truncate_summary(summary_text, max_summary_chars - 100)
             self._upsert_summary(end_idx, summary_text)
+
+        summary_logger.info(
+            f"[SUMMARY-GEN] Complete | final_size={len(summary_text):,} chars | "
+            f"anchor={end_idx} | shrink_attempts={shrink_attempts}"
+        )
 
     def _upsert_summary(self, anchor_idx: int, summary_text: str) -> None:
         """Insert or update a summary for the given anchor index."""
@@ -704,10 +765,108 @@ Keep the same structure (## headers), preserve technical details exactly, but ma
             "T_max": self.T_max,
             "T_target": self.T_target,
             "T_summary_max": self.T_summary_max,
-            "max_message_size": self.T_max // 2,
+            "max_message_size": self.max_message_size,
             "message_count": len(self.messages),
             "summary_count": len(self.summaries),
             "current_anchor_idx": self.current_anchor_idx,
             "has_response_id": self.last_response_id is not None,
             "summarization_in_progress": self.summarization_in_progress,
         }
+
+    # --- Agent integration methods ---
+    # These methods allow external agents to use the context manager
+    # while handling their own LLM calls (e.g., with tools, parsing, etc.)
+
+    def add_user_message(self, content: str) -> None:
+        """
+        Add a user message to the context.
+        Checks for drain if context exceeds T_max.
+
+        Use this when you're managing LLM calls externally but want
+        the context manager to handle message history and summarization.
+        """
+        max_message_size = self.max_message_size
+        if len(content) > max_message_size:
+            raise ValueError(
+                f"Message too large: {len(content):,} chars exceeds limit of {max_message_size:,} chars."
+            )
+
+        self.messages.append(Message(role=MessageRole.USER, content=content))
+        self.T_current += len(content)
+
+        # log context status
+        pct = (self.T_current / self.T_max) * 100
+        summary_logger.info(
+            f"[CONTEXT] +USER msg ({len(content):,} chars) → "
+            f"T_current={self.T_current:,}/{self.T_max:,} ({pct:.1f}%) | "
+            f"msgs={len(self.messages)} | summaries={len(self.summaries)}"
+        )
+
+        # check if we need to drain
+        if self.T_current > self.T_max:
+            summary_logger.warning(f"[CONTEXT] T_current ({self.T_current:,}) > T_max ({self.T_max:,}) - DRAIN REQUIRED")
+            self._drain_context()
+
+    def add_assistant_message(self, content: str, response_id: str | None = None) -> None:
+        """
+        Add an assistant message to the context.
+        Optionally stores the response_id for continuation mode.
+        Triggers async summarization if context exceeds T_drain.
+
+        Use this after receiving an LLM response when managing calls externally.
+        """
+        self.messages.append(Message(role=MessageRole.ASSISTANT, content=content))
+        self.T_current += len(content)
+
+        if response_id is not None:
+            self.last_response_id = response_id
+
+        # log context status
+        pct = (self.T_current / self.T_max) * 100
+        drain_pct = (self.T_current / self.T_drain) * 100 if self.T_drain > 0 else 0
+        summary_logger.info(
+            f"[CONTEXT] +ASST msg ({len(content):,} chars) → "
+            f"T_current={self.T_current:,}/{self.T_max:,} ({pct:.1f}%) | "
+            f"drain_threshold={drain_pct:.1f}% | msgs={len(self.messages)}"
+        )
+
+        # check if we need to start async summarization
+        if self.T_current > self.T_drain:
+            summary_logger.info(f"[CONTEXT] T_current ({self.T_current:,}) > T_drain ({self.T_drain:,}) - triggering async summarization")
+            self._maybe_start_async_summarization()
+
+    def get_llm_input(self) -> tuple[list[dict], str | None]:
+        """
+        Get the input messages and previous_response_id for an LLM call.
+
+        Returns:
+            tuple of (input_messages, previous_response_id)
+            - If previous_response_id is not None, input_messages contains only the last message
+            - If previous_response_id is None, input_messages contains full context
+        """
+        llm_input = self._build_llm_input()
+
+        # log what mode we're using
+        if self.last_response_id is not None:
+            summary_logger.debug(
+                f"[LLM_INPUT] Continuation mode | sending {len(llm_input)} msg(s) | "
+                f"has_response_id=True"
+            )
+        elif self.current_anchor_idx is not None:
+            summary_logger.debug(
+                f"[LLM_INPUT] Post-drain mode | sending {len(llm_input)} msg(s) | "
+                f"anchor={self.current_anchor_idx} | has_summary={len(self.summaries) > 0}"
+            )
+        else:
+            summary_logger.debug(
+                f"[LLM_INPUT] Fresh context mode | sending {len(llm_input)} msg(s)"
+            )
+
+        return llm_input, self.last_response_id
+
+    def set_response_id(self, response_id: str) -> None:
+        """
+        Set the last response ID without adding a message.
+        Useful when the response content is tracked elsewhere.
+        """
+        self.last_response_id = response_id
