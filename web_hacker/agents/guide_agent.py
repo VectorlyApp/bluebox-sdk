@@ -316,12 +316,14 @@ Your job is to help users define their automation needs by gathering:
 
             # Handle text response
             if response.content:
-                self._add_chat(ChatRole.ASSISTANT, response.content)
+                chat = self._add_chat(ChatRole.ASSISTANT, response.content)
                 # Always emit CHAT_RESPONSE (handler checks if streaming occurred)
                 self._emit_message(
                     EmittedChatMessage(
                         type=ChatMessageType.CHAT_RESPONSE,
                         content=response.content,
+                        chat_id=chat.id,
+                        chat_thread_id=self._thread.id,
                     )
                 )
 

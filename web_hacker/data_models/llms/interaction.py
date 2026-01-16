@@ -90,6 +90,14 @@ class EmittedChatMessage(BaseModel):
         default=None,
         description="Text content for chat responses or error messages",
     )
+    chat_id: str | None = Field(
+        default=None,
+        description="ID of the Chat message (for CHAT_RESPONSE messages)",
+    )
+    chat_thread_id: str | None = Field(
+        default=None,
+        description="ID of the ChatThread this message belongs to",
+    )
     tool_invocation: PendingToolInvocation | None = Field(
         default=None,
         description="Tool invocation details for request/result messages",
