@@ -11,8 +11,13 @@ Usage:
 import sys
 
 from web_hacker.agents.guide_agent.guide_agent import GuideAgent
-from web_hacker.data_models.chat import Chat, ChatThread, EmittedChatMessage, ChatMessageType
-from web_hacker.data_models.llms import OpenAIModel
+from web_hacker.data_models.llms.interaction import (
+    ChatLite,
+    ChatMessageType,
+    ChatThreadLite,
+    EmittedChatMessage,
+)
+from web_hacker.data_models.llms.vendors import OpenAIModel
 from web_hacker.config import Config
 from web_hacker.utils.exceptions import ApiKeyNotFoundError
 from web_hacker.utils.logger import get_logger
@@ -31,13 +36,13 @@ class TerminalGuideChat:
             llm_model=OpenAIModel.GPT_5_MINI,
         )
 
-    def _persist_chat(self, chat: Chat) -> None:
-        """Persist a Chat object. In the future, this will POST to DynamoDB."""
-        logger.debug("Would persist Chat: %s", chat.id)
+    def _persist_chat(self, chat: ChatLite) -> None:
+        """Persist a ChatLite object. In the future, this will POST to DynamoDB."""
+        logger.debug("Would persist ChatLite: %s", chat.id)
 
-    def _persist_chat_thread(self, thread: ChatThread) -> None:
-        """Persist a ChatThread object. In the future, this will POST/PATCH to DynamoDB."""
-        logger.debug("Would persist ChatThread: %s", thread.id)
+    def _persist_chat_thread(self, thread: ChatThreadLite) -> None:
+        """Persist a ChatThreadLite object. In the future, this will POST/PATCH to DynamoDB."""
+        logger.debug("Would persist ChatThreadLite: %s", thread.id)
 
     def _handle_emitted_message(self, message: EmittedChatMessage) -> None:
         """Handle messages emitted by the agent."""

@@ -12,7 +12,7 @@ import textwrap
 from typing import Any
 
 from web_hacker.agents.guide_agent.guide_agent import GuideAgent
-from web_hacker.data_models.chat import (
+from web_hacker.data_models.llms.interaction import (
     ChatMessageType,
     EmittedChatMessage,
     PendingToolInvocation,

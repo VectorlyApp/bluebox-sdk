@@ -1,7 +1,7 @@
 """
-web_hacker/data_models/chat.py
+web_hacker/data_models/llm_interaction.py
 
-Chat data models for the guide agent conversation system.
+Data models for LLM interactions and agent communication.
 """
 
 from datetime import datetime, timezone
@@ -9,8 +9,6 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
-
-from web_hacker.data_models.resource_base import ResourceBase
 
 
 class ChatRole(StrEnum):
@@ -57,50 +55,6 @@ class PendingToolInvocation(BaseModel):
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc),
         description="When the invocation was created",
-    )
-
-
-class Chat(ResourceBase):
-    """
-    A single message in a conversation thread.
-
-    Each Chat belongs to a ChatThread and contains a single message
-    from a user, assistant, system, or tool.
-
-    ID format: Chat_<uuid>
-    """
-
-    chat_thread_id: str = Field(
-        ...,
-        description="ID of the parent ChatThread this message belongs to",
-    )
-    role: ChatRole = Field(
-        ...,
-        description="The role of the message sender (user, assistant, system, tool)",
-    )
-    content: str = Field(
-        ...,
-        description="The content of the message",
-    )
-
-
-class ChatThread(ResourceBase):
-    """
-    Container for a conversation thread with 0+ Chat messages.
-
-    A ChatThread maintains an ordered list of Chat IDs and tracks
-    any pending tool invocations that require user confirmation.
-
-    ID format: ChatThread_<uuid>
-    """
-
-    chat_ids: list[str] = Field(
-        default_factory=list,
-        description="Ordered list of Chat IDs in this thread (bidirectional link)",
-    )
-    pending_tool_invocation: PendingToolInvocation | None = Field(
-        default=None,
-        description="Tool invocation awaiting user confirmation, if any",
     )
 
 
@@ -174,4 +128,54 @@ class LLMChatResponse(BaseModel):
     tool_call: LLMToolCall | None = Field(
         default=None,
         description="Tool call requested by the LLM, if any",
+    )
+
+
+class ChatLite(BaseModel):
+    """
+    A single message in a conversation.
+
+    Lightweight model for internal agent use. The servers repo defines
+    Chat (extending ResourceBase) for persistence.
+    """
+    id: str = Field(
+        ...,
+        description="Unique message ID",
+    )
+    thread_id: str = Field(
+        ...,
+        description="ID of the parent thread this message belongs to",
+    )
+    role: ChatRole = Field(
+        ...,
+        description="The role of the message sender (user, assistant, system, tool)",
+    )
+    content: str = Field(
+        ...,
+        description="The content of the message",
+    )
+
+
+class ChatThreadLite(BaseModel):
+    """
+    Container for a conversation thread.
+
+    Lightweight model for internal agent use. The servers repo defines
+    ChatThread (extending ResourceBase) for persistence.
+    """
+    id: str = Field(
+        ...,
+        description="Unique thread ID",
+    )
+    message_ids: list[str] = Field(
+        default_factory=list,
+        description="Ordered list of message IDs in this thread",
+    )
+    pending_tool_invocation: PendingToolInvocation | None = Field(
+        default=None,
+        description="Tool invocation awaiting user confirmation, if any",
+    )
+    updated_at: int = Field(
+        default=0,
+        description="Unix timestamp (seconds) when thread was last updated",
     )

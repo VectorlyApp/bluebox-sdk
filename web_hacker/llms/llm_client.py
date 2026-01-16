@@ -9,8 +9,8 @@ from typing import Any, Callable, TypeVar
 
 from pydantic import BaseModel
 
-from web_hacker.data_models.chat import LLMChatResponse
-from web_hacker.data_models.llms import (
+from web_hacker.data_models.llms.interaction import LLMChatResponse
+from web_hacker.data_models.llms.vendors import (
     LLMModel,
     LLMVendor,
     OpenAIModel,

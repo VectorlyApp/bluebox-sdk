@@ -10,8 +10,8 @@ from typing import Any, ClassVar, TypeVar
 
 from pydantic import BaseModel
 
-from web_hacker.data_models.chat import LLMChatResponse
-from web_hacker.data_models.llms import LLMModel
+from web_hacker.data_models.llms.interaction import LLMChatResponse
+from web_hacker.data_models.llms.vendors import LLMModel
 
 
 T = TypeVar("T", bound=BaseModel)

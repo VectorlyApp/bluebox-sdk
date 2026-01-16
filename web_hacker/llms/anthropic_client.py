@@ -10,8 +10,8 @@ from typing import Any, TypeVar
 from anthropic import Anthropic, AsyncAnthropic
 from pydantic import BaseModel
 
-from web_hacker.data_models.chat import LLMChatResponse, LLMToolCall
-from web_hacker.data_models.llms import LLMModel
+from web_hacker.data_models.llms.interaction import LLMChatResponse, LLMToolCall
+from web_hacker.data_models.llms.vendors import LLMModel
 from web_hacker.llms.abstract_llm_vendor_client import AbstractLLMVendorClient
 from web_hacker.config import Config
 from web_hacker.utils.logger import get_logger
