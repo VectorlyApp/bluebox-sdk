@@ -570,8 +570,8 @@ class WebSocketStateResponse(WebSocketResponseBase):
     type: Literal[WebSocketCommandResponseType.STATE] = (
         WebSocketCommandResponseType.STATE
     )
-    guide_chat_id: str = Field(
-        description="Current session ID",
+    thread_id: str = Field(
+        description="Current ChatThread ID",
     )
     message_count: int = Field(
         description="Number of messages in conversation history",
