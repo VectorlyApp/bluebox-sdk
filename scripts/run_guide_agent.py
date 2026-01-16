@@ -116,9 +116,29 @@ class TerminalGuideChat:
     def __init__(self) -> None:
         """Initialize the terminal chat interface."""
         self._pending_invocation: PendingToolInvocation | None = None
+        self._streaming_started: bool = False
         self._agent = GuideAgent(
             emit_message_callable=self._handle_message,
+            stream_chunk_callable=self._handle_stream_chunk,
         )
+
+    def _handle_stream_chunk(self, chunk: str) -> None:
+        """
+        Handle a streaming text chunk from the LLM.
+
+        Args:
+            chunk: A text chunk from the streaming response.
+        """
+        if not self._streaming_started:
+            # Print the header before the first chunk
+            print()
+            print(colorize("  Assistant", Colors.BOLD, Colors.CYAN) + colorize(":", Colors.DIM))
+            print()
+            print("    ", end="", flush=True)
+            self._streaming_started = True
+
+        # Print chunk without newline, flush immediately
+        print(chunk, end="", flush=True)
 
     def _handle_message(self, message: EmittedChatMessage) -> None:
         """
@@ -128,7 +148,13 @@ class TerminalGuideChat:
             message: The emitted message from the agent.
         """
         if message.type == ChatMessageType.CHAT_RESPONSE:
-            self._print_assistant_message(message.content or "")
+            # If we were streaming, just finish with newlines (content already printed)
+            if self._streaming_started:
+                print()  # End the streamed line
+                print()  # Add spacing
+                self._streaming_started = False
+            else:
+                self._print_assistant_message(message.content or "")
 
         elif message.type == ChatMessageType.TOOL_INVOCATION_REQUEST:
             if message.tool_invocation:

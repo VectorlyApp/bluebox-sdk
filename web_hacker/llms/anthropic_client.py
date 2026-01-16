@@ -4,6 +4,7 @@ web_hacker/llms/anthropic_client.py
 Anthropic-specific LLM client implementation.
 """
 
+from collections.abc import Generator
 from typing import Any, TypeVar
 
 from anthropic import Anthropic, AsyncAnthropic
@@ -247,5 +248,64 @@ class AnthropicClient(AbstractLLMVendorClient):
 
         return LLMChatResponse(
             content=text_content if text_content else None,
+            tool_call=tool_call,
+        )
+
+    def chat_stream_sync(
+        self,
+        messages: list[dict[str, str]],
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> Generator[str | LLMChatResponse, None, None]:
+        """Chat with streaming, yielding text chunks and final LLMChatResponse."""
+        kwargs: dict[str, Any] = {
+            "model": self.model.value,
+            "messages": messages,
+            "max_tokens": self._resolve_max_tokens(max_tokens),
+            "temperature": self._resolve_temperature(temperature),
+        }
+        if system_prompt:
+            kwargs["system"] = system_prompt
+        if self._tools:
+            kwargs["tools"] = self._tools
+
+        full_content: list[str] = []
+        tool_name: str | None = None
+        tool_input: dict[str, Any] = {}
+
+        with self._client.messages.stream(**kwargs) as stream:
+            for event in stream:
+                # Handle text delta events
+                if hasattr(event, "type"):
+                    if event.type == "content_block_delta":
+                        if hasattr(event.delta, "text"):
+                            full_content.append(event.delta.text)
+                            yield event.delta.text
+                        elif hasattr(event.delta, "partial_json"):
+                            # Tool input being streamed
+                            pass
+                    elif event.type == "content_block_start":
+                        if hasattr(event.content_block, "name"):
+                            tool_name = event.content_block.name
+
+            # Get final message for tool input
+            final_message = stream.get_final_message()
+            for block in final_message.content:
+                if hasattr(block, "input") and hasattr(block, "name"):
+                    tool_name = block.name
+                    tool_input = block.input
+                    break
+
+        # Build final response
+        tool_call: LLMToolCall | None = None
+        if tool_name:
+            tool_call = LLMToolCall(
+                tool_name=tool_name,
+                tool_arguments=tool_input,
+            )
+
+        yield LLMChatResponse(
+            content="".join(full_content) if full_content else None,
             tool_call=tool_call,
         )

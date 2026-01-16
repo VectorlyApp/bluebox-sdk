@@ -5,6 +5,7 @@ Abstract base class for LLM vendor clients.
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from typing import Any, ClassVar, TypeVar
 
 from pydantic import BaseModel
@@ -208,5 +209,31 @@ class AbstractLLMVendorClient(ABC):
 
         Returns:
             LLMChatResponse with text content and optional tool call.
+        """
+        pass
+
+    @abstractmethod
+    def chat_stream_sync(
+        self,
+        messages: list[dict[str, str]],
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> Generator[str | LLMChatResponse, None, None]:
+        """
+        Chat with streaming, yielding text chunks and final LLMChatResponse.
+
+        Yields text chunks as they arrive, then yields the final LLMChatResponse
+        with the complete content and any tool call.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys.
+            system_prompt: Optional system prompt for context.
+            max_tokens: Maximum tokens in the response. Defaults to DEFAULT_MAX_TOKENS.
+            temperature: Sampling temperature (0.0-1.0). Defaults to DEFAULT_TEMPERATURE.
+
+        Yields:
+            str: Text chunks as they arrive.
+            LLMChatResponse: Final response with complete content and optional tool call.
         """
         pass

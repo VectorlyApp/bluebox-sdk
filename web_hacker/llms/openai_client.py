@@ -5,6 +5,7 @@ OpenAI-specific LLM client implementation.
 """
 
 import json
+from collections.abc import Generator
 from typing import Any, TypeVar
 
 from openai import OpenAI, AsyncOpenAI
@@ -209,5 +210,64 @@ class OpenAIClient(AbstractLLMVendorClient):
 
         return LLMChatResponse(
             content=message.content,
+            tool_call=tool_call,
+        )
+
+    def chat_stream_sync(
+        self,
+        messages: list[dict[str, str]],
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> Generator[str | LLMChatResponse, None, None]:
+        """Chat with streaming, yielding text chunks and final LLMChatResponse."""
+        all_messages = self._prepend_system_prompt(messages, system_prompt)
+
+        kwargs: dict[str, Any] = {
+            "model": self.model.value,
+            "messages": all_messages,
+            "max_completion_tokens": self._resolve_max_tokens(max_tokens),
+            "stream": True,
+            # Note: GPT-5 models only support temperature=1 (default), so we omit it
+        }
+        if self._tools:
+            kwargs["tools"] = self._tools
+
+        stream = self._client.chat.completions.create(**kwargs)
+
+        # Accumulate content and tool call data
+        full_content: list[str] = []
+        tool_call_name: str | None = None
+        tool_call_args: list[str] = []
+
+        for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta is None:
+                continue
+
+            # Handle text content
+            if delta.content:
+                full_content.append(delta.content)
+                yield delta.content
+
+            # Handle tool calls (streamed in chunks)
+            if delta.tool_calls:
+                for tc in delta.tool_calls:
+                    if tc.function:
+                        if tc.function.name:
+                            tool_call_name = tc.function.name
+                        if tc.function.arguments:
+                            tool_call_args.append(tc.function.arguments)
+
+        # Build final response
+        tool_call: LLMToolCall | None = None
+        if tool_call_name:
+            tool_call = LLMToolCall(
+                tool_name=tool_call_name,
+                tool_arguments=json.loads("".join(tool_call_args)) if tool_call_args else {},
+            )
+
+        yield LLMChatResponse(
+            content="".join(full_content) if full_content else None,
             tool_call=tool_call,
         )

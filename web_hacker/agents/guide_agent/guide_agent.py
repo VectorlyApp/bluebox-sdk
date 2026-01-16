@@ -14,6 +14,7 @@ from web_hacker.data_models.chat import (
     ChatRole,
     EmittedChatMessage,
     ChatMessageType,
+    LLMChatResponse,
     PendingToolInvocation,
     ToolInvocationStatus,
 )
@@ -89,6 +90,7 @@ Your job is to help users define their automation needs by gathering:
         emit_message_callable: Callable[[EmittedChatMessage], None],
         persist_chat_callable: Callable[[Chat], None] | None = None,
         persist_chat_thread_callable: Callable[[ChatThread], None] | None = None,
+        stream_chunk_callable: Callable[[str], None] | None = None,
         llm_model: LLMModel = OpenAIModel.GPT_5_MINI,
         chat_thread: ChatThread | None = None,
         existing_chats: list[Chat] | None = None,
@@ -100,6 +102,7 @@ Your job is to help users define their automation needs by gathering:
             emit_message_callable: Callback function to emit messages to the host.
             persist_chat_callable: Optional callback to persist Chat objects (for DynamoDB).
             persist_chat_thread_callable: Optional callback to persist ChatThread (for DynamoDB).
+            stream_chunk_callable: Optional callback for streaming text chunks as they arrive.
             llm_model: The LLM model to use for conversation.
             chat_thread: Existing ChatThread to continue, or None for new conversation.
             existing_chats: Existing Chat messages if loading from persistence.
@@ -107,6 +110,7 @@ Your job is to help users define their automation needs by gathering:
         self._emit_message_callable = emit_message_callable
         self._persist_chat_callable = persist_chat_callable
         self._persist_chat_thread_callable = persist_chat_thread_callable
+        self._stream_chunk_callable = stream_chunk_callable
 
         self.llm_model = llm_model
         self.llm_client = LLMClient(llm_model)
@@ -302,14 +306,19 @@ Your job is to help users define their automation needs by gathering:
         messages = self._build_messages_for_llm()
 
         try:
-            response = self.llm_client.chat_sync(
-                messages=messages,
-                system_prompt=self.SYSTEM_PROMPT,
-            )
+            # Use streaming if chunk callback is set
+            if self._stream_chunk_callable:
+                response = self._process_streaming_response(messages)
+            else:
+                response = self.llm_client.chat_sync(
+                    messages=messages,
+                    system_prompt=self.SYSTEM_PROMPT,
+                )
 
             # Handle text response
             if response.content:
                 self._add_chat(ChatRole.ASSISTANT, response.content)
+                # Always emit CHAT_RESPONSE (handler checks if streaming occurred)
                 self._emit_message(
                     EmittedChatMessage(
                         type=ChatMessageType.CHAT_RESPONSE,
@@ -338,6 +347,35 @@ Your job is to help users define their automation needs by gathering:
                     error=str(e),
                 )
             )
+
+    def _process_streaming_response(self, messages: list[dict[str, str]]) -> LLMChatResponse:
+        """
+        Process LLM response with streaming, calling chunk callback for each chunk.
+
+        Args:
+            messages: The messages to send to the LLM.
+
+        Returns:
+            The final LLMChatResponse with complete content.
+        """
+        response: LLMChatResponse | None = None
+
+        for item in self.llm_client.chat_stream_sync(
+            messages=messages,
+            system_prompt=self.SYSTEM_PROMPT,
+        ):
+            if isinstance(item, str):
+                # Text chunk - call the callback
+                if self._stream_chunk_callable:
+                    self._stream_chunk_callable(item)
+            elif isinstance(item, LLMChatResponse):
+                # Final response
+                response = item
+
+        if response is None:
+            raise ValueError("No final response received from streaming LLM")
+
+        return response
 
     def confirm_tool_invocation(self, invocation_id: str) -> None:
         """
