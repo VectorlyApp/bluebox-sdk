@@ -516,19 +516,19 @@ class TestAgentResponseModels:
 
     def test_state_response_validation(self) -> None:
         resp = WebSocketStateResponse(
-            guide_chat_id="session-abc-123",
+            thread_id="session-abc-123",
             message_count=5,
             has_pending_tool_invocation=False,
         )
         assert resp.type == resp.type.STATE
-        assert resp.guide_chat_id == "session-abc-123"
+        assert resp.thread_id == "session-abc-123"
         assert resp.message_count == 5
         assert resp.has_pending_tool_invocation is False
         assert resp.pending_tool_invocation_id is None
 
     def test_state_response_with_pending_invocation(self) -> None:
         resp = WebSocketStateResponse(
-            guide_chat_id="session-abc-123",
+            thread_id="session-abc-123",
             message_count=3,
             has_pending_tool_invocation=True,
             pending_tool_invocation_id="inv-xyz-789",
@@ -538,18 +538,18 @@ class TestAgentResponseModels:
 
     def test_state_response_requires_fields(self) -> None:
         with pytest.raises(ValidationError):
-            WebSocketStateResponse(guide_chat_id="abc")  # type: ignore[call-arg]
+            WebSocketStateResponse(thread_id="abc")  # type: ignore[call-arg]
 
     def test_state_response_round_trip(self) -> None:
         resp = WebSocketStateResponse(
-            guide_chat_id="session-123",
+            thread_id="session-123",
             message_count=10,
             has_pending_tool_invocation=True,
             pending_tool_invocation_id="inv-456",
         )
         dumped = resp.model_dump()
         loaded = WebSocketStateResponse(**dumped)
-        assert loaded.guide_chat_id == "session-123"
+        assert loaded.thread_id == "session-123"
         assert loaded.message_count == 10
         assert loaded.has_pending_tool_invocation is True
         assert loaded.pending_tool_invocation_id == "inv-456"
