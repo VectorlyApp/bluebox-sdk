@@ -6,12 +6,14 @@ Interactive terminal interface for the Guide Agent.
 Guides users through creating web automation routines.
 """
 
+import argparse
 import json
 import sys
 import textwrap
 from typing import Any
 
 from web_hacker.agents.guide_agent.guide_agent import GuideAgent
+from web_hacker.data_models.llms.vendors import LLMModel, OpenAIModel, AnthropicModel
 from web_hacker.data_models.llms.interaction import (
     ChatMessageType,
     EmittedChatMessage,
@@ -81,18 +83,18 @@ class TerminalGuideChat:
     """Interactive terminal chat interface for the Guide Agent."""
 
     BANNER = r"""
-    ╔══════════════════════════════════════════════════════════════════╗
-    ║                                                                  ║
-    ║  ██╗   ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ ██╗  ██╗   ██╗║
-    ║  ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██║  ╚██╗ ██╔╝║
-    ║  ██║   ██║█████╗  ██║        ██║   ██║   ██║██████╔╝██║   ╚████╔╝ ║
-    ║  ╚██╗ ██╔╝██╔══╝  ██║        ██║   ██║   ██║██╔══██╗██║    ╚██╔╝  ║
-    ║   ╚████╔╝ ███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║███████╗██║   ║
-    ║    ╚═══╝  ╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝   ║
-    ║                                                                  ║
-    ║                      Guide Agent Terminal                        ║
-    ║                                                                  ║
-    ╚══════════════════════════════════════════════════════════════════╝
+    ╔════════════════════════════════════════════════════════════════════╗
+    ║                                                                    ║
+    ║  ██╗   ██╗███████╗ ██████╗████████╗ ██████╗ ██████╗ ██╗  ██╗   ██╗ ║
+    ║  ██║   ██║██╔════╝██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██║  ╚██╗ ██╔╝ ║
+    ║  ██║   ██║█████╗  ██║        ██║   ██║   ██║██████╔╝██║   ╚████╔╝  ║
+    ║  ╚██╗ ██╔╝██╔══╝  ██║        ██║   ██║   ██║██╔══██╗██║    ╚██╔╝   ║
+    ║   ╚████╔╝ ███████╗╚██████╗   ██║   ╚██████╔╝██║  ██║███████╗██║    ║
+    ║    ╚═══╝  ╚══════╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝    ║
+    ║                                                                    ║
+    ║                      Guide Agent Terminal                          ║
+    ║                                                                    ║
+    ╚════════════════════════════════════════════════════════════════════╝
     """
 
     WELCOME_MESSAGE = """
@@ -113,13 +115,14 @@ class TerminalGuideChat:
       • Console: https://console.vectorly.app
     """
 
-    def __init__(self) -> None:
+    def __init__(self, llm_model: LLMModel | None = None) -> None:
         """Initialize the terminal chat interface."""
         self._pending_invocation: PendingToolInvocation | None = None
         self._streaming_started: bool = False
         self._agent = GuideAgent(
             emit_message_callable=self._handle_message,
             stream_chunk_callable=self._handle_stream_chunk,
+            llm_model=llm_model if llm_model else OpenAIModel.GPT_5_MINI,
         )
 
     def _handle_stream_chunk(self, chunk: str) -> None:
@@ -278,6 +281,8 @@ class TerminalGuideChat:
         # Print banner and welcome
         print(colorize(self.BANNER, Colors.BRIGHT_MAGENTA, Colors.BOLD))
         print(colorize(self.WELCOME_MESSAGE, Colors.DIM))
+        print(colorize(f"    Model: {self._agent.llm_model}", Colors.DIM))
+        print()
         print(colorize("  " + "─" * 67, Colors.DIM))
         print()
 
@@ -333,11 +338,37 @@ class TerminalGuideChat:
                 break
 
 
+def parse_model(model_str: str) -> LLMModel:
+    """Parse a model string into an LLMModel enum value."""
+    # Try OpenAI models
+    for model in OpenAIModel:
+        if model.value == model_str or model.name == model_str:
+            return model
+    # Try Anthropic models
+    for model in AnthropicModel:
+        if model.value == model_str or model.name == model_str:
+            return model
+    raise ValueError(f"Unknown model: {model_str}")
+
+
 def main() -> None:
     """Entry point for the guide agent terminal."""
+    parser = argparse.ArgumentParser(description="Interactive Guide Agent terminal")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=OpenAIModel.GPT_5_MINI.value,
+        help=f"LLM model to use (default: {OpenAIModel.GPT_5_MINI.value})",
+    )
+    args = parser.parse_args()
+
     try:
-        chat = TerminalGuideChat()
+        llm_model = parse_model(args.model)
+        chat = TerminalGuideChat(llm_model=llm_model)
         chat.run()
+    except ValueError as e:
+        print(colorize(f"\n  Error: {e}", Colors.RED, Colors.BOLD), file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(colorize(f"\n  Fatal error: {e}", Colors.RED, Colors.BOLD), file=sys.stderr)
         sys.exit(1)

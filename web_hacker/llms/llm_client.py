@@ -45,7 +45,7 @@ class LLMClient:
 
     def __init__(
         self,
-        llm_model: LLMModel = OpenAIModel.GPT_5_MINI,
+        llm_model: LLMModel,
     ) -> None:
         self.llm_model = llm_model
         self.vendor = get_model_vendor(llm_model)
