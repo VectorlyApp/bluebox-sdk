@@ -1,5 +1,5 @@
 """
-web_hacker/data_models/llm_interaction.py
+web_hacker/data_models/llms/interaction.py
 
 Data models for LLM interactions and agent communication.
 """
@@ -135,8 +135,7 @@ class ChatLite(BaseModel):
     """
     A single message in a conversation.
 
-    Lightweight model for internal agent use. The servers repo defines
-    Chat (extending ResourceBase) for persistence.
+    Lightweight model for internal agent use.
     """
     id: str = Field(
         ...,
@@ -160,8 +159,7 @@ class ChatThreadLite(BaseModel):
     """
     Container for a conversation thread.
 
-    Lightweight model for internal agent use. The servers repo defines
-    ChatThread (extending ResourceBase) for persistence.
+    Lightweight model for internal agent use.
     """
     id: str = Field(
         ...,

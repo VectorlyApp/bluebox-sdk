@@ -1,5 +1,5 @@
 """
-web_hacker/data_models/llm_vendor_models.py
+web_hacker/data_models/llms/vendors.py
 
 This module contains the LLM vendor models.
 """
