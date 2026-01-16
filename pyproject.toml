@@ -47,6 +47,7 @@ dependencies = [
     "pylint>=3.0.0",
     "pytest>=8.3.5",
     "jmespath>=1.0.1,<2",
+    "rich>=14.2.0",
 ]
 
 [project.optional-dependencies]

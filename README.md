@@ -650,6 +650,7 @@ python web_hacker/scripts/run_benchmarks.py --output-dir ./my_benchmarks
 ```
 
 Results are saved to the output directory:
+
 - `{benchmark_name}.json` — Full evaluation results for each benchmark
 - `_summary.json` — Aggregated summary of all benchmark runs
 

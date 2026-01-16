@@ -62,7 +62,7 @@ class WebHacker:
         
         self._monitor = None
         self._discovery = None
-        self._executor = None
+        self.executor = None
     
     def monitor_browser(
         self,
@@ -147,10 +147,10 @@ class WebHacker:
         Returns:
             RoutineExecutionResult with "ok" status and "result" data.
         """
-        self._executor = RoutineExecutor(
+        self.executor = RoutineExecutor(
             remote_debugging_address=self.remote_debugging_address,
         )
-        return self._executor.execute(
+        return self.executor.execute(
             routine=routine,
             parameters=parameters,
             timeout=timeout,
