@@ -34,6 +34,27 @@ def extract_description_from_docstring(docstring: str | None) -> str:
     return " ".join(lines)
 
 
+def _parse_args_from_docstring(docstring: str | None) -> dict[str, str]:
+    """Extract param descriptions from docstring Args section."""
+    if not docstring:
+        return {}
+    result = {}
+    in_args = False
+    for line in docstring.split("\n"):
+        s = line.strip()
+        if s.startswith("Args:"):
+            in_args = True
+            continue
+        if in_args and s.endswith(":") and s in ("Returns:", "Raises:", "Yields:"):
+            break
+        if in_args and ":" in s:
+            name, desc = s.split(":", 1)
+            name = name.split("(")[0].strip()  # handle "param (type):" format
+            if name and " " not in name:
+                result[name] = desc.strip()
+    return result
+
+
 def generate_parameters_schema(func: Callable[..., Any]) -> dict[str, Any]:
     """
     Generate JSON Schema for function parameters using pydantic.
@@ -46,6 +67,7 @@ def generate_parameters_schema(func: Callable[..., Any]) -> dict[str, Any]:
     """
     sig = inspect.signature(obj=func)
     hints = get_type_hints(obj=func)
+    param_descs = _parse_args_from_docstring(func.__doc__)
 
     properties: dict[str, Any] = {}
     required: list[str] = []
@@ -60,6 +82,10 @@ def generate_parameters_schema(func: Callable[..., Any]) -> dict[str, Any]:
 
         # remove pydantic metadata that's not needed for tool schemas
         schema.pop("title", None)
+
+        # add description from docstring if available
+        if param_name in param_descs:
+            schema["description"] = param_descs[param_name]
 
         properties[param_name] = schema
 

@@ -49,6 +49,10 @@ class PendingToolInvocation(BaseModel):
         ...,
         description="Arguments to pass to the tool",
     )
+    call_id: str | None = Field(
+        default=None,
+        description="LLM's call ID for this tool invocation (for Responses API)",
+    )
     status: ToolInvocationStatus = Field(
         default=ToolInvocationStatus.PENDING_CONFIRMATION,
         description="Current status of the invocation",
@@ -124,6 +128,10 @@ class LLMToolCall(BaseModel):
         ...,
         description="Arguments to pass to the tool",
     )
+    call_id: str | None = Field(
+        default=None,
+        description="Unique ID for this tool call (required for Responses API)",
+    )
 
 
 class LLMChatResponse(BaseModel):
@@ -134,9 +142,9 @@ class LLMChatResponse(BaseModel):
         default=None,
         description="Text content of the response",
     )
-    tool_call: LLMToolCall | None = Field(
-        default=None,
-        description="Tool call requested by the LLM, if any",
+    tool_calls: list[LLMToolCall] = Field(
+        default_factory=list,
+        description="Tool calls requested by the LLM",
     )
     response_id: str | None = Field(
         default=None,
@@ -167,6 +175,14 @@ class Chat(BaseModel):
     content: str = Field(
         ...,
         description="The content of the message",
+    )
+    tool_call_id: str | None = Field(
+        default=None,
+        description="For TOOL role messages, the call_id this is a response to",
+    )
+    tool_calls: list[LLMToolCall] = Field(
+        default_factory=list,
+        description="For ASSISTANT role messages, any tool calls made",
     )
 
 
