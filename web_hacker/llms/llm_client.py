@@ -1,7 +1,13 @@
 """
 web_hacker/llms/llm_client.py
 
-Unified LLM client supporting OpenAI models.
+Unified LLM client for OpenAI models.
+
+Contains:
+- LLMClient: High-level interface for chat completions
+- Tool registration and execution
+- Streaming and non-streaming response handling
+- Structured output parsing with Pydantic
 """
 
 from collections.abc import Generator
@@ -79,12 +85,25 @@ class LLMClient:
         name = func.__name__
         description = extract_description_from_docstring(func.__doc__)
         parameters = generate_parameters_schema(func)
+        logger.info("Registering tool %s with schema: %s", name, parameters)
         self.register_tool(name, description, parameters)
 
     def clear_tools(self) -> None:
         """Clear all registered tools."""
         self._client.clear_tools()
         logger.debug("Cleared all registered tools")
+
+    def set_file_search_vectorstores(self, vector_store_ids: list[str] | None) -> None:
+        """
+        Set vectorstore IDs for file_search tool.
+
+        When set, the file_search tool will be automatically included in LLM calls.
+        This enables the LLM to search through the specified vectorstores.
+
+        Args:
+            vector_store_ids: List of vectorstore IDs to search, or None to disable.
+        """
+        self._client.set_file_search_vectorstores(vector_store_ids)
 
     ## Unified API methods
 

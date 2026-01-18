@@ -1,7 +1,12 @@
 """
 web_hacker/routine_discovery/agent.py
 
-Agent for discovering routines from the network transactions.
+LLM-powered agent for generating routines from CDP captures.
+
+Contains:
+- RoutineDiscoveryAgent: Uses OpenAI with tools to analyze captures and build routines
+- Tools: scan_transaction_responses, get_transaction, scan_storage, etc.
+- Outputs: validated Routine JSON with parameters and operations
 """
 
 import json
@@ -13,7 +18,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field, ConfigDict
 from toon import encode
 
-from web_hacker.routine_discovery.context_manager import ContextManager
+from web_hacker.routine_discovery.data_store import DiscoveryDataStore
 from web_hacker.utils.llm_utils import collect_text_from_response, manual_llm_parse_text_to_model
 from web_hacker.data_models.routine_discovery.llm_responses import (
     TransactionIdentificationResponse,
@@ -40,7 +45,7 @@ class RoutineDiscoveryAgent(BaseModel):
     Agent for discovering routines from the network transactions.
     """
     client: OpenAI
-    context_manager: ContextManager
+    data_store: DiscoveryDataStore
     task: str
     emit_message_callable: Callable[[RoutineDiscoveryMessage], None]
     llm_model: str = Field(default="gpt-5.1")
@@ -53,12 +58,16 @@ class RoutineDiscoveryAgent(BaseModel):
     timeout: int = Field(default=600)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    SYSTEM_PROMPT_IDENTIFY_TRANSACTIONS: str = """
-    You are a helpful assistant that is an expert in parsing network traffic.
-    You need to identify one or more network transactions that directly correspond to the user's requested task.
-    You have access to vectorstore that contains network transactions and storage data
-    (cookies, localStorage, sessionStorage, etc.).
-    """
+    DATA_STORE_PROMPT: str = """
+You have access to the following data and you must refer to it when searching for transactions and resolving variables!
+It is essential that you use this data, documentation, and code:
+{data_store_prompt}
+"""
+
+    SYSTEM_PROMPT: str = """You are a helpful assistant that is an expert in parsing network traffic.
+You need to identify one or more network transactions that directly correspond to the user's requested task.
+You have access to vectorstore that contains network transactions and storage data
+(cookies, localStorage, sessionStorage, etc.)."""
 
     PLACEHOLDER_INSTRUCTIONS: str = (
         "PLACEHOLDER SYNTAX:\n"
@@ -79,6 +88,50 @@ class RoutineDiscoveryAgent(BaseModel):
         '8. Cookie:           "sid": \\"{{cookie:session_id}}\\"'
         'IMPORTANT: YOU MUST ENSURE THAT EACH PLACEHOLDER IS SURROUNDED BY QUOTES OR ESCAPED QUOTES!'
     )
+
+    def _get_system_prompt(self) -> str:
+        """Get system prompt with data store context if available."""
+        system_prompt = self.SYSTEM_PROMPT
+        if self.data_store:
+            data_store_prompt = self.DATA_STORE_PROMPT.format(
+                data_store_prompt=self.data_store.generate_data_store_prompt()
+            )
+            if data_store_prompt:
+                system_prompt = f"{system_prompt}\n\n{data_store_prompt}"
+        return system_prompt
+
+    def _build_filtered_tools(self, uuid_filter: str) -> list[dict]:
+        """
+        Build file_search tools with UUID filter for CDP captures and unfiltered for other vectorstores.
+
+        Args:
+            uuid_filter: The UUID to filter CDP captures by.
+
+        Returns:
+            List of file_search tool definitions using all available vectorstores.
+        """
+        tools = []
+
+        # Add filtered CDP captures vectorstore
+        if self.data_store.cdp_captures_vectorstore_id:
+            tools.append({
+                "type": "file_search",
+                "vector_store_ids": [self.data_store.cdp_captures_vectorstore_id],
+                "filters": {
+                    "type": "eq",
+                    "key": "uuid",
+                    "value": [uuid_filter]
+                }
+            })
+
+        # Add other vectorstores (documentation, etc.) without filters
+        if self.data_store.documentation_vectorstore_id:
+            tools.append({
+                "type": "file_search",
+                "vector_store_ids": [self.data_store.documentation_vectorstore_id],
+            })
+
+        return tools
 
     def _save_to_output_dir(self, relative_path: str, data: dict | list | str) -> None:
         """Save data to output_dir if it is specified."""
@@ -128,8 +181,8 @@ class RoutineDiscoveryAgent(BaseModel):
         Returns:
             Routine: The discovered and productionized routine.
         """
-        # validate the context manager
-        assert self.context_manager.vectorstore_id is not None, "Vectorstore ID is not set"
+        # validate the data store
+        assert self.data_store.cdp_captures_vectorstore_id is not None, "Vectorstore ID is not set"
 
         # Push initial message
         self.emit_message_callable(RoutineDiscoveryMessage(
@@ -137,20 +190,22 @@ class RoutineDiscoveryAgent(BaseModel):
             content=f"Discovery initiated"
         ))
 
-        # construct the tools
+        # construct the tools with all available vectorstores
+        vector_store_ids = self.data_store.get_vectorstore_ids()
+
         self.tools = [
             {
                 "type": "file_search",
-                "vector_store_ids": [self.context_manager.vectorstore_id],
+                "vector_store_ids": vector_store_ids,
             }
         ]
 
-        # add the system prompt to the message history
-        self._add_to_message_history("system", self.SYSTEM_PROMPT_IDENTIFY_TRANSACTIONS)
+        # add the system prompt to the message history (including data store context)
+        self._add_to_message_history("system", self._get_system_prompt())
 
         # add the user prompt to the message history
         self._add_to_message_history("user", f"Task description: {self.task}")
-        self._add_to_message_history("user", f"These are the possible network transaction ids you can choose from:\n{encode(self.context_manager.get_all_transaction_ids())}")
+        self._add_to_message_history("user", f"These are the possible network transaction ids you can choose from:\n{encode(self.data_store.get_all_transaction_ids())}")
 
         self.emit_message_callable(RoutineDiscoveryMessage(
             type=RoutineDiscoveryMessageType.PROGRESS_THINKING,
@@ -171,9 +226,9 @@ class RoutineDiscoveryAgent(BaseModel):
                 identified_transaction = None
                 continue
 
-            # ensure the identified transaction is in the context manager (not hallucinated)
-            if identified_transaction.transaction_id not in self.context_manager.get_all_transaction_ids():
-                logger.error(f"Identified transaction: {identified_transaction.transaction_id} is not in the context manager.")
+            # ensure the identified transaction is in the data store (not hallucinated)
+            if identified_transaction.transaction_id not in self.data_store.get_all_transaction_ids():
+                logger.error(f"Identified transaction: {identified_transaction.transaction_id} is not in the data store.")
                 self._handle_transaction_identification_failure()
                 identified_transaction = None
                 continue
@@ -268,7 +323,7 @@ class RoutineDiscoveryAgent(BaseModel):
 
             # adding transaction data to the routine transactions
             routine_transactions[transaction_id] = {
-                "request": self.context_manager.get_transaction_by_id(transaction_id)['request'],
+                "request": self.data_store.get_transaction_by_id(transaction_id)['request'],
                 "extracted_variables": extracted_variables.model_dump(),
                 "resolved_variables": [resolved_variable.model_dump() for resolved_variable in resolved_variables]
             }
@@ -337,7 +392,7 @@ class RoutineDiscoveryAgent(BaseModel):
         if not is_first_attempt:
             message = (
                 "Try again. The transaction id you provided does not exist or was not relevant. "
-                f"Choose from: {encode(self.context_manager.get_all_transaction_ids())}"
+                f"Choose from: {encode(self.data_store.get_all_transaction_ids())}"
             )
             self._add_to_message_history("user", message)
 
@@ -375,22 +430,13 @@ class RoutineDiscoveryAgent(BaseModel):
 
         # add the transaction to the vectorstore
         metadata = {"uuid": str(uuid4())}
-        self.context_manager.add_transaction_to_vectorstore(
+        self.data_store.add_transaction_to_vectorstore(
             transaction_id=identified_transaction.transaction_id, metadata=metadata
         )
 
         # temporarily update the tools to specifically search through these transactions
-        tools = [
-            {
-                "type": "file_search",
-                "vector_store_ids": [self.context_manager.vectorstore_id],
-                "filters": {
-                    "type": "eq",
-                    "key": "uuid",
-                    "value": [metadata["uuid"]]
-                }
-            }
-        ]
+        # Use filtered CDP captures + all other vectorstores (unfiltered)
+        tools = self._build_filtered_tools(uuid_filter=metadata["uuid"])
         
         # update the message history with request to confirm the identified transaction
         message = (
@@ -426,7 +472,7 @@ class RoutineDiscoveryAgent(BaseModel):
         original_transaction_id = transaction_id
 
         # get the transaction
-        transaction = self.context_manager.get_transaction_by_id(transaction_id)
+        transaction = self.data_store.get_transaction_by_id(transaction_id)
         
         # add message to the message history
         message = (
@@ -455,8 +501,8 @@ class RoutineDiscoveryAgent(BaseModel):
             model=self.llm_model,
             input=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
-            # tools=self.tools,
-            # tool_choice="auto",
+            tools=self.tools,
+            tool_choice="auto",
             text_format=ExtractedVariableResponse
         )
         extracted_variable_response = response.output_parsed
@@ -475,7 +521,7 @@ class RoutineDiscoveryAgent(BaseModel):
         Resolve the variables from the extracted variables.
         """
         # get the latest timestamp
-        max_timestamp = self.context_manager.get_transaction_timestamp(extracted_variables.transaction_id)
+        max_timestamp = self.data_store.get_transaction_timestamp(extracted_variables.transaction_id)
 
         # get a list of cookies and tokens that require resolution
         variables_to_resolve = [
@@ -495,7 +541,7 @@ class RoutineDiscoveryAgent(BaseModel):
             # get the storage objects that contain the value and are before the latest timestamp
             storage_objects: list[dict] = []
             for value in variable.values_to_scan_for:
-                storage_sources_found = self.context_manager.scan_storage_for_value(
+                storage_sources_found = self.data_store.scan_storage_for_value(
                     value=value,
                 )
                 # scan_storage_for_value returns list[str], so we can use it directly
@@ -507,7 +553,7 @@ class RoutineDiscoveryAgent(BaseModel):
             # get the window properties that contain the value and are before the latest timestamp
             window_properties: list[dict] = []
             for value in variable.values_to_scan_for:
-                window_properties_found = self.context_manager.scan_window_properties_for_value(value)
+                window_properties_found = self.data_store.scan_window_properties_for_value(value)
                 # scan_window_properties_for_value returns list[dict], so we can use it directly
                 window_properties.extend(window_properties_found)
                 
@@ -517,7 +563,7 @@ class RoutineDiscoveryAgent(BaseModel):
             # get the transaction ids that contain the value and are before the latest timestamp
             transaction_ids: list[str] = []
             for value in variable.values_to_scan_for:
-                transaction_ids_found = self.context_manager.scan_transaction_responses(
+                transaction_ids_found = self.data_store.scan_transaction_responses(
                     value=value,
                     max_timestamp=max_timestamp
                 )
@@ -532,7 +578,7 @@ class RoutineDiscoveryAgent(BaseModel):
             # add the transactions to the vectorstore
             uuid = str(uuid4())
             for transaction_id in transaction_ids:
-                self.context_manager.add_transaction_to_vectorstore(
+                self.data_store.add_transaction_to_vectorstore(
                     transaction_id=transaction_id,
                     metadata={"uuid": uuid}
                 )
@@ -550,17 +596,8 @@ class RoutineDiscoveryAgent(BaseModel):
             self._add_to_message_history("user", message)
 
             # custom tools to force the LLM to look at the newly added transactions to the vectorstore
-            tools = [
-                {
-                    "type": "file_search",
-                    "vector_store_ids": [self.context_manager.vectorstore_id],
-                    "filters": {
-                        "type": "eq",
-                        "key": "uuid",
-                        "value": [uuid]
-                    }
-                }
-            ]
+            # Use filtered CDP captures + all other vectorstores (unfiltered)
+            tools = self._build_filtered_tools(uuid_filter=uuid)
             
             # call to the LLM API for resolution of the variable
             response = self.client.responses.parse(

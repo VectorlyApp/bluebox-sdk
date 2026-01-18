@@ -1,9 +1,15 @@
 """
 web_hacker/agents/guide_agent.py
 
-Guide agent that guides the user through the process of creating or editing a routine.
+Interactive agent for routine creation and editing.
+
+Contains:
+- GuideAgent: Conversational interface for building/modifying routines
+- Uses: LLMClient with guide-specific tools
+- Maintains: ChatThread for multi-turn conversation
 """
 
+import json
 from datetime import datetime
 from typing import Any, Callable
 from uuid import uuid4
@@ -15,12 +21,17 @@ from web_hacker.data_models.llms.interaction import (
     ChatThread,
     EmittedChatMessage,
     LLMChatResponse,
+    LLMToolCall,
     PendingToolInvocation,
     ToolInvocationStatus,
 )
 from web_hacker.data_models.llms.vendors import OpenAIModel
 from web_hacker.llms.llm_client import LLMClient
-from web_hacker.llms.tools.guide_agent_tools import start_routine_discovery_job_creation
+from web_hacker.llms.tools.guide_agent_tools import (
+    start_routine_discovery_job_creation,
+    validate_routine,
+)
+from web_hacker.routine_discovery.data_store import DiscoveryDataStore
 from web_hacker.utils.exceptions import UnknownToolError
 from web_hacker.utils.logger import get_logger
 
@@ -45,42 +56,64 @@ class GuideAgent:
     """
 
     # Class constants ______________________________________________________________________________________________________
+    
+    DATA_STORE_PROMPT: str = """
+    You have access to the following data and you must refer to it when answering questions or helping debug!
+    It is essecntial that you use this data, documentation, and code:
+    {data_store_prompt}
+    """
 
     SYSTEM_PROMPT: str = """You are a helpful assistant that guides users through creating \
 web automation routines using the Web Hacker tool.
 
 ## What is Web Hacker?
 
+https://github.com/vectorlyapp/web-hacker
+
 Web Hacker is a tool that creates reusable web automation routines by learning from \
 user demonstrations. Users record themselves performing a task on a website, and \
 Web Hacker generates a parameterized routine that can be executed programmatically.
 
+## What is Vectorly?
+
+Vectorly (https://vectorly.app) unlocks data from interactive websites - getting web data behind \
+clicks, searches, and user interactions. Define a routine once, then access it anywhere via API or MCP.
+
 ## Your Role
 
-Your job is to help users define their automation needs by gathering:
+You help users in two ways:
 
-1. **TASK**: What task do they want to automate?
-   - Examples: "Search for train tickets", "Download a research paper", "Look up company info"
+### 1. Creating New Routines
+Help users define their automation needs by gathering:
+- **TASK**: What task to automate (e.g., "Search for train tickets")
+- **OUTPUT**: What data to return (e.g., "List of trains with prices")
+- **PARAMETERS**: Input parameters needed (name + description)
+- **CONSTRAINTS**: Any filters (e.g., "Only direct trains")
+- **WEBSITE**: Target website (e.g., "amtrak.com")
 
-2. **OUTPUT**: What data/output should the routine return?
-   - Examples: "List of available trains with prices", "PDF file of the paper", "Company registration details"
+### 2. Debugging Existing Routines
+Help users troubleshoot by reviewing:
+- Routine JSON structure and operations
+- Execution run logs and errors
+- Parameter values and placeholder resolution
+- Network transactions and responses
 
-3. **PARAMETERS**: What input parameters will the routine need? For each:
-   - Name (e.g., "origin", "destination", "departure_date")
-   - Description (e.g., "The departure station name")
+## Routine Validation - CRITICAL
 
-4. **CONSTRAINTS**: Any filters or constraints?
-   - Examples: "Only direct trains", "Papers from 2024", "Only active companies"
+**IMPORTANT**: Whenever you propose changes to an existing routine or generate a new routine, \
+you MUST use the `validate_routine` tool to validate the complete routine JSON.
 
-5. **WEBSITE**: What website should be used?
-   - Examples: "amtrak.com", "arxiv.org", "sec.gov"
+- Always validate before presenting a routine to the user
+- If validation fails, carefully read the error message, fix the issues, and retry
+- Keep retrying until validation passes (make at least 3 attempts if needed)
+- Only present routines to the user that have passed validation
 
 ## Guidelines
 
 - Be conversational and helpful
 - Ask clarifying questions if needed
-- Don't overwhelm the user with too many questions at once
-- When you have enough information, use the start_routine_discovery_job_creation tool
+- Use the file_search tool to look up relevant documentation, code, and captured data
+- When debugging, analyze the specific error and suggest concrete fixes (refer to debug docs and common issues)
 - If the user asks what this tool does, explain it clearly"""
 
     # Magic methods ________________________________________________________________________________________________________
@@ -94,6 +127,8 @@ Your job is to help users define their automation needs by gathering:
         llm_model: OpenAIModel = OpenAIModel.GPT_5_MINI,
         chat_thread: ChatThread | None = None,
         existing_chats: list[Chat] | None = None,
+        data_store: DiscoveryDataStore | None = None,
+        tools_requiring_approval: set[str] | None = None,
     ) -> None:
         """
         Initialize the guide agent.
@@ -108,17 +143,28 @@ Your job is to help users define their automation needs by gathering:
             llm_model: The LLM model to use for conversation.
             chat_thread: Existing ChatThread to continue, or None for new conversation.
             existing_chats: Existing Chat messages if loading from persistence.
+            data_store: Optional data store for accessing CDP captures and documentation.
+            tools_requiring_approval: Set of tool names that require user approval before execution.
+                If empty or None, all tools auto-execute without approval.
         """
         self._emit_message_callable = emit_message_callable
         self._persist_chat_callable = persist_chat_callable
         self._persist_chat_thread_callable = persist_chat_thread_callable
         self._stream_chunk_callable = stream_chunk_callable
+        self._data_store = data_store
+        self._tools_requiring_approval = tools_requiring_approval or set()
 
         self.llm_model = llm_model
         self.llm_client = LLMClient(llm_model)
 
         # Register tools
         self._register_tools()
+
+        # Configure file_search vectorstores if data store is provided
+        if data_store:
+            vector_store_ids = data_store.get_vectorstore_ids()
+            if vector_store_ids:
+                self.llm_client.set_file_search_vectorstores(vector_store_ids)
 
         # Initialize or load conversation state
         self._thread = chat_thread or ChatThread()
@@ -149,25 +195,51 @@ Your job is to help users define their automation needs by gathering:
         """Check if there's a pending tool invocation awaiting confirmation."""
         return self._thread.pending_tool_invocation is not None
 
+    @property
+    def data_store(self) -> DiscoveryDataStore | None:
+        """Return the data store if available."""
+        return self._data_store
+
+    @property
+    def tools_requiring_approval(self) -> set[str]:
+        """Return the set of tool names that require user approval."""
+        return self._tools_requiring_approval
+
     # Private methods ______________________________________________________________________________________________________
+
+    def _get_system_prompt(self) -> str:
+        """Get system prompt with data store context if available."""
+        system_prompt = self.SYSTEM_PROMPT
+        if self._data_store:
+            data_store_prompt = self.DATA_STORE_PROMPT.format(data_store_prompt=self._data_store.generate_data_store_prompt())
+            if data_store_prompt:
+                system_prompt = f"{system_prompt}\n\n{data_store_prompt}"
+        return system_prompt
 
     def _register_tools(self) -> None:
         """Register all tools with the LLM client."""
-        self.llm_client.register_tool_from_function(
-            func=start_routine_discovery_job_creation,
-        )
+        self.llm_client.register_tool_from_function(validate_routine)
+        # self.llm_client.register_tool_from_function(start_routine_discovery_job_creation)
 
     def _emit_message(self, message: EmittedChatMessage) -> None:
         """Emit a message via the callback."""
         self._emit_message_callable(message)
 
-    def _add_chat(self, role: ChatRole, content: str) -> Chat:
+    def _add_chat(
+        self,
+        role: ChatRole,
+        content: str,
+        tool_call_id: str | None = None,
+        tool_calls: list[LLMToolCall] | None = None,
+    ) -> Chat:
         """
         Create and store a new Chat, update thread, persist if callbacks set.
 
         Args:
             role: The role of the message sender.
             content: The content of the message.
+            tool_call_id: For TOOL role, the call_id this is a response to.
+            tool_calls: For ASSISTANT role, any tool calls made.
 
         Returns:
             The created Chat object (with final ID from persistence layer if callback provided).
@@ -176,6 +248,8 @@ Your job is to help users define their automation needs by gathering:
             thread_id=self._thread.id,
             role=role,
             content=content,
+            tool_call_id=tool_call_id,
+            tool_calls=tool_calls or [],
         )
 
         # Persist chat first if callback provided (may assign new ID)
@@ -193,27 +267,42 @@ Your job is to help users define their automation needs by gathering:
 
         return chat
 
-    def _build_messages_for_llm(self) -> list[dict[str, str]]:
+    def _build_messages_for_llm(self) -> list[dict[str, Any]]:
         """
         Build messages list for LLM from Chat objects.
 
         Returns:
-            List of message dicts with 'role' and 'content' keys.
+            List of message dicts with 'role', 'content', and optionally 'tool_call_id' or 'tool_calls' keys.
         """
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, Any]] = []
         for chat_id in self._thread.message_ids:
             chat = self._chats.get(chat_id)
             if chat:
-                messages.append({
+                msg: dict[str, Any] = {
                     "role": chat.role.value,
                     "content": chat.content,
-                })
+                }
+                # Include tool_call_id for TOOL role messages
+                if chat.tool_call_id:
+                    msg["tool_call_id"] = chat.tool_call_id
+                # Include tool_calls for ASSISTANT role messages
+                if chat.tool_calls:
+                    msg["tool_calls"] = [
+                        {
+                            "name": tc.tool_name,
+                            "arguments": tc.tool_arguments,
+                            "call_id": tc.call_id,
+                        }
+                        for tc in chat.tool_calls
+                    ]
+                messages.append(msg)
         return messages
 
     def _create_tool_invocation_request(
         self,
         tool_name: str,
         tool_arguments: dict[str, Any],
+        call_id: str | None = None,
     ) -> PendingToolInvocation:
         """
         Create a tool invocation request for user confirmation.
@@ -221,6 +310,7 @@ Your job is to help users define their automation needs by gathering:
         Args:
             tool_name: Name of the tool to invoke
             tool_arguments: Arguments for the tool
+            call_id: LLM's call ID for this tool invocation (for Responses API)
 
         Returns:
             PendingToolInvocation stored in state and ready to emit
@@ -230,6 +320,7 @@ Your job is to help users define their automation needs by gathering:
             invocation_id=invocation_id,
             tool_name=tool_name,
             tool_arguments=tool_arguments,
+            call_id=call_id,
         )
 
         # Store in thread
@@ -265,6 +356,10 @@ Your job is to help users define their automation needs by gathering:
         Raises:
             UnknownToolError: If tool_name is unknown
         """
+        if tool_name == validate_routine.__name__:
+            logger.info("Executing tool %s", tool_name)
+            return validate_routine(**tool_arguments)
+
         if tool_name == start_routine_discovery_job_creation.__name__:
             logger.info(
                 "Executing tool %s with args: %s",
@@ -280,16 +375,78 @@ Your job is to help users define their automation needs by gathering:
         logger.error("Unknown tool \"%s\" with arguments: %s", tool_name, tool_arguments)
         raise UnknownToolError(f"Unknown tool \"{tool_name}\" with arguments: {tool_arguments}")
 
+    def _auto_execute_tool(
+        self,
+        tool_name: str,
+        tool_arguments: dict[str, Any],
+    ) -> str:
+        """
+        Auto-execute a tool without user approval and emit the result.
+
+        Args:
+            tool_name: Name of the tool to execute
+            tool_arguments: Arguments for the tool
+
+        Returns:
+            JSON string of the result (for feeding back to conversation)
+        """
+        # Create a transient invocation for tracking (not persisted as pending)
+        invocation = PendingToolInvocation(
+            invocation_id=str(uuid4()),
+            tool_name=tool_name,
+            tool_arguments=tool_arguments,
+            status=ToolInvocationStatus.CONFIRMED,
+        )
+
+        try:
+            result = self._execute_tool(tool_name, tool_arguments)
+            invocation.status = ToolInvocationStatus.EXECUTED
+
+            self._emit_message(
+                EmittedChatMessage(
+                    type=ChatMessageType.TOOL_INVOCATION_RESULT,
+                    tool_invocation=invocation,
+                    tool_result=result,
+                )
+            )
+
+            logger.info(
+                "Auto-executed tool %s successfully",
+                tool_name,
+            )
+
+            return json.dumps(result)
+
+        except Exception as e:
+            invocation.status = ToolInvocationStatus.FAILED
+
+            self._emit_message(
+                EmittedChatMessage(
+                    type=ChatMessageType.TOOL_INVOCATION_RESULT,
+                    tool_invocation=invocation,
+                    error=str(e),
+                )
+            )
+
+            logger.exception(
+                "Auto-executed tool %s failed: %s",
+                tool_name,
+                e,
+            )
+
+            return json.dumps({"error": str(e)})
+
     # Public methods _______________________________________________________________________________________________________
 
     def process_user_message(self, content: str) -> None:
         """
         Process a user message and emit responses via callback.
 
-        This method handles the conversation loop:
+        This method handles the agentic conversation loop:
         1. Adds user message to history
         2. Calls LLM to generate response
-        3. Emits chat response or tool invocation request
+        3. If tool calls: execute tools, add results to history, call LLM again
+        4. Repeat until LLM responds with text only (or tool needs approval)
 
         Args:
             content: The user's message content
@@ -307,53 +464,116 @@ Your job is to help users define their automation needs by gathering:
         # Add user message to history
         self._add_chat(ChatRole.USER, content)
 
-        # Build messages and call LLM
-        messages = self._build_messages_for_llm()
+        # Run the agentic loop
+        self._run_agent_loop()
 
-        try:
-            # Use streaming if chunk callback is set
-            if self._stream_chunk_callable:
-                response = self._process_streaming_response(messages)
-            else:
-                response = self.llm_client.call_sync(
-                    messages=messages,
-                    system_prompt=self.SYSTEM_PROMPT,
-                )
+    def _run_agent_loop(self) -> None:
+        """
+        Run the agentic loop: call LLM, execute tools, feed results back, repeat.
 
-            # Handle text response
-            if response.content:
-                chat = self._add_chat(ChatRole.ASSISTANT, response.content)
-                # Always emit CHAT_RESPONSE (handler checks if streaming occurred)
+        Continues until:
+        - LLM responds with text only (no tool calls)
+        - A tool requires user approval (pauses for confirmation)
+        - An error occurs
+        """
+        max_iterations = 10  # Safety limit to prevent infinite loops
+
+        for iteration in range(max_iterations):
+            logger.debug("Agent loop iteration %d", iteration + 1)
+
+            # Build messages and call LLM
+            messages = self._build_messages_for_llm()
+
+            try:
+                # Use streaming if chunk callback is set
+                if self._stream_chunk_callable:
+                    response = self._process_streaming_response(messages)
+                else:
+                    response = self.llm_client.call_sync(
+                        messages=messages,
+                        system_prompt=self._get_system_prompt(),
+                    )
+
+                # Handle response - add assistant message if there's content or tool calls
+                if response.content or response.tool_calls:
+                    chat = self._add_chat(
+                        ChatRole.ASSISTANT,
+                        response.content or "",
+                        tool_calls=response.tool_calls if response.tool_calls else None,
+                    )
+                    if response.content:
+                        self._emit_message(
+                            EmittedChatMessage(
+                                type=ChatMessageType.CHAT_RESPONSE,
+                                content=response.content,
+                                chat_id=chat.id,
+                                chat_thread_id=self._thread.id,
+                            )
+                        )
+
+                # If no tool calls, we're done
+                if not response.tool_calls:
+                    logger.debug("Agent loop complete - no more tool calls")
+                    return
+
+                # Process tool calls
+                tools_executed = False
+                for tool_call in response.tool_calls:
+                    tool_name = tool_call.tool_name
+                    tool_arguments = tool_call.tool_arguments
+                    call_id = tool_call.call_id
+
+                    if tool_name in self._tools_requiring_approval:
+                        # Tool requires user approval - pause the loop
+                        pending = self._create_tool_invocation_request(
+                            tool_name, tool_arguments, call_id
+                        )
+                        self._emit_message(
+                            EmittedChatMessage(
+                                type=ChatMessageType.TOOL_INVOCATION_REQUEST,
+                                tool_invocation=pending,
+                            )
+                        )
+                        logger.debug("Agent loop paused - awaiting tool approval")
+                        return  # Pause loop until user confirms/denies
+
+                    # Auto-execute tool
+                    logger.info(
+                        "Auto-executing tool %s with arguments: %s",
+                        tool_name,
+                        tool_arguments,
+                    )
+                    result_str = self._auto_execute_tool(tool_name, tool_arguments)
+
+                    # Add tool result to conversation history for LLM to analyze
+                    self._add_chat(
+                        ChatRole.TOOL,
+                        f"Tool '{tool_name}' result: {result_str}",
+                        tool_call_id=call_id,
+                    )
+                    tools_executed = True
+
+                # If we executed tools, continue the loop to let LLM analyze results
+                if not tools_executed:
+                    return
+
+            except Exception as e:
+                logger.exception("Error in agent loop: %s", e)
                 self._emit_message(
                     EmittedChatMessage(
-                        type=ChatMessageType.CHAT_RESPONSE,
-                        content=response.content,
-                        chat_id=chat.id,
-                        chat_thread_id=self._thread.id,
+                        type=ChatMessageType.ERROR,
+                        error=str(e),
                     )
                 )
+                return
 
-            # Handle tool call if present
-            if response.tool_call:
-                pending = self._create_tool_invocation_request(
-                    response.tool_call.tool_name,
-                    response.tool_call.tool_arguments,
-                )
-                self._emit_message(
-                    EmittedChatMessage(
-                        type=ChatMessageType.TOOL_INVOCATION_REQUEST,
-                        tool_invocation=pending,
-                    )
-                )
-
-        except Exception as e:
-            logger.exception("Error processing user message: %s", e)
-            self._emit_message(
-                EmittedChatMessage(
-                    type=ChatMessageType.ERROR,
-                    error=str(e),
-                )
+        logger.warning("Agent loop hit max iterations (%d)", max_iterations)
+        self._emit_message(
+            EmittedChatMessage(
+                type=ChatMessageType.ERROR,
+                error=f"Agent loop exceeded maximum iterations ({max_iterations})",
             )
+        )
 
     def _process_streaming_response(self, messages: list[dict[str, str]]) -> LLMChatResponse:
         """
@@ -369,7 +589,7 @@ Your job is to help users define their automation needs by gathering:
 
         for item in self.llm_client.call_stream_sync(
             messages=messages,
-            system_prompt=self.SYSTEM_PROMPT,
+            system_prompt=self._get_system_prompt(),
         ):
             if isinstance(item, str):
                 # Text chunk - call the callback
@@ -386,7 +606,7 @@ Your job is to help users define their automation needs by gathering:
 
     def confirm_tool_invocation(self, invocation_id: str) -> None:
         """
-        Confirm a pending tool invocation and execute it.
+        Confirm a pending tool invocation, execute it, and continue the agent loop.
 
         Args:
             invocation_id: ID of the tool invocation to confirm
@@ -417,6 +637,7 @@ Your job is to help users define their automation needs by gathering:
 
         # Update status
         pending.status = ToolInvocationStatus.CONFIRMED
+        tool_name = pending.tool_name
 
         try:
             result = self._execute_tool(pending.tool_name, pending.tool_arguments)
@@ -440,8 +661,18 @@ Your job is to help users define their automation needs by gathering:
                 invocation_id,
             )
 
+            # Add tool result to conversation and continue the agent loop
+            result_str = json.dumps(result)
+            self._add_chat(
+                ChatRole.TOOL,
+                f"Tool '{tool_name}' result: {result_str}",
+                tool_call_id=pending.call_id,
+            )
+            self._run_agent_loop()
+
         except Exception as e:
             pending.status = ToolInvocationStatus.FAILED
+            self._thread.pending_tool_invocation = None
 
             self._emit_message(
                 EmittedChatMessage(
@@ -456,6 +687,14 @@ Your job is to help users define their automation needs by gathering:
                 invocation_id,
                 e,
             )
+
+            # Add error to conversation and continue the agent loop
+            self._add_chat(
+                ChatRole.TOOL,
+                f"Tool '{tool_name}' failed: {str(e)}",
+                tool_call_id=pending.call_id,
+            )
+            self._run_agent_loop()
 
     def deny_tool_invocation(
         self,
@@ -501,11 +740,11 @@ Your job is to help users define their automation needs by gathering:
         if self._persist_chat_thread_callable:
             self._thread = self._persist_chat_thread_callable(self._thread)
 
-        # Add denial to conversation history
-        denial_message = "Tool invocation denied"
+        # Add denial to conversation history as tool response
+        denial_message = f"User rejected the tool execution for '{pending.tool_name}'"
         if reason:
-            denial_message += f": {reason}"
-        self._add_chat(ChatRole.SYSTEM, denial_message)
+            denial_message += f". Reason: {reason}"
+        self._add_chat(ChatRole.TOOL, denial_message, tool_call_id=pending.call_id)
 
         self._emit_message(
             EmittedChatMessage(
@@ -520,6 +759,9 @@ Your job is to help users define their automation needs by gathering:
             invocation_id,
             reason or "no reason provided",
         )
+
+        # Continue the agent loop so LLM can respond to the rejection
+        self._run_agent_loop()
 
     def get_thread(self) -> ChatThread:
         """

@@ -12,26 +12,56 @@ from pydantic import TypeAdapter
 
 def extract_description_from_docstring(docstring: str | None) -> str:
     """
-    Extract the first paragraph from a docstring as the description.
+    Extract the full description from a docstring (everything before Args/Returns/etc).
 
     Args:
         docstring: The function's docstring (func.__doc__)
 
     Returns:
-        The first paragraph of the docstring, or empty string if none.
+        The description portion of the docstring, or empty string if none.
     """
     if not docstring:
         return ""
 
-    # split on double newlines to get first paragraph
-    paragraphs = docstring.strip().split("\n\n")
-    if not paragraphs:
-        return ""
+    # Find where the Args/Returns/Raises/Yields section starts
+    section_markers = ("Args:", "Returns:", "Raises:", "Yields:", "Example:", "Examples:", "Note:", "Notes:")
+    lines = docstring.strip().split("\n")
 
-    # clean up the first paragraph (remove leading/trailing whitespace from each line)
-    first_para = paragraphs[0]
-    lines = [line.strip() for line in first_para.split("\n")]
-    return " ".join(lines)
+    description_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        # Stop if we hit a section marker
+        if any(stripped.startswith(marker) for marker in section_markers):
+            break
+        description_lines.append(stripped)
+
+    # Join lines, collapse multiple spaces, and strip trailing whitespace
+    description = " ".join(description_lines)
+    # Collapse multiple spaces into single space
+    while "  " in description:
+        description = description.replace("  ", " ")
+    return description.strip()
+
+
+def _parse_args_from_docstring(docstring: str | None) -> dict[str, str]:
+    """Extract param descriptions from docstring Args section."""
+    if not docstring:
+        return {}
+    result = {}
+    in_args = False
+    for line in docstring.split("\n"):
+        s = line.strip()
+        if s.startswith("Args:"):
+            in_args = True
+            continue
+        if in_args and s.endswith(":") and s in ("Returns:", "Raises:", "Yields:"):
+            break
+        if in_args and ":" in s:
+            name, desc = s.split(":", 1)
+            name = name.split("(")[0].strip()  # handle "param (type):" format
+            if name and " " not in name:
+                result[name] = desc.strip()
+    return result
 
 
 def generate_parameters_schema(func: Callable[..., Any]) -> dict[str, Any]:
@@ -46,6 +76,7 @@ def generate_parameters_schema(func: Callable[..., Any]) -> dict[str, Any]:
     """
     sig = inspect.signature(obj=func)
     hints = get_type_hints(obj=func)
+    param_descs = _parse_args_from_docstring(func.__doc__)
 
     properties: dict[str, Any] = {}
     required: list[str] = []
@@ -60,6 +91,10 @@ def generate_parameters_schema(func: Callable[..., Any]) -> dict[str, Any]:
 
         # remove pydantic metadata that's not needed for tool schemas
         schema.pop("title", None)
+
+        # add description from docstring if available
+        if param_name in param_descs:
+            schema["description"] = param_descs[param_name]
 
         properties[param_name] = schema
 

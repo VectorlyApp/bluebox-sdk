@@ -24,7 +24,7 @@ class TestExtractDescriptionFromDocstring:
         result = extract_description_from_docstring(docstring)
         assert result == "This is a description that spans multiple lines."
 
-    def test_extracts_only_first_paragraph(self) -> None:
+    def test_extracts_everything_before_args(self) -> None:
         docstring = """First paragraph here.
 
         Args:
@@ -32,6 +32,17 @@ class TestExtractDescriptionFromDocstring:
         """
         result = extract_description_from_docstring(docstring)
         assert result == "First paragraph here."
+
+    def test_extracts_multiple_paragraphs_before_args(self) -> None:
+        docstring = """First paragraph here.
+
+        Second paragraph with more details.
+
+        Args:
+            foo: Some argument.
+        """
+        result = extract_description_from_docstring(docstring)
+        assert result == "First paragraph here. Second paragraph with more details."
 
     def test_none_docstring(self) -> None:
         result = extract_description_from_docstring(None)
