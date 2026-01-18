@@ -1,5 +1,5 @@
 """
-src/cdp/monitors/async_storage_monitor.py
+web_hacker/cdp/async_cdp/monitors/async_storage_monitor.py
 
 Async storage monitor for CDP.
 """
@@ -9,12 +9,12 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
-from data_models.cdp.cdp_events import StorageEvent
-from utils.logger import get_logger
+from web_hacker.cdp.async_cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
+from web_hacker.cdp.async_cdp.data_models import StorageEvent
+from web_hacker.utils.logger import get_logger
 
 if TYPE_CHECKING:
-    from cdp.async_cdp_session import AsyncCDPSession
+    from web_hacker.cdp.async_cdp.async_cdp_session import AsyncCDPSession
 
 logger = get_logger(name=__name__)
 
@@ -65,8 +65,8 @@ class AsyncStorageMonitor(AbstractAsyncMonitor):
         """
         Initialize AsyncStorageMonitor.
         Args:
-            event_callback_fn: Async callback function that takes (category: str, detail: dict). To be used to emit
-            storage events to AWS S3 via AWS Firehose.
+            event_callback_fn: Async callback function that takes (category: str, detail: BaseCDPEvent).
+                Called when storage events are captured.
         """
         self.event_callback_fn = event_callback_fn
 

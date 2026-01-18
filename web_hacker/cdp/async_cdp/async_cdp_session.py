@@ -1,5 +1,5 @@
 """
-src/cdp/async_cdp_session.cd
+web_hacker/cdp/async_cdp/async_cdp_session.py
 
 Single comprehensive class for asynchronous CDP session monitoring.
 """
@@ -10,10 +10,10 @@ from typing import Awaitable, Callable
 
 from websockets.asyncio.client import connect, ClientConnection
 
-from cdp.monitors.async_network_monitor import AsyncNetworkMonitor
-from cdp.monitors.async_storage_monitor import AsyncStorageMonitor
-from cdp.monitors.async_window_property_monitor import AsyncWindowPropertyMonitor
-from utils.logger import get_logger
+from web_hacker.cdp.async_cdp.monitors.async_network_monitor import AsyncNetworkMonitor
+from web_hacker.cdp.async_cdp.monitors.async_storage_monitor import AsyncStorageMonitor
+from web_hacker.cdp.async_cdp.monitors.async_window_property_monitor import AsyncWindowPropertyMonitor
+from web_hacker.utils.logger import get_logger
 
 logger = get_logger(name=__name__)
 
@@ -37,8 +37,8 @@ class AsyncCDPSession:
         Args:
             ws_url: WebSocket URL to connect to the browser session.
             session_start_dtm: Session start datetime in format YYYY-MM-DDTHH-MM-SSZ.
-            event_callback_fn: Async callback function that takes (category: str, detail: dict).
-                To be used to emit events to AWS S3 via AWS Firehose.
+            event_callback_fn: Async callback function that takes (category: str, detail: BaseCDPEvent).
+                Called when CDP events are captured. Caller can use this to store events, stream them, etc.
         NOTE:
             The CDP sessionId will be obtained automatically in run() after connecting.
             CDP sessionIds are only valid for the specific WebSocket connection where Target.attachToTarget was called.

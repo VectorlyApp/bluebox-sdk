@@ -1,5 +1,5 @@
 """
-src/cdp/monitors/async_window_property_monitor.py
+web_hacker/cdp/async_cdp/monitors/async_window_property_monitor.py
 
 Async window property monitor for CDP.
 """
@@ -10,12 +10,12 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
-from cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
-from data_models.cdp.cdp_events import WindowPropertyChange, WindowPropertyEvent
-from utils.logger import get_logger
+from web_hacker.cdp.async_cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
+from web_hacker.cdp.async_cdp.data_models import WindowPropertyChange, WindowPropertyEvent
+from web_hacker.utils.logger import get_logger
 
 if TYPE_CHECKING:  # avoid circular import
-    from cdp.async_cdp_session import AsyncCDPSession
+    from web_hacker.cdp.async_cdp.async_cdp_session import AsyncCDPSession
 
 logger = get_logger(name=__name__)
 
@@ -96,8 +96,8 @@ class AsyncWindowPropertyMonitor(AbstractAsyncMonitor):
         """
         Initialize AsyncWindowPropertyMonitor.
         Args:
-            event_callback_fn: Async callback function that takes (category: str, detail: dict). To be used to emit
-                window properties to AWS S3 via AWS Firehose.
+            event_callback_fn: Async callback function that takes (category: str, detail: BaseCDPEvent).
+                Called when window property events are captured.
         """
         self.event_callback_fn = event_callback_fn
 

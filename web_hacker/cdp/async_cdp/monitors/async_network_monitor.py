@@ -1,5 +1,5 @@
 """
-src/cdp/monitors/async_network_monitor.py
+web_hacker/cdp/async_cdp/monitors/async_network_monitor.py
 
 Async network monitor for CDP.
 """
@@ -12,15 +12,14 @@ import re
 from fnmatch import fnmatch
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, ClassVar
 
-from cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
-from data_models.cdp.cdp_events import NetworkTransactionEvent
-from utils.logger import get_logger
-
+from web_hacker.cdp.async_cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
+from web_hacker.cdp.async_cdp.data_models import NetworkTransactionEvent
 from web_hacker.data_models.routine.endpoint import ResourceType
 from web_hacker.utils.data_utils import get_text_from_html
+from web_hacker.utils.logger import get_logger
 
 if TYPE_CHECKING:  # avoid circular import
-    from cdp.async_cdp_session import AsyncCDPSession
+    from web_hacker.cdp.async_cdp.async_cdp_session import AsyncCDPSession
 
 logger = get_logger(name=__name__)
 
@@ -76,9 +75,9 @@ class AsyncNetworkMonitor(AbstractAsyncMonitor):
     )
     NOISY_NETWORK_EVENTS: ClassVar[frozenset[str]] = frozenset({})
 
-    # for Firehose streaming
+    # for streaming/storage limits
     URL_MAX_CHARS: ClassVar[int] = 150
-    RESPONSE_BODY_MAX_CHARS: ClassVar[int] = 250_000  # Firehose limit is 1MB
+    RESPONSE_BODY_MAX_CHARS: ClassVar[int] = 250_000
 
 
     # Abstract method implementations ______________________________________________________________________________________
@@ -111,8 +110,8 @@ class AsyncNetworkMonitor(AbstractAsyncMonitor):
         """
         Initialize AsyncNetworkMonitor.
         Args:
-            event_callback_fn: Async callback function that takes (category: str, detail: dict). To be used to emit
-            network transactions to AWS S3 via AWS Firehose.
+            event_callback_fn: Async callback function that takes (category: str, detail: BaseCDPEvent).
+                Called when network transactions are captured.
         """
         self.event_callback_fn = event_callback_fn
 
