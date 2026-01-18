@@ -1,10 +1,17 @@
-from pydantic import BaseModel, field_validator, Field, ConfigDict
-from openai import OpenAI
-from abc import ABC, abstractmethod
-import os
+"""
+web_hacker/routine_discovery/context_manager.py
+
+Context management abstractions and utilities for routine discovery.
+"""
+
 import json
-import time
+import os
 import shutil
+import time
+from abc import ABC, abstractmethod
+
+from openai import OpenAI
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from web_hacker.utils.data_utils import get_text_from_html
 
