@@ -98,7 +98,7 @@ class EmittedChatMessage(BaseModel):
         default=None,
         description="ID of the Chat message (for CHAT_RESPONSE messages)",
     )
-    chat_thread_id: str | None = Field(
+    chat_chat_thread_id: str | None = Field(
         default=None,
         description="ID of the ChatThread this message belongs to",
     )
@@ -164,7 +164,7 @@ class Chat(BaseModel):
         default_factory=lambda: str(uuid4()),
         description="Unique message ID (UUIDv4)",
     )
-    thread_id: str = Field(
+    chat_thread_id: str = Field(
         ...,
         description="ID of the parent thread this message belongs to",
     )
@@ -191,10 +191,10 @@ class ChatThread(BaseModel):
     Container for a conversation thread.
     """
     id: str = Field(
-        default_factory=lambda: str(uuid4()),
+        default_factory=lambda: "ChatThread_" + str(uuid4()),
         description="Unique thread ID (UUIDv4)",
     )
-    message_ids: list[str] = Field(
+    chat_ids: list[str] = Field(
         default_factory=list,
         description="Ordered list of message IDs in this thread",
     )

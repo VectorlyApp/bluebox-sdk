@@ -276,7 +276,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
             self._thread = self._persist_chat_thread_callable(self._thread)
 
         logger.info(
-            "Instantiated GuideAgent with model: %s, thread_id: %s",
+            "Instantiated GuideAgent with model: %s, chat_thread_id: %s",
             llm_model,
             self._thread.id,
         )
@@ -287,7 +287,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
     # Properties ___________________________________________________________________________________________________________
 
     @property
-    def thread_id(self) -> str:
+    def chat_thread_id(self) -> str:
         """Return the current thread ID."""
         return self._thread.id
 
@@ -390,7 +390,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
             The created Chat object (with final ID from persistence layer if callback provided).
         """
         chat = Chat(
-            thread_id=self._thread.id,
+            chat_thread_id=self._thread.id,
             role=role,
             content=content,
             tool_call_id=tool_call_id,
@@ -403,7 +403,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
 
         # Store with final ID
         self._chats[chat.id] = chat
-        self._thread.message_ids.append(chat.id)
+        self._thread.chat_ids.append(chat.id)
         self._thread.updated_at = int(datetime.now().timestamp())
 
         # Persist thread if callback provided
@@ -420,7 +420,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
             List of message dicts with 'role', 'content', and optionally 'tool_call_id' or 'tool_calls' keys.
         """
         messages: list[dict[str, Any]] = []
-        for chat_id in self._thread.message_ids:
+        for chat_id in self._thread.chat_ids:
             chat = self._chats.get(chat_id)
             if chat:
                 msg: dict[str, Any] = {
@@ -496,7 +496,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
             tool_arguments: Arguments for the tool
 
         Returns:
-            Tool execution result with thread_id and params
+            Tool execution result with chat_thread_id and params
 
         Raises:
             UnknownToolError: If tool_name is unknown
@@ -675,7 +675,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
                                 type=ChatMessageType.CHAT_RESPONSE,
                                 content=response.content,
                                 chat_id=chat.id,
-                                chat_thread_id=self._thread.id,
+                                chat_chat_thread_id=self._thread.id,
                             )
                         )
 
@@ -947,7 +947,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
         Returns:
             List of Chat objects in conversation order.
         """
-        return [self._chats[chat_id] for chat_id in self._thread.message_ids if chat_id in self._chats]
+        return [self._chats[chat_id] for chat_id in self._thread.chat_ids if chat_id in self._chats]
 
     def reset(self) -> None:
         """
@@ -955,7 +955,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
 
         Generates a new thread and clears all messages and routine state.
         """
-        old_thread_id = self._thread.id
+        old_chat_thread_id = self._thread.id
         self._thread = ChatThread()
         self._chats = {}
         self._routine_state.reset()
@@ -965,6 +965,6 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
 
         logger.info(
             "Reset conversation from %s to %s",
-            old_thread_id,
+            old_chat_thread_id,
             self._thread.id,
         )

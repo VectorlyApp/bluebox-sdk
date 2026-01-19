@@ -541,7 +541,7 @@ class TerminalGuideChat:
             table.add_row("Last Execution", "[dim]None[/dim]")
 
         # Thread info
-        table.add_row("Thread ID", self._agent.thread_id[:8] + "...")
+        table.add_row("Thread ID", self._agent.chat_thread_id[:8] + "...")
         table.add_row("Messages", str(len(self._agent.get_chats())))
 
         console.print()
