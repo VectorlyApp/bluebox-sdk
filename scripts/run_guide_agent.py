@@ -196,6 +196,24 @@ def print_error(error: str) -> None:
     console.print()
 
 
+def safe_parse_routine(routine_str: str | None) -> tuple[dict[str, Any] | None, str | None]:
+    """
+    Safely parse a routine string to dict.
+
+    Returns:
+        Tuple of (parsed_dict, error_message).
+        If parsing succeeds: (dict, None)
+        If parsing fails: (None, error_message)
+        If routine_str is None: (None, None)
+    """
+    if routine_str is None:
+        return None, None
+    try:
+        return json.loads(routine_str), None
+    except json.JSONDecodeError as e:
+        return None, f"Invalid JSON: {e}"
+
+
 def print_routine_info(routine_json: dict[str, Any], validation_result: dict | None = None) -> None:
     """Print routine info in a nice table."""
     table = Table(box=box.ROUNDED, show_header=False)
@@ -281,13 +299,17 @@ class TerminalGuideChat:
 
     def _get_prompt(self) -> str:
         """Get the input prompt with routine name if loaded."""
-        routine_json = self._agent.routine_state.current_routine_json
-        if routine_json:
-            name = routine_json.get("name", "routine")
-            # Truncate long names
-            if len(name) > 20:
-                name = name[:17] + "..."
-            return f"[bold green]You[/bold green] [dim]({name})[/dim][bold green]>[/bold green] "
+        routine_str = self._agent.routine_state.current_routine_str
+        if routine_str:
+            routine_dict, _ = safe_parse_routine(routine_str)
+            if routine_dict:
+                name = routine_dict.get("name", "routine")
+                # Truncate long names
+                if len(name) > 20:
+                    name = name[:17] + "..."
+                return f"[bold green]You[/bold green] [dim]({name})[/dim][bold green]>[/bold green] "
+            else:
+                return f"[bold green]You[/bold green] [dim](invalid json)[/dim][bold green]>[/bold green] "
         return "[bold green]You>[/bold green] "
 
     def _handle_stream_chunk(self, chunk: str) -> None:
@@ -360,23 +382,26 @@ class TerminalGuideChat:
                 console.print()
                 return
 
+            # Load as raw string (preserves content even if JSON is invalid)
             with open(path, encoding="utf-8") as f:
-                routine_json = json.load(f)
+                routine_str = f.read()
 
             self._loaded_routine_path = path
-            self._agent.routine_state.update_current_routine(routine_json)
+            self._agent.routine_state.update_current_routine(routine_str)
 
-            # Auto-validate on load
-            validation_result = validate_routine(routine_json)
+            # Try to parse and validate
+            routine_dict, parse_error = safe_parse_routine(routine_str)
+            if routine_dict is not None:
+                validation_result = validate_routine(routine_dict)
+                print_routine_info(routine_dict, validation_result)
+            else:
+                console.print()
+                console.print(f"[yellow]⚠ Loaded file with invalid JSON: {parse_error}[/yellow]")
+                console.print("[dim]Ask the agent for help fixing the JSON.[/dim]")
 
-            print_routine_info(routine_json, validation_result)
             console.print(f"[dim]Watching: {path}[/dim]")
             console.print()
 
-        except json.JSONDecodeError as e:
-            console.print()
-            console.print(f"[red]✗ Invalid JSON: {e}[/red]")
-            console.print()
         except Exception as e:
             console.print()
             console.print(f"[red]✗ Error loading routine: {e}[/red]")
@@ -384,7 +409,7 @@ class TerminalGuideChat:
 
     def _handle_unload_command(self) -> None:
         """Handle /unload command to clear the current routine."""
-        if self._agent.routine_state.current_routine_json is None:
+        if self._agent.routine_state.current_routine_str is None:
             console.print()
             console.print("[yellow]No routine loaded.[/yellow]")
             console.print()
@@ -398,10 +423,19 @@ class TerminalGuideChat:
 
     def _handle_show_command(self) -> None:
         """Handle /show command to display current routine details."""
-        routine_json = self._agent.routine_state.current_routine_json
-        if routine_json is None:
+        routine_str = self._agent.routine_state.current_routine_str
+        if routine_str is None:
             console.print()
             console.print("[yellow]No routine loaded. Use /load <file.json> first.[/yellow]")
+            console.print()
+            return
+
+        routine_dict, parse_error = safe_parse_routine(routine_str)
+        if routine_dict is None:
+            console.print()
+            console.print(f"[red]✗ {parse_error}[/red]")
+            console.print("[dim]Raw content:[/dim]")
+            console.print(routine_str[:500] + ("..." if len(routine_str) > 500 else ""))
             console.print()
             return
 
@@ -410,11 +444,11 @@ class TerminalGuideChat:
         table.add_column("Field", style="dim", width=15)
         table.add_column("Value", style="white")
 
-        table.add_row("Name", routine_json.get("name", "N/A"))
-        table.add_row("Description", routine_json.get("description", "N/A"))
+        table.add_row("Name", routine_dict.get("name", "N/A"))
+        table.add_row("Description", routine_dict.get("description", "N/A"))
 
         # Parameters
-        params = routine_json.get("parameters", [])
+        params = routine_dict.get("parameters", [])
         if params:
             param_lines = []
             for p in params:
@@ -425,7 +459,7 @@ class TerminalGuideChat:
             table.add_row("Parameters", "[dim]None[/dim]")
 
         # Operations summary
-        ops = routine_json.get("operations", [])
+        ops = routine_dict.get("operations", [])
         if ops:
             op_lines = []
             for i, op in enumerate(ops, 1):
@@ -444,14 +478,21 @@ class TerminalGuideChat:
 
     def _handle_validate_command(self) -> None:
         """Handle /validate command to validate the current routine."""
-        routine_json = self._agent.routine_state.current_routine_json
-        if routine_json is None:
+        routine_str = self._agent.routine_state.current_routine_str
+        if routine_str is None:
             console.print()
             console.print("[yellow]No routine loaded. Use /load <file.json> first.[/yellow]")
             console.print()
             return
 
-        result = validate_routine(routine_json)
+        routine_dict, parse_error = safe_parse_routine(routine_str)
+        if routine_dict is None:
+            console.print()
+            console.print(f"[bold red]✗ {parse_error}[/bold red]")
+            console.print()
+            return
+
+        result = validate_routine(routine_dict)
         console.print()
         if result.get("valid"):
             console.print(f"[bold green]✓ Valid:[/bold green] {result.get('message', 'Routine is valid')}")
@@ -470,11 +511,15 @@ class TerminalGuideChat:
         table.add_column("Value", style="white")
 
         # Routine status
-        routine_json = self._agent.routine_state.current_routine_json
-        if routine_json:
-            table.add_row("Routine", f"[green]{routine_json.get('name', 'Unnamed')}[/green]")
-            table.add_row("Operations", str(len(routine_json.get("operations", []))))
-            table.add_row("Parameters", str(len(routine_json.get("parameters", []))))
+        routine_str = self._agent.routine_state.current_routine_str
+        if routine_str:
+            routine_dict, parse_error = safe_parse_routine(routine_str)
+            if routine_dict:
+                table.add_row("Routine", f"[green]{routine_dict.get('name', 'Unnamed')}[/green]")
+                table.add_row("Operations", str(len(routine_dict.get("operations", []))))
+                table.add_row("Parameters", str(len(routine_dict.get("parameters", []))))
+            else:
+                table.add_row("Routine", f"[yellow]Invalid JSON[/yellow]")
         else:
             table.add_row("Routine", "[dim]None loaded[/dim]")
 
@@ -509,8 +554,8 @@ class TerminalGuideChat:
             return
         try:
             with open(self._loaded_routine_path, encoding="utf-8") as f:
-                routine_json = json.load(f)
-            self._agent.routine_state.update_current_routine(routine_json)
+                routine_str = f.read()
+            self._agent.routine_state.update_current_routine(routine_str)
         except Exception:
             pass  # Silently ignore reload errors
 
@@ -571,10 +616,18 @@ class TerminalGuideChat:
 
     def _handle_execute_command(self, params_path: str | None) -> None:
         """Handle /execute command to execute the loaded routine."""
-        routine_json = self._agent.routine_state.current_routine_json
-        if routine_json is None:
+        routine_str = self._agent.routine_state.current_routine_str
+        if routine_str is None:
             console.print()
             console.print("[red]✗ No routine loaded. Use /load <file.json> first.[/red]")
+            console.print()
+            return
+
+        # Parse routine
+        routine_dict, parse_error = safe_parse_routine(routine_str)
+        if routine_dict is None:
+            console.print()
+            console.print(f"[red]✗ Cannot execute: {parse_error}[/red]")
             console.print()
             return
 
@@ -597,11 +650,11 @@ class TerminalGuideChat:
                 return
         else:
             # Check if routine has required parameters
-            routine_params = routine_json.get("parameters", [])
+            routine_params = routine_dict.get("parameters", [])
             has_required = any(p.get("required", False) for p in routine_params)
 
             if has_required:
-                params = self._prompt_for_parameters(routine_json)
+                params = self._prompt_for_parameters(routine_dict)
                 if params is None:
                     return  # User cancelled
 
@@ -609,13 +662,13 @@ class TerminalGuideChat:
             console.print()
             with console.status("[bold yellow]Executing routine...[/bold yellow]"):
                 # Create and execute routine
-                routine = Routine(**routine_json)
+                routine = Routine(**routine_dict)
                 result = routine.execute(params)
                 result_dict = result.model_dump()
 
             # Update agent state with execution result
             self._agent.routine_state.update_last_execution(
-                routine_json=routine_json,
+                routine_json=routine_dict,
                 routine_params=params,
                 routine_result=result_dict,
             )

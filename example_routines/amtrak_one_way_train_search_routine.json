@@ -7,7 +7,7 @@
         {"type": "sleep", "timeout_seconds": 2.0},
         {
             "type": "fetch",
-            "endpoint": {
+            "endpoint": {     
                 "description": "Amtrak station/location autocomplete. GET with query parameter searchTerm; returns JSON with autoCompleterResponse.autoCompleteList.",
                 "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm=\"{{origin}}\"",
                 "method": "GET",

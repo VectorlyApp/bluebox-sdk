@@ -16,7 +16,7 @@ def validate_routine(routine_dict: dict) -> dict:
     Validates a routine dictionary against the Routine schema.
 
     IMPORTANT: You MUST pass the COMPLETE routine JSON object as routine_dict.
-    If you have a routine from get_current_routine_json, pass that exact JSON here.
+    If you have a routine from get_current_routine, pass that exact JSON here.
 
     The routine_dict must be a JSON object containing:
     - "name" (string): The name of the routine
@@ -33,7 +33,7 @@ def validate_routine(routine_dict: dict) -> dict:
     if not routine_dict:
         return {
             "valid": False,
-            "error": "routine_dict is empty. You must pass the complete routine JSON object. If you have a routine from get_current_routine_json, pass that exact routine_json here.",
+            "error": "routine_dict is empty. You must pass the complete routine JSON object. If you have a routine from get_current_routine, pass that exact routine_json here.",
         }
 
     try:

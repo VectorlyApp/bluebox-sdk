@@ -11,7 +11,7 @@ Contains:
 
 import json
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 from uuid import uuid4
 
 from web_hacker.data_models.llms.interaction import (
@@ -40,41 +40,46 @@ class GuideAgentRoutineState:
     """
     Manages routine state for the Guide Agent.
 
-    Tracks current routine, last execution, and queues update messages
-    when state changes. Provides diff-checking so hosts can safely call
-    update methods on every message without duplicate notifications.
+    Tracks current routine and last execution using timestamps to record
+    when state changes. On flush, generates a single message per category
+    (routine change, execution) based on which timestamps exist.
     """
 
     def __init__(self) -> None:
         """Initialize empty routine state."""
-        self.current_routine_json: dict | None = None
+        # Store as string to preserve raw content even if JSON is invalid
+        self.current_routine_str: str | None = None
+        # Execution-related fields stay as dict (only set after successful execution)
         self.last_executed_routine_json: dict | None = None
         self.last_executed_routine_params: dict | None = None
         self.last_executed_routine_result: dict | None = None
-        self.update_messages: list[dict[str, Any]] = []
+        # Timestamps for tracking state changes (None = no pending update)
+        self._routine_change_at: int | None = None
+        self._routine_change_type: Literal["added", "updated", "removed"] | None = None
+        self._execution_at: int | None = None
 
-    def update_current_routine(self, routine_json: dict | None) -> None:
+    def update_current_routine(self, routine_str: str | None) -> None:
         """
-        Update current routine if changed. No-op if unchanged.
+        Update current routine string if changed. No-op if unchanged.
+        Stores raw string to preserve content even if JSON is invalid.
+        Records timestamp and change type for later message generation.
         """
-        if routine_json == self.current_routine_json:
+        if routine_str == self.current_routine_str:
             return
-        was_none = self.current_routine_json is None
-        self.current_routine_json = routine_json
+        was_none = self.current_routine_str is None
+        self.current_routine_str = routine_str
 
-        if routine_json is None:
-            message = "Routine has been removed from context."
+        # Determine change type and record timestamp
+        if routine_str is None:
+            change_type = "removed"
         elif was_none:
-            message = "Routine added to context. Use get_current_routine_json to see the routine."
+            change_type = "added"
         else:
-            message = "Routine has been updated. Use get_current_routine_json to see the changes."
-            
-        print(f"Routine state update: {message}")
+            change_type = "updated"
 
-        self.update_messages.append({
-            "timestamp": int(datetime.now().timestamp()),
-            "message": message,
-        })
+        self._routine_change_at = int(datetime.now().timestamp())
+        self._routine_change_type = change_type
+        print(f"Routine state update: routine {change_type}")
 
     def update_last_execution(
         self,
@@ -83,36 +88,52 @@ class GuideAgentRoutineState:
         routine_result: dict,
     ) -> None:
         """
-        Update last execution state.
+        Update last execution state and record timestamp.
         """
         self.last_executed_routine_json = routine_json
         self.last_executed_routine_params = routine_params
         self.last_executed_routine_result = routine_result
-        self.update_messages.append({
-            "timestamp": int(datetime.now().timestamp()),
-            "message": "Executed routine. To see the executed routine and parameters use the get_last_routine_execution tool. To see the result use the get_last_routine_execution_result tool."
-        })
+        self._execution_at = int(datetime.now().timestamp())
 
     def flush_update_messages(self) -> str | None:
         """
-        Get formatted update messages and clear the queue.
+        Generate update messages based on which timestamps exist, then clear them.
         Returns None if no pending updates.
+        Only generates ONE message per category (routine change, execution).
         """
-        if not self.update_messages:
+        messages: list[str] = []
+
+        # Check for routine change
+        if self._routine_change_at is not None and self._routine_change_type is not None:
+            if self._routine_change_type == "removed":
+                messages.append("[System Update] Routine has been removed from context.")
+            elif self._routine_change_type == "added":
+                messages.append("[System Update] Routine added to context. Use get_current_routine to see the routine.")
+            else:  # updated
+                messages.append("[System Update] Routine has been updated. Use get_current_routine to see the changes.")
+            # Reset timestamp
+            self._routine_change_at = None
+            self._routine_change_type = None
+
+        # Check for execution
+        if self._execution_at is not None:
+            messages.append("[System Update] Executed routine. To see the executed routine and parameters use the get_last_routine_execution tool. To see the result use the get_last_routine_execution_result tool.")
+            # Reset timestamp
+            self._execution_at = None
+
+        if not messages:
             return None
-        updates = "\n".join(
-            f"[System Update] {msg['message']}" for msg in self.update_messages
-        )
-        self.update_messages.clear()
-        return updates
+        return "\n".join(messages)
 
     def reset(self) -> None:
         """Reset all state."""
-        self.current_routine_json = None
+        self.current_routine_str = None
         self.last_executed_routine_json = None
         self.last_executed_routine_params = None
         self.last_executed_routine_result = None
-        self.update_messages.clear()
+        self._routine_change_at = None
+        self._routine_change_type = None
+        self._execution_at = None
 
 
 class GuideAgent:
@@ -176,13 +197,13 @@ Help users troubleshoot by reviewing:
 
 ## Routine State Tools - USE THESE WHEN DEBUGGING
 When a user asks for help debugging a routine or wants you to review their routine, use these tools:
-- **`get_current_routine_json`**: Call this FIRST when the user asks about their routine or wants help editing it. Shows the routine JSON they're currently working on.
+- **`get_current_routine`**: Call this FIRST when the user asks about their routine or wants help editing it. Shows the routine JSON they're currently working on.
 - **`get_last_routine_execution`**: Call this when the user says they ran a routine and it failed. Returns the routine JSON and parameters that were used in the last execution.
 - **`get_last_routine_execution_result`**: Call this to see what actually happened during execution - success/failure status, output data, operation metadata, and error messages. Essential for diagnosing why a routine failed.
 
 **Debugging workflow:**
 1. User says "my routine failed" or "help me debug" → call `get_last_routine_execution` and `get_last_routine_execution_result`
-2. User says "review my routine" or "what's wrong with my routine" → call `get_current_routine_json`
+2. User says "review my routine" or "what's wrong with my routine" → call `get_current_routine`
 3. Analyze the results and cross-reference with documentation via file_search
 4. Suggest specific fixes based on the error patterns
 
@@ -320,7 +341,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
             description=(
                 "Validates a routine JSON object against the Routine schema. "
                 "You MUST pass the COMPLETE routine JSON object as routine_dict. "
-                "If you have a routine from get_current_routine_json, pass that exact routine_json here."
+                "If you have a routine from get_current_routine, pass that exact routine_json here."
             ),
             parameters={
                 "type": "object",
@@ -341,7 +362,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
 
         # Register routine state tools directly (no parameters needed, auto-execute)
         self.llm_client.register_tool(
-            name="get_current_routine_json",
+            name="get_current_routine",
             description="Get the current routine JSON that the user is working on. Use this to see the routine before making edits or suggestions.",
             parameters={"type": "object", "properties": {}, "required": []},
         )
@@ -496,11 +517,19 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
             routine_dict = tool_arguments.get("routine_dict", {})
             return validate_routine(routine_dict)
 
-        if tool_name == "get_current_routine_json":
+        if tool_name == "get_current_routine":
             logger.info("Executing tool %s", tool_name)
-            if self._routine_state.current_routine_json is None:
+            if self._routine_state.current_routine_str is None:
                 return {"error": "No current routine set. The user hasn't loaded or created a routine yet."}
-            return {"routine_json": self._routine_state.current_routine_json}
+            # Try to parse string as JSON, fallback to raw content if invalid
+            try:
+                parsed = json.loads(self._routine_state.current_routine_str)
+                return parsed  # Return the routine directly, not wrapped
+            except json.JSONDecodeError as e:
+                return {
+                    "error": f"Invalid JSON: {e}",
+                    "raw_content": self._routine_state.current_routine_str
+                }
 
         if tool_name == "get_last_routine_execution":
             logger.info("Executing tool %s", tool_name)
