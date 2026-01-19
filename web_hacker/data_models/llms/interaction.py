@@ -98,7 +98,7 @@ class EmittedChatMessage(BaseModel):
         default=None,
         description="ID of the Chat message (for CHAT_RESPONSE messages)",
     )
-    chat_chat_thread_id: str | None = Field(
+    chat_thread_id: str | None = Field(
         default=None,
         description="ID of the ChatThread this message belongs to",
     )

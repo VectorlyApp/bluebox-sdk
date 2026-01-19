@@ -675,7 +675,7 @@ you MUST use the `validate_routine` tool to validate the complete routine JSON.
                                 type=ChatMessageType.CHAT_RESPONSE,
                                 content=response.content,
                                 chat_id=chat.id,
-                                chat_chat_thread_id=self._thread.id,
+                                chat_thread_id=self._thread.id,
                             )
                         )
 
