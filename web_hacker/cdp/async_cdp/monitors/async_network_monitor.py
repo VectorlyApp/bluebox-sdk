@@ -9,7 +9,9 @@ from __future__ import annotations
 import base64
 import json
 import re
+from datetime import datetime
 from fnmatch import fnmatch
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, ClassVar
 
 from web_hacker.cdp.async_cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
@@ -855,3 +857,278 @@ class AsyncNetworkMonitor(AbstractAsyncMonitor):
             return await self._on_fetch_get_body_reply(cmd_id, msg, cdp_session)
 
         return False
+
+    def get_network_summary(self) -> dict[str, Any]:
+        """
+        Get summary of current network monitoring state.
+        Returns:
+            Dictionary with network monitoring statistics.
+        """
+        return {
+            "requests_tracked": len(self.req_meta),
+            "pending_bodies": len(self.fetch_get_body_wait),
+        }
+
+    @staticmethod
+    def consolidate_transactions(
+        network_events_path: str | Path,
+        output_path: str | Path | None = None,
+    ) -> dict[str, Any]:
+        """
+        Consolidate network transactions from JSONL events file into a single JSON file.
+
+        Args:
+            network_events_path: Path to the network events JSONL file (written by FileEventWriter).
+            output_path: Path to save consolidated JSON. If None, only returns dict.
+
+        Returns:
+            dict: Consolidated transactions with structure:
+                {
+                    "request_id": {
+                        "url": "...",
+                        "method": "...",
+                        "status": ...,
+                        "request_headers": {...},
+                        "response_headers": {...},
+                        "post_data": ...,
+                        "response_body": "...",
+                    }
+                }
+        """
+        network_events_path = Path(network_events_path)
+
+        if not network_events_path.exists():
+            logger.warning("Network events file not found: %s", network_events_path)
+            return {}
+
+        consolidated: dict[str, Any] = {}
+
+        # Read JSONL file line by line
+        try:
+            with open(network_events_path, "r", encoding="utf-8") as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                        request_id = event.get("request_id", f"unknown_{line_num}")
+
+                        # Store transaction data
+                        consolidated[request_id] = {
+                            "url": event.get("url"),
+                            "method": event.get("method"),
+                            "type": event.get("type"),
+                            "status": event.get("status"),
+                            "status_text": event.get("status_text"),
+                            "request_headers": event.get("request_headers", {}),
+                            "response_headers": event.get("response_headers", {}),
+                            "post_data": event.get("post_data"),
+                            "response_body": event.get("response_body"),
+                            "mime_type": event.get("mime_type"),
+                            "failed": event.get("failed", False),
+                            "error_text": event.get("errorText"),
+                        }
+                    except json.JSONDecodeError as e:
+                        logger.warning("Failed to parse line %d: %s", line_num, e)
+                        continue
+        except Exception as e:
+            logger.error("Failed to read network events file: %s", e)
+            return {}
+
+        # Save to output file if path provided
+        if output_path:
+            output_path = Path(output_path)
+            try:
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(output_path, "w", encoding="utf-8") as f:
+                    json.dump(consolidated, f, indent=2, ensure_ascii=False)
+                logger.info("Consolidated %d transactions to: %s", len(consolidated), output_path)
+            except Exception as e:
+                logger.error("Failed to save consolidated transactions: %s", e)
+
+        return consolidated
+
+    @staticmethod
+    def generate_har_from_transactions(
+        network_events_path: str | Path,
+        har_path: str | Path,
+        title: str = "Web Hacker Session",
+    ) -> dict[str, Any]:
+        """
+        Generate HAR file from network events JSONL file.
+
+        Args:
+            network_events_path: Path to the network events JSONL file.
+            har_path: Path to save the HAR file.
+            title: Title for the HAR page entry.
+
+        Returns:
+            dict: The HAR data structure.
+        """
+        network_events_path = Path(network_events_path)
+        har_path = Path(har_path)
+
+        # Create base HAR structure
+        har_data: dict[str, Any] = {
+            "log": {
+                "version": "1.2",
+                "creator": {
+                    "name": "Web Hacker Async Network Monitor",
+                    "version": "1.0"
+                },
+                "browser": {
+                    "name": "Chrome DevTools Protocol",
+                    "version": "1.0"
+                },
+                "pages": [
+                    {
+                        "startedDateTime": datetime.now().isoformat() + "Z",
+                        "id": "page_1",
+                        "title": title,
+                        "pageTimings": {
+                            "onContentLoad": -1,
+                            "onLoad": -1
+                        }
+                    }
+                ],
+                "entries": []
+            }
+        }
+
+        if not network_events_path.exists():
+            logger.warning("Network events file not found: %s", network_events_path)
+            # Save empty HAR
+            har_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(har_path, "w", encoding="utf-8") as f:
+                json.dump(har_data, f, indent=2, ensure_ascii=False)
+            return har_data
+
+        entries = []
+
+        # Read JSONL file and convert to HAR entries
+        try:
+            with open(network_events_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                        entry = AsyncNetworkMonitor._create_har_entry_from_event(event)
+                        if entry:
+                            entries.append(entry)
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            logger.error("Failed to read network events for HAR generation: %s", e)
+
+        har_data["log"]["entries"] = entries
+
+        # Save HAR file
+        try:
+            har_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(har_path, "w", encoding="utf-8") as f:
+                json.dump(har_data, f, indent=2, ensure_ascii=False)
+            logger.info("HAR file saved with %d entries to: %s", len(entries), har_path)
+        except Exception as e:
+            logger.error("Failed to save HAR file: %s", e)
+
+        return har_data
+
+    @staticmethod
+    def _create_har_entry_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
+        """Create a HAR entry from a NetworkTransactionEvent dict."""
+        try:
+            url = event.get("url", "")
+            method = event.get("method", "GET")
+            status = event.get("status", 0)
+            request_headers = event.get("request_headers", {})
+            response_headers = event.get("response_headers", {})
+            post_data = event.get("post_data")
+            response_body = event.get("response_body", "")
+
+            # Parse request headers to list format
+            req_headers_list = [{"name": k, "value": str(v)} for k, v in request_headers.items()]
+
+            # Parse query string from URL
+            query_string = []
+            if "?" in url:
+                _, query_part = url.split("?", 1)
+                for param in query_part.split("&"):
+                    if "=" in param:
+                        name, value = param.split("=", 1)
+                        query_string.append({"name": name, "value": value})
+
+            # Parse cookies from request headers
+            cookies = []
+            cookie_header = request_headers.get("Cookie", "")
+            if cookie_header:
+                for cookie in cookie_header.split(";"):
+                    cookie = cookie.strip()
+                    if "=" in cookie:
+                        name, value = cookie.split("=", 1)
+                        cookies.append({"name": name, "value": value})
+
+            # Build request object
+            request_obj: dict[str, Any] = {
+                "method": method,
+                "url": url,
+                "httpVersion": "HTTP/1.1",
+                "headers": req_headers_list,
+                "queryString": query_string,
+                "cookies": cookies,
+                "headersSize": -1,
+                "bodySize": len(str(post_data)) if post_data else 0,
+            }
+            if post_data:
+                request_obj["postData"] = {
+                    "mimeType": request_headers.get("content-type", "application/x-www-form-urlencoded"),
+                    "text": str(post_data) if not isinstance(post_data, str) else post_data,
+                }
+
+            # Parse response headers to list format
+            resp_headers_list = [{"name": k, "value": str(v)} for k, v in response_headers.items()]
+
+            # Build response object
+            response_body_str = str(response_body) if response_body else ""
+            response_obj = {
+                "status": status if isinstance(status, int) else 0,
+                "statusText": event.get("status_text", ""),
+                "httpVersion": "HTTP/1.1",
+                "headers": resp_headers_list,
+                "cookies": [],
+                "content": {
+                    "size": len(response_body_str),
+                    "mimeType": event.get("mime_type", ""),
+                    "text": response_body_str,
+                },
+                "redirectURL": "",
+                "headersSize": -1,
+                "bodySize": len(response_body_str),
+            }
+
+            # Build HAR entry
+            entry = {
+                "pageref": "page_1",
+                "startedDateTime": datetime.now().isoformat() + "Z",
+                "time": 100,  # default duration
+                "request": request_obj,
+                "response": response_obj,
+                "cache": {},
+                "timings": {
+                    "blocked": -1,
+                    "dns": -1,
+                    "connect": -1,
+                    "send": 0,
+                    "wait": 100,
+                    "receive": 0
+                },
+                "connection": "0"
+            }
+
+            return entry
+
+        except Exception as e:
+            logger.debug("Error creating HAR entry: %s", e)
+            return None

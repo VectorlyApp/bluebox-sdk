@@ -658,3 +658,19 @@ class AsyncWindowPropertyMonitor(AbstractAsyncMonitor):
         # just trigger the task. if it's running, great. if not, start it.
         # we do NOT wait for it to complete.
         await self._trigger_collection_task(cdp_session)
+
+    def get_window_property_summary(self) -> dict[str, Any]:
+        """
+        Get summary of window property monitoring.
+        Returns:
+            Dictionary with window property monitoring statistics.
+        """
+        total_keys = len(self.history_db)
+        total_entries = sum(
+            len(window_prop.get("values", []))
+            for window_prop in self.history_db.values()
+        )
+        return {
+            "total_keys": total_keys,
+            "total_history_entries": total_entries,
+        }

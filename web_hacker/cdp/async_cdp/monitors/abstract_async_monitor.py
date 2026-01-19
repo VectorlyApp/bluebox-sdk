@@ -63,4 +63,4 @@ class AbstractAsyncMonitor(ABC):
         # not raising UnimplementedError here because this is an abstract method
         pass
 
-    # TODO: add addition abstract methods (e.g., `setup_monitor`, `handle_message`, etc.)
+    # TODO: add additional abstract methods (e.g., `setup_monitor`, `handle_message`, etc.)

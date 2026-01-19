@@ -577,3 +577,17 @@ class AsyncStorageMonitor(AbstractAsyncMonitor):
             cdp_session: The CDP session to use.
         """
         await self._trigger_native_cookie_check(cdp_session)
+
+    def get_storage_summary(self) -> dict[str, Any]:
+        """
+        Get summary of current storage state.
+        Returns:
+            Dictionary with storage state summary.
+        """
+        return {
+            "cookies_count": len(self.cookies_state),
+            "local_storage_origins": list(self.local_storage_state.keys()),
+            "session_storage_origins": list(self.session_storage_state.keys()),
+            "local_storage_items": sum(len(items) for items in self.local_storage_state.values()),
+            "session_storage_items": sum(len(items) for items in self.session_storage_state.values()),
+        }

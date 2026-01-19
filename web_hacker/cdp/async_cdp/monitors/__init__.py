@@ -12,12 +12,14 @@ lightweight summaries for WebSocket streaming.
 from web_hacker.cdp.async_cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
 
 # import all monitor classes to trigger AbstractAsyncMonitor.__init_subclass__
+from web_hacker.cdp.async_cdp.monitors.async_interaction_monitor import AsyncInteractionMonitor
 from web_hacker.cdp.async_cdp.monitors.async_network_monitor import AsyncNetworkMonitor
 from web_hacker.cdp.async_cdp.monitors.async_storage_monitor import AsyncStorageMonitor
 from web_hacker.cdp.async_cdp.monitors.async_window_property_monitor import AsyncWindowPropertyMonitor
 
 __all__ = [
     "AbstractAsyncMonitor",
+    "AsyncInteractionMonitor",
     "AsyncNetworkMonitor",
     "AsyncStorageMonitor",
     "AsyncWindowPropertyMonitor",

@@ -6,10 +6,11 @@ Single comprehensive class for asynchronous CDP session monitoring.
 
 import asyncio
 import json
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 from websockets.asyncio.client import connect, ClientConnection
 
+from web_hacker.cdp.async_cdp.monitors.async_interaction_monitor import AsyncInteractionMonitor
 from web_hacker.cdp.async_cdp.monitors.async_network_monitor import AsyncNetworkMonitor
 from web_hacker.cdp.async_cdp.monitors.async_storage_monitor import AsyncStorageMonitor
 from web_hacker.cdp.async_cdp.monitors.async_window_property_monitor import AsyncWindowPropertyMonitor
@@ -27,10 +28,11 @@ class AsyncCDPSession:
     # Magic methods ________________________________________________________________________________________________________
 
     def __init__(
-        self, 
-        ws_url: str, 
+        self,
+        ws_url: str,
         session_start_dtm: str,
         event_callback_fn: Callable[[str, dict], Awaitable[None]],
+        paths: dict[str, str] | None = None,
     ) -> None:
         """
         Initialize AsyncCDPSession.
@@ -39,6 +41,9 @@ class AsyncCDPSession:
             session_start_dtm: Session start datetime in format YYYY-MM-DDTHH-MM-SSZ.
             event_callback_fn: Async callback function that takes (category: str, detail: BaseCDPEvent).
                 Called when CDP events are captured. Caller can use this to store events, stream them, etc.
+            paths: Optional dict of file paths for output. Used by finalize() for consolidation.
+                Expected keys: 'network_events_path', 'consolidated_transactions_json_path',
+                'network_har_path'. If not provided, finalize() will skip file operations.
         NOTE:
             The CDP sessionId will be obtained automatically in run() after connecting.
             CDP sessionIds are only valid for the specific WebSocket connection where Target.attachToTarget was called.
@@ -48,6 +53,7 @@ class AsyncCDPSession:
         self.ws_url = ws_url
         self.event_callback_fn = event_callback_fn
         self.session_start_dtm = session_start_dtm
+        self.paths = paths or {}
         self.ws: ClientConnection | None = None
         self.seq = 0  # sequence ID for CDP commands
 
@@ -67,6 +73,7 @@ class AsyncCDPSession:
         self.network_monitor = AsyncNetworkMonitor(event_callback_fn=self.event_callback_fn)
         self.storage_monitor = AsyncStorageMonitor(event_callback_fn=self.event_callback_fn)
         self.window_property_monitor = AsyncWindowPropertyMonitor(event_callback_fn=self.event_callback_fn)
+        self.interaction_monitor = AsyncInteractionMonitor(event_callback_fn=self.event_callback_fn)
 
 
     # Private methods ______________________________________________________________________________________________________
@@ -121,6 +128,11 @@ class AsyncCDPSession:
 
         # try storage monitor
         handled = await self.storage_monitor.handle_storage_command_reply(msg)
+        if handled:
+            return
+
+        # try interaction monitor
+        handled = await self.interaction_monitor.handle_interaction_command_reply(msg)
         if handled:
             return
 
@@ -294,6 +306,7 @@ class AsyncCDPSession:
         await self.network_monitor.setup_network_monitoring(self)
         await self.storage_monitor.setup_storage_monitoring(self)
         await self.window_property_monitor.setup_window_property_monitoring(self)
+        await self.interaction_monitor.setup_interaction_monitoring(self)
         logger.info("✅ CDP domain setup complete")
 
     async def get_current_url(self, timeout: float = 3.0) -> str | None:
@@ -366,6 +379,11 @@ class AsyncCDPSession:
         if handled_window_property:
             return
 
+        # handle interaction events via AsyncInteractionMonitor
+        handled_interaction = await self.interaction_monitor.handle_interaction_message(msg, self)
+        if handled_interaction:
+            return
+
         # handle command replies
         if "id" in msg:
             #logger.debug("📥 Processing as COMMAND REPLY (id=%s)", msg.get("id"))
@@ -435,3 +453,69 @@ class AsyncCDPSession:
                 raise
             except Exception as e:
                 logger.error("❌ Connection error: %s", e, exc_info=True)
+
+    async def finalize(self) -> None:
+        """
+        Finalize the session by syncing cookies, collecting window properties,
+        and consolidating network data.
+
+        Call this after run() completes or is cancelled.
+        Requires self.paths to be set with appropriate file paths.
+        """
+        logger.info("🔧 Finalizing session...")
+
+        # Final cookie sync
+        try:
+            await self.storage_monitor.monitor_cookie_changes(self)
+            logger.info("✅ Cookies synced")
+        except Exception as e:
+            logger.warning("⚠️ Could not sync cookies: %s", e)
+
+        # Force final window property collection
+        try:
+            await self.window_property_monitor.force_collect(self)
+            logger.info("✅ Window properties collected")
+        except Exception as e:
+            logger.warning("⚠️ Could not collect window properties: %s", e)
+
+        # Consolidate network transactions (if paths provided)
+        network_events_path = self.paths.get("network_events_path")
+        if network_events_path:
+            consolidated_path = self.paths.get("consolidated_transactions_json_path")
+            if consolidated_path:
+                try:
+                    AsyncNetworkMonitor.consolidate_transactions(
+                        network_events_path=network_events_path,
+                        output_path=consolidated_path,
+                    )
+                    logger.info("✅ Transactions consolidated")
+                except Exception as e:
+                    logger.error("❌ Failed to consolidate transactions: %s", e)
+
+            # Generate HAR file
+            har_path = self.paths.get("network_har_path")
+            if har_path:
+                try:
+                    AsyncNetworkMonitor.generate_har_from_transactions(
+                        network_events_path=network_events_path,
+                        har_path=har_path,
+                        title="Web Hacker Session",
+                    )
+                    logger.info("✅ HAR file generated")
+                except Exception as e:
+                    logger.error("❌ Failed to generate HAR file: %s", e)
+
+        logger.info("✅ Session finalization complete")
+
+    def get_monitoring_summary(self) -> dict[str, Any]:
+        """
+        Get summary of all monitoring activities.
+        Returns:
+            Dictionary with summaries from all monitors.
+        """
+        return {
+            "network": self.network_monitor.get_network_summary(),
+            "storage": self.storage_monitor.get_storage_summary(),
+            "window_properties": self.window_property_monitor.get_window_property_summary(),
+            "interactions": self.interaction_monitor.get_interaction_summary(),
+        }
