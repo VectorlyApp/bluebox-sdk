@@ -114,7 +114,7 @@ class BrowserMonitor:
         """Check if browser is still connected and responsive."""
         try:
             response = requests.get(
-                f"{self.remote_debugging_address}/json/version",
+                url=f"{self.remote_debugging_address}/json/version",
                 timeout=1,
             )
             return response.status_code == 200
@@ -176,9 +176,11 @@ class BrowserMonitor:
         )
 
         # Start monitoring in background task
-        self._run_task = asyncio.create_task(self._run_monitoring())
+        self._run_task = asyncio.create_task(
+            coro=self._run_monitoring(),
+        )
 
-        logger.info(f"Browser monitoring started. Output directory: {self.output_dir}")
+        logger.info("Browser monitoring started. Output directory: %s", self.output_dir)
 
     async def _run_monitoring(self) -> None:
         """Run the monitoring loop."""
@@ -190,7 +192,7 @@ class BrowserMonitor:
         except asyncio.CancelledError:
             logger.info("Monitoring task cancelled")
         except Exception as e:
-            logger.error(f"Error in monitoring loop: {e}")
+            logger.error("Error in monitoring loop: %s", e)
 
     async def _finalize_session(self) -> None:
         """Finalize session: consolidate data and cleanup."""
@@ -211,7 +213,7 @@ class BrowserMonitor:
             try:
                 await self.session.finalize()
             except Exception as e:
-                logger.warning(f"Error during finalization: {e}")
+                logger.warning("Error during finalization: %s", e)
         else:
             # Just do file consolidation without CDP calls
             logger.info("Browser disconnected, skipping CDP finalization")
@@ -241,7 +243,7 @@ class BrowserMonitor:
                 dispose_context(self.remote_debugging_address, self.context_id)
                 logger.info("Browser context disposed")
             except Exception as e:
-                logger.debug(f"Could not dispose browser context: {e}")
+                logger.debug("Could not dispose browser context: %s", e)
 
         logger.info("Browser monitoring stopped.")
         return summary

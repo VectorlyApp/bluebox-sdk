@@ -21,8 +21,6 @@ from web_hacker.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# ---- Configuration ----
-
 BLOCK_PATTERNS = [
     "*://*.doubleclick.net/*",
     "*://*.googletagmanager.com/*",
@@ -48,7 +46,7 @@ BLOCK_PATTERNS = [
     "*://*.outbrain.com/*",
 ]
 
-# Default values - can be overridden by command line args
+# default values - can be overridden by command line args
 DEFAULT_CAPTURE_RESOURCE_TYPES = {
     ResourceType.XHR,
     ResourceType.FETCH,
@@ -64,20 +62,20 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="CDP-based web scraper that blocks trackers and captures network requests. By default, clears all cookies and storage before monitoring.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python run_cdp.py <TAB_ID>                    # Use existing tab
-  python run_cdp.py                             # Create new tab automatically
-  python run_cdp.py --incognito                 # Create new incognito tab
-  python run_cdp.py --tab-id <TAB_ID> --url https://example.com
-  python run_cdp.py -t <TAB_ID> --output-dir ./captures --no-navigate
-  python run_cdp.py -t <TAB_ID> --capture-resources XHR Fetch --block-resources Image Font
-  python run_cdp.py -t <TAB_ID> --no-clear-all --url https://example.com
-  python run_cdp.py -t <TAB_ID> --no-clear-cookies --no-clear-storage
-
-Get TAB_ID from chrome://inspect/#devices or http://127.0.0.1:9222/json
-If no TAB_ID is provided, a new tab will be created automatically.
-        """
+        epilog=(
+            "Examples:\n"
+            "  python run_cdp.py <TAB_ID>                    # Use existing tab\n"
+            "  python run_cdp.py                             # Create new tab automatically\n"
+            "  python run_cdp.py --incognito                 # Create new incognito tab\n"
+            "  python run_cdp.py --tab-id <TAB_ID> --url https://example.com\n"
+            "  python run_cdp.py -t <TAB_ID> --output-dir ./captures --no-navigate\n"
+            "  python run_cdp.py -t <TAB_ID> --capture-resources XHR Fetch --block-resources Image Font\n"
+            "  python run_cdp.py -t <TAB_ID> --no-clear-all --url https://example.com\n"
+            "  python run_cdp.py -t <TAB_ID> --no-clear-cookies --no-clear-storage\n"
+            "\n"
+            "Get TAB_ID from chrome://inspect/#devices or http://127.0.0.1:9222/json\n"
+            "If no TAB_ID is provided, a new tab will be created automatically.\n"
+        )
     )
 
     parser.add_argument(
@@ -140,7 +138,6 @@ If no TAB_ID is provided, a new tab will be created automatically.
         action="store_true",
         help="Keep existing files in output directory"
     )
-
 
     parser.add_argument(
         "--capture-resources",
