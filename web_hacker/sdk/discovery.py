@@ -115,7 +115,7 @@ class RoutineDiscovery:
                 consolidated_transactions_path=str(Path(self.cdp_captures_dir) / "network" / "consolidated_transactions.json"),
                 storage_jsonl_path=str(Path(self.cdp_captures_dir) / "storage" / "events.jsonl"),
                 window_properties_path=str(Path(self.cdp_captures_dir) / "window_properties" / "window_properties.json"),
-                documentation_dirs=["./agent_docs"],
+                documentation_dirs=[str(PACKAGE_ROOT / "agent_docs")],
                 code_dirs=[
                     str(PACKAGE_ROOT / "data_models"),
                     str(PACKAGE_ROOT / "utils"),
