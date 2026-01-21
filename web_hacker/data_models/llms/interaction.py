@@ -6,7 +6,7 @@ Data models for LLM interactions and agent communication.
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Union
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -75,6 +75,16 @@ class SuggestedEditRoutine(SuggestedEdit):
     """
     type: Literal[SuggestedEditType.ROUTINE] = SuggestedEditType.ROUTINE
     routine: Routine = Field(..., description="The new/modified routine object")
+
+
+# Union of all suggested edit types - discriminated by 'type' field
+SuggestedEditUnion = Annotated[
+    Union[
+        SuggestedEditRoutine,
+        # Add new types here
+    ],
+    Field(discriminator="type"),
+]
 
 
 class PendingToolInvocation(BaseModel):
@@ -159,7 +169,7 @@ class EmittedMessage(BaseModel):
         default=None,
         description="Error message if type is ERROR",
     )
-    suggested_edit: SuggestedEdit | None = Field(
+    suggested_edit: SuggestedEditUnion | None = Field(
         default=None,
         description="Suggested edit details for SUGGESTED_EDIT messages",
     )

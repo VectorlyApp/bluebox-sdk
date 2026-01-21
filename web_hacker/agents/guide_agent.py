@@ -24,6 +24,7 @@ from web_hacker.data_models.llms.interaction import (
     LLMToolCall,
     PendingToolInvocation,
     SuggestedEditRoutine,
+    SuggestedEditUnion,
     ToolInvocationStatus,
 )
 from web_hacker.data_models.routine import Routine
@@ -228,7 +229,7 @@ but is not required before calling `suggest_routine_edit`.
         emit_message_callable: Callable[[EmittedMessage], None],
         persist_chat_callable: Callable[[Chat], Chat] | None = None,
         persist_chat_thread_callable: Callable[[ChatThread], ChatThread] | None = None,
-        persist_suggested_edit_callable: Callable[[SuggestedEditRoutine], SuggestedEditRoutine] | None = None,
+        persist_suggested_edit_callable: Callable[[SuggestedEditUnion], SuggestedEditUnion] | None = None,
         stream_chunk_callable: Callable[[str], None] | None = None,
         llm_model: OpenAIModel = OpenAIModel.GPT_5_1,
         chat_thread: ChatThread | None = None,
@@ -245,8 +246,8 @@ but is not required before calling `suggest_routine_edit`.
                 Returns the Chat with the final ID assigned by the persistence layer.
             persist_chat_thread_callable: Optional callback to persist ChatThread (for DynamoDB).
                 Returns the ChatThread with the final ID assigned by the persistence layer.
-            persist_suggested_edit_callable: Optional callback to persist SuggestedEditRoutine objects.
-                Returns the SuggestedEditRoutine with the final ID assigned by the persistence layer.
+            persist_suggested_edit_callable: Optional callback to persist suggested edit objects.
+                Returns the SuggestedEditUnion with the final ID assigned by the persistence layer.
             stream_chunk_callable: Optional callback for streaming text chunks as they arrive.
             llm_model: The LLM model to use for conversation.
             chat_thread: Existing ChatThread to continue, or None for new conversation.
