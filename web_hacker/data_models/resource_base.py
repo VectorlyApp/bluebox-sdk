@@ -29,12 +29,12 @@ class ResourceBase(BaseModel, ABC):
         description="Resource ID in format [resourceType]_[uuidv4]"
     )
 
-    created_at: int = Field(
-        default_factory=lambda: int(datetime.now().timestamp() * 1_000),
+    created_at: float = Field(
+        default_factory=lambda: datetime.now().timestamp(),
         description="Unix timestamp (milliseconds) when resource was created"
     )
-    updated_at: int = Field(
-        default_factory=lambda: int(datetime.now().timestamp() * 1_000),
+    updated_at: float = Field(
+        default_factory=lambda: datetime.now().timestamp(),
         description="Unix timestamp (milliseconds) when resource was last updated"
     )
     metadata: dict[str, Any] | None = Field(
