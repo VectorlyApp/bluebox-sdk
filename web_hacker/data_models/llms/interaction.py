@@ -73,7 +73,7 @@ class SuggestedEditRoutine(SuggestedEdit):
     """
     Suggested edit for a routine.
     """
-    type: SuggestedEditType = Literal[SuggestedEditType.ROUTINE]
+    type: Literal[SuggestedEditType.ROUTINE] = SuggestedEditType.ROUTINE
     routine: Routine = Field(..., description="The new/modified routine object")
 
 
