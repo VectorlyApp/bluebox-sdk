@@ -31,11 +31,11 @@ class ResourceBase(BaseModel, ABC):
 
     created_at: float = Field(
         default_factory=lambda: datetime.now().timestamp(),
-        description="Unix timestamp (milliseconds) when resource was created"
+        description="Unix timestamp (seconds) when resource was created"
     )
     updated_at: float = Field(
         default_factory=lambda: datetime.now().timestamp(),
-        description="Unix timestamp (milliseconds) when resource was last updated"
+        description="Unix timestamp (seconds) when resource was last updated"
     )
     metadata: dict[str, Any] | None = Field(
         default=None,
