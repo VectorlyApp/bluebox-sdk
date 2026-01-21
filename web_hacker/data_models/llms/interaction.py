@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from web_hacker.data_models.resource_base import ResourceBase
 from web_hacker.data_models.routine import Routine
 
 class ChatRole(StrEnum):
@@ -50,21 +51,13 @@ class SuggestedEditStatus(StrEnum):
     REJECTED = "rejected"
     
     
-class SuggestedEdit(BaseModel):
+class SuggestedEdit(ResourceBase):
     """
     Base model for suggested edits that require user approval.
     """
-    id: str = Field(
-        default_factory=lambda: str(uuid4()),
-        description="Unique edit ID (UUIDv4)",
-    )
     type: SuggestedEditType = Field(
         ...,
         description="Type of suggested edit",
-    )
-    created_at: int = Field(
-        default_factory=lambda: int(datetime.now().timestamp() * 1_000),
-        description="Unix timestamp (milliseconds) when resource was created",
     )
     status: SuggestedEditStatus = Field(
         default=SuggestedEditStatus.PENDING,
@@ -253,6 +246,10 @@ class ChatThread(BaseModel):
     chat_ids: list[str] = Field(
         default_factory=list,
         description="Ordered list of message IDs in this thread",
+    )
+    suggested_edit_ids : list[str] = Field(
+        default_factory=list,
+        description="List of suggested edit IDs in this thread",
     )
     pending_tool_invocation: PendingToolInvocation | None = Field(
         default=None,

@@ -228,6 +228,7 @@ but is not required before calling `suggest_routine_edit`.
         emit_message_callable: Callable[[EmittedMessage], None],
         persist_chat_callable: Callable[[Chat], Chat] | None = None,
         persist_chat_thread_callable: Callable[[ChatThread], ChatThread] | None = None,
+        persist_suggested_edit_callable: Callable[[SuggestedEditRoutine], SuggestedEditRoutine] | None = None,
         stream_chunk_callable: Callable[[str], None] | None = None,
         llm_model: OpenAIModel = OpenAIModel.GPT_5_1,
         chat_thread: ChatThread | None = None,
@@ -244,6 +245,8 @@ but is not required before calling `suggest_routine_edit`.
                 Returns the Chat with the final ID assigned by the persistence layer.
             persist_chat_thread_callable: Optional callback to persist ChatThread (for DynamoDB).
                 Returns the ChatThread with the final ID assigned by the persistence layer.
+            persist_suggested_edit_callable: Optional callback to persist SuggestedEditRoutine objects.
+                Returns the SuggestedEditRoutine with the final ID assigned by the persistence layer.
             stream_chunk_callable: Optional callback for streaming text chunks as they arrive.
             llm_model: The LLM model to use for conversation.
             chat_thread: Existing ChatThread to continue, or None for new conversation.
@@ -255,6 +258,7 @@ but is not required before calling `suggest_routine_edit`.
         self._emit_message_callable = emit_message_callable
         self._persist_chat_callable = persist_chat_callable
         self._persist_chat_thread_callable = persist_chat_thread_callable
+        self._persist_suggested_edit_callable = persist_suggested_edit_callable
         self._stream_chunk_callable = stream_chunk_callable
         self._data_store = data_store
         self._tools_requiring_approval = tools_requiring_approval or set()
@@ -574,6 +578,16 @@ but is not required before calling `suggest_routine_edit`.
             chat_thread_id=self._thread.id,
             routine=routine,
         )
+
+        # Persist suggested edit if callback provided (may assign new ID)
+        if self._persist_suggested_edit_callable:
+            suggested_edit = self._persist_suggested_edit_callable(suggested_edit)
+
+        # Add to thread's suggested_edit_ids and persist thread
+        self._thread.suggested_edit_ids.append(suggested_edit.id)
+        self._thread.updated_at = int(datetime.now().timestamp())
+        if self._persist_chat_thread_callable:
+            self._thread = self._persist_chat_thread_callable(self._thread)
 
         # Emit the suggested edit for host to handle
         self._emit_message(
