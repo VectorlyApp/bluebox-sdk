@@ -228,7 +228,6 @@ but is not required before calling `suggest_routine_edit`.
         emit_message_callable: Callable[[EmittedMessage], None],
         persist_chat_callable: Callable[[Chat], Chat] | None = None,
         persist_chat_thread_callable: Callable[[ChatThread], ChatThread] | None = None,
-        persist_routine_callable: Callable[[dict], None] | None = None,
         stream_chunk_callable: Callable[[str], None] | None = None,
         llm_model: OpenAIModel = OpenAIModel.GPT_5_1,
         chat_thread: ChatThread | None = None,
@@ -245,8 +244,6 @@ but is not required before calling `suggest_routine_edit`.
                 Returns the Chat with the final ID assigned by the persistence layer.
             persist_chat_thread_callable: Optional callback to persist ChatThread (for DynamoDB).
                 Returns the ChatThread with the final ID assigned by the persistence layer.
-            persist_routine_callable: Optional callback to persist routine when suggest_routine_edit succeeds.
-                Receives the complete routine dict to save/overwrite.
             stream_chunk_callable: Optional callback for streaming text chunks as they arrive.
             llm_model: The LLM model to use for conversation.
             chat_thread: Existing ChatThread to continue, or None for new conversation.
@@ -258,7 +255,6 @@ but is not required before calling `suggest_routine_edit`.
         self._emit_message_callable = emit_message_callable
         self._persist_chat_callable = persist_chat_callable
         self._persist_chat_thread_callable = persist_chat_thread_callable
-        self._persist_routine_callable = persist_routine_callable
         self._stream_chunk_callable = stream_chunk_callable
         self._data_store = data_store
         self._tools_requiring_approval = tools_requiring_approval or set()
