@@ -7,13 +7,17 @@ Script for discovering routines from the network transactions.
 from argparse import ArgumentParser
 import os
 import json
+from pathlib import Path
 
 from openai import OpenAI
+
+# Package root for code_paths (web_hacker/scripts/ -> web_hacker/)
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
 from web_hacker.config import Config
 from web_hacker.utils.exceptions import ApiKeyNotFoundError
 from web_hacker.routine_discovery.agent import RoutineDiscoveryAgent
-from web_hacker.routine_discovery.context_manager import LocalContextManager
+from web_hacker.routine_discovery.data_store import LocalDiscoveryDataStore
 from web_hacker.data_models.routine_discovery.message import (
     RoutineDiscoveryMessage,
     RoutineDiscoveryMessageType,
@@ -48,19 +52,30 @@ def main() -> None:
     os.makedirs(args.output_dir, exist_ok=True)
 
     # initialize context manager
-    context_manager = LocalContextManager(
+    data_store = LocalDiscoveryDataStore(
         client=openai_client,
         tmp_dir=os.path.join(args.output_dir, "tmp"),
         transactions_dir=os.path.join(args.cdp_captures_dir, "network/transactions"),
         consolidated_transactions_path=os.path.join(args.cdp_captures_dir, "network/consolidated_transactions.json"),
         storage_jsonl_path=os.path.join(args.cdp_captures_dir, "storage/events.jsonl"),
         window_properties_path=os.path.join(args.cdp_captures_dir, "window_properties/window_properties.json"),
+        documentation_paths=[str(PACKAGE_ROOT / "agent_docs")],
+        code_paths=[
+            str(PACKAGE_ROOT / "data_models" / "routine"),
+            str(PACKAGE_ROOT / "data_models" / "ui_elements.py"),
+            str(PACKAGE_ROOT / "utils" / "js_utils.py"),
+            str(PACKAGE_ROOT / "utils" / "data_utils.py"),
+            "!" + str(PACKAGE_ROOT / "**" / "__init__.py"),
+        ],
     )
-    logger.info("Context manager initialized.")
+    logger.info("Data store initialized.")
 
-    # make the vectorstore
-    context_manager.make_vectorstore()
-    logger.info("Vectorstore created: %s", context_manager.vectorstore_id)
+    # make the vectorstores
+    data_store.make_cdp_captures_vectorstore()
+    logger.info("CDP captures vectorstore created: %s", data_store.cdp_captures_vectorstore_id)
+
+    data_store.make_documentation_vectorstore()
+    logger.info("Documentation vectorstore created: %s", data_store.documentation_vectorstore_id)
 
     # define message handler for progress updates
     def handle_discovery_message(message: RoutineDiscoveryMessage) -> None:
@@ -79,7 +94,7 @@ def main() -> None:
     # initialize routine discovery agent
     routine_discovery_agent = RoutineDiscoveryAgent(
         client=openai_client,
-        context_manager=context_manager,
+        data_store=data_store,
         task=args.task,
         emit_message_callable=handle_discovery_message,
         llm_model=args.llm_model,
@@ -116,7 +131,7 @@ def main() -> None:
     finally:
         # clean up the vectorstore
         logger.info("Cleaning up vectorstore...")
-        context_manager.clean_up()
+        data_store.clean_up()
         logger.info("Vectorstore cleaned up.")
 
 

@@ -1,7 +1,15 @@
 """
 web_hacker/utils/exceptions.py
 
-Custom exceptions for the project.
+Custom exceptions for web-hacker.
+
+Contains:
+- UnsupportedFileFormat: Invalid file type
+- ApiKeyNotFoundError: Missing API key
+- BrowserConnectionError, ChromiumConnectionError: CDP connection failures
+- NavigationError, NavigationBlockedError: Page navigation failures
+- RoutineExecutionError: Routine run failures
+- HTTPClientError, HTTPServerError: HTTP request failures
 """
 
 class UnsupportedFileFormat(Exception):
@@ -80,4 +88,10 @@ class RoutineExecutionError(Exception):
 class WebHackerError(Exception):
     """
     Base exception for all Web Hacker errors.
+    """
+
+
+class UnknownToolError(Exception):
+    """
+    Raised when attempting to execute a tool that does not exist.
     """

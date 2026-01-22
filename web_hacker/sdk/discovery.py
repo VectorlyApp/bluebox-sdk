@@ -1,5 +1,13 @@
 """
+web_hacker/sdk/discovery.py
+
 Routine discovery SDK wrapper.
+
+Contains:
+- RoutineDiscoveryResult: Discovered routine with messages and vectorstore IDs
+- RoutineDiscovery: Wraps RoutineDiscoveryAgent for easy routine generation
+- discover(): Generate routine from CDP captures using LLM
+- Uses: LocalDiscoveryDataStore, RoutineDiscoveryAgent
 """
 
 from pathlib import Path
@@ -9,8 +17,11 @@ import json
 from openai import OpenAI
 from pydantic import BaseModel
 
+# Package root for code_paths (web_hacker/sdk/ -> web_hacker/)
+PACKAGE_ROOT = Path(__file__).resolve().parent.parent
+
 from ..routine_discovery.agent import RoutineDiscoveryAgent
-from ..routine_discovery.context_manager import LocalContextManager
+from ..routine_discovery.data_store import LocalDiscoveryDataStore
 from ..data_models.routine.routine import Routine
 from ..data_models.routine_discovery.message import RoutineDiscoveryMessage
 from ..data_models.routine_discovery.llm_responses import TestParametersResponse
@@ -68,7 +79,7 @@ class RoutineDiscovery:
         self.message_callback = message_callback or self._default_message_handler
 
         self.agent: Optional[RoutineDiscoveryAgent] = None
-        self.context_manager: Optional[LocalContextManager] = None
+        self.data_store: Optional[LocalDiscoveryDataStore] = None
 
     def _default_message_handler(self, message: RoutineDiscoveryMessage) -> None:
         """Default message handler that logs to console."""
@@ -96,25 +107,36 @@ class RoutineDiscovery:
             # Create output directory
             os.makedirs(self.output_dir, exist_ok=True)
 
-            # Initialize context manager
-            self.context_manager = LocalContextManager(
+            # Initialize data store
+            self.data_store = LocalDiscoveryDataStore(
                 client=self.client,
                 tmp_dir=str(Path(self.output_dir) / "tmp"),
                 transactions_dir=str(Path(self.cdp_captures_dir) / "network" / "transactions"),
                 consolidated_transactions_path=str(Path(self.cdp_captures_dir) / "network" / "consolidated_transactions.json"),
                 storage_jsonl_path=str(Path(self.cdp_captures_dir) / "storage" / "events.jsonl"),
                 window_properties_path=str(Path(self.cdp_captures_dir) / "window_properties" / "window_properties.json"),
+                documentation_paths=[str(PACKAGE_ROOT / "agent_docs")],
+                code_paths=[
+                    str(PACKAGE_ROOT / "data_models" / "routine"),
+                    str(PACKAGE_ROOT / "data_models" / "ui_elements.py"),
+                    str(PACKAGE_ROOT / "utils" / "js_utils.py"),
+                    str(PACKAGE_ROOT / "utils" / "data_utils.py"),
+                    "!" + str(PACKAGE_ROOT / "**" / "__init__.py"),
+                ],
             )
-            logger.info("Context manager initialized.")
+            logger.info("Data store initialized.")
 
-            # Make the vectorstore
-            self.context_manager.make_vectorstore()
-            logger.info(f"Vectorstore created: {self.context_manager.vectorstore_id}")
+            # Make the vectorstores
+            self.data_store.make_cdp_captures_vectorstore()
+            logger.info(f"CDP captures vectorstore created: {self.data_store.cdp_captures_vectorstore_id}")
+
+            self.data_store.make_documentation_vectorstore()
+            logger.info(f"Documentation vectorstore created: {self.data_store.documentation_vectorstore_id}")
 
             # Initialize and run agent
             self.agent = RoutineDiscoveryAgent(
                 client=self.client,
-                context_manager=self.context_manager,
+                data_store=self.data_store,
                 task=self.task,
                 emit_message_callable=self.message_callback,
                 llm_model=self.llm_model,
@@ -136,8 +158,8 @@ class RoutineDiscovery:
 
         finally:
             # Clean up vectorstore
-            if self.context_manager is not None and self.context_manager.vectorstore_id is not None:
+            if self.data_store is not None and self.data_store.cdp_captures_vectorstore_id is not None:
                 logger.info("Cleaning up vectorstore...")
-                self.context_manager.clean_up()
+                self.data_store.clean_up()
                 logger.info("Vectorstore cleaned up.")
 

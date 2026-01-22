@@ -10,7 +10,6 @@ This module provides the core functionality for:
 """
 
 import json
-import random
 import time
 from json import JSONDecodeError
 from typing import Callable
