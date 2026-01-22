@@ -1,6 +1,6 @@
 # Fetch Returns 401/403 (Unauthenticated)
 
-> Related: [fetch.md](../operations/fetch.md), [js-evaluate.md](../operations/js-evaluate.md)
+> Fetch operations return 401/403 errors when authentication fails. Use `js_evaluate` to inspect cookies/storage, set `"credentials": "include"` to send cookies, navigate to API origin first, or extract tokens from JS variables. Related: [fetch.md](../operations/fetch.md), [js-evaluate.md](../operations/js-evaluate.md)
 
 **Symptom:** API returns unauthorized error
 

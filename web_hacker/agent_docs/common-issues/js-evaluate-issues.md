@@ -1,6 +1,6 @@
 # js_evaluate Issues
 
-> Related: [js-evaluate.md](../operations/js-evaluate.md), [fetch.md](../operations/fetch.md)
+> Common problems when using `js_evaluate` operations: code returns undefined due to missing IIFE wrappers or return statements, stored fetch data needs JSON parsing (sometimes double parsing), and certain APIs like `fetch()` or `eval()` are blocked and must use dedicated operations instead. Related: [js-evaluate.md](../operations/js-evaluate.md), [fetch.md](../operations/fetch.md)
 
 ---
 

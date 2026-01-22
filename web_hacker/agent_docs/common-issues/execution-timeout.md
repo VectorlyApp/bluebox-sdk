@@ -1,5 +1,7 @@
 # Agent Routine Execution Timeout
 
+> Routines timeout due to long execution times (3+ minutes), network issues with Chrome deployment server, or JavaScript code stuck in infinite loops. Retry for transient issues, optimize routines, or check JS code. Related: [execution.md](../core/execution.md), [routines.md](../core/routines.md)
+
 **Symptom:** Routine execution times out or fails after extended run time
 
 **Possible Causes:**
