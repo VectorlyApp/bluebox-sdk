@@ -790,9 +790,7 @@ def generate_js_evaluate_wrapper_js(
         }}
     }}"""
 
-    # Use string concatenation instead of f-string for IIFE to avoid
-    # interpreting JavaScript braces as f-string placeholders
-    template = """(async () => {{
+    return f"""(async () => {{
     // Console log capture
     const __consoleLogs = [];
     const __originalConsoleLog = console.log;
@@ -816,8 +814,8 @@ def generate_js_evaluate_wrapper_js(
 
     try {{
         // Execute IIFE and await if it returns a promise
-        __result = await Promise.resolve(""" + iife + """);
-        """ + storage_code + """
+        __result = await Promise.resolve({iife});
+        {storage_code}
     }} catch(e) {{
         __executionError = String(e);
     }} finally {{
@@ -832,6 +830,5 @@ def generate_js_evaluate_wrapper_js(
         execution_error: __executionError
     }};
 }})()"""
-    return template
 
 
