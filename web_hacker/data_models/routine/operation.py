@@ -1150,8 +1150,8 @@ class RoutineJsEvaluateOperation(RoutineOperation):
             session_storage_key=self.session_storage_key,
         )
 
-        logger.info(
-            f"Executing JS evaluation: {len(expression)} chars, "
+        logger.debug(
+            f"Executing JS evaluation: {expression}"
             f"timeout={self.timeout_seconds}s, session_storage_key={self.session_storage_key}"
         )
 
