@@ -23,7 +23,7 @@ class ResourceBase(BaseModel, ABC):
     Examples: "Routine_123e4567-e89b-12d3-a456-426614174000"
     """
 
-    # standardized resource ID in format "[resourceType]_[uuid]"
+    # standardized resource ID in format "[resourceType]_[uuidv4]"
     id: str = Field(
         default_factory=lambda: f"ResourceBase_{uuid4()}",
         description="Resource ID in format [resourceType]_[uuidv4]"
