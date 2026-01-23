@@ -239,21 +239,16 @@ class OpenAIClient(AbstractLLMVendorClient):
             kwargs["previous_response_id"] = previous_response_id
 
         # Handle input
-        system_prompt_handled = False
         if input_text:
             kwargs["input"] = input_text
         elif messages:
             converted_messages = self._convert_messages_for_responses_api(messages)
-            if not previous_response_id:
-                # First call: prepend system prompt directly into messages
-                converted_messages = self._prepend_system_prompt(converted_messages, system_prompt)
-                system_prompt_handled = True
             kwargs["input"] = converted_messages
         elif not previous_response_id:
             raise ValueError("Either messages or input must be provided")
 
-        # Pass system prompt as instructions when not already in messages
-        if system_prompt and not system_prompt_handled:
+        # Always pass system prompt as instructions
+        if system_prompt:
             kwargs["instructions"] = system_prompt
 
         if stream:
