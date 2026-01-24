@@ -236,6 +236,7 @@ but is not required before calling `suggest_routine_edit`.
         existing_chats: list[Chat] | None = None,
         data_store: DiscoveryDataStore | None = None,
         tools_requiring_approval: set[str] | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         """
         Initialize the guide agent.
@@ -263,6 +264,7 @@ but is not required before calling `suggest_routine_edit`.
         self._stream_chunk_callable = stream_chunk_callable
         self._data_store = data_store
         self._tools_requiring_approval = tools_requiring_approval or set()
+        self._system_prompt = system_prompt if system_prompt is not None else self.SYSTEM_PROMPT
         self._previous_response_id: str | None = None
 
         self.llm_model = llm_model
@@ -328,7 +330,7 @@ but is not required before calling `suggest_routine_edit`.
 
     def _get_system_prompt(self) -> str:
         """Get system prompt with data store context if available."""
-        system_prompt = self.SYSTEM_PROMPT
+        system_prompt = self._system_prompt
         if self._data_store:
             data_store_prompt = self.DATA_STORE_PROMPT.format(data_store_prompt=self._data_store.generate_data_store_prompt())
             if data_store_prompt:
@@ -375,6 +377,30 @@ but is not required before calling `suggest_routine_edit`.
             name="get_last_routine_execution_result",
             description="Get the result of the last routine execution including success/failure status, output data, and any errors. No arguments required.",
             parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+        # Register request_user_browser_recording tool
+        self.llm_client.register_tool(
+            name="request_user_browser_recording",
+            description=(
+                "Request the user to perform a browser recording session. "
+                "Use this when you need the user to demonstrate a web task so it can be captured "
+                "and turned into a routine. The user will navigate to a website and perform "
+                "actions while browser activity (navigation, network requests, cookies, etc.) is recorded."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "task_description": {
+                        "type": "string",
+                        "description": (
+                            "Description of what the user should do during the recording. "
+                            "E.g. 'Search for one-way flights from NYC to LA on March 15'"
+                        ),
+                    }
+                },
+                "required": ["task_description"],
+            },
         )
 
         # Register suggest_routine_edit tool - auto-executes, validates before saving
@@ -579,6 +605,31 @@ but is not required before calling `suggest_routine_edit`.
             return {"error": "No routine execution result available. No routine has been executed yet."}
         return {"result": self._routine_state.last_execution_result}
 
+    def _tool_request_user_browser_recording(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute request_user_browser_recording tool."""
+        task_description = tool_arguments.get("task_description", "")
+        if not task_description:
+            raise ValueError("task_description is required.")
+
+        self._emit_message(
+            EmittedMessage(
+                type=ChatMessageType.BROWSER_RECORDING_REQUEST,
+                browser_recording_task=task_description,
+                chat_thread_id=self._thread.id,
+            )
+        )
+
+        return {
+            "success": True,
+            "message": (
+                "Browser recording request sent to user. "
+                "Give the user brief bulleted instructions on what to do:\n"
+                "- A new browser tab will open\n"
+                "- Navigate to <WEBSITE>\n"
+                "- Perform the following: <STEPS>"
+            ),
+        }
+
     def _tool_suggest_routine_edit(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute suggest_routine_edit tool."""
         # Accept both "routine" and "routine_dict" keys for flexibility
@@ -659,6 +710,9 @@ but is not required before calling `suggest_routine_edit`.
 
         if tool_name == "suggest_routine_edit":
             return self._tool_suggest_routine_edit(tool_arguments)
+
+        if tool_name == "request_user_browser_recording":
+            return self._tool_request_user_browser_recording(tool_arguments)
 
         logger.error("Unknown tool \"%s\" with arguments: %s", tool_name, tool_arguments)
         raise UnknownToolError(f"Unknown tool \"{tool_name}\" with arguments: {tool_arguments}")

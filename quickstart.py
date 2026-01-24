@@ -8,21 +8,16 @@ Usage:
 """
 
 import json
-import os
-import platform
-import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
-import requests
 import websocket
 
 from web_hacker.sdk import WebHacker, BrowserMonitor
 from web_hacker.data_models.routine.routine import Routine
 from web_hacker.cdp.connection import get_existing_tabs
+from web_hacker.utils.chrome_utils import check_chrome_running, launch_chrome
 from web_hacker.utils.terminal_utils import (
     GREEN, YELLOW, BLUE, CYAN,
     print_colored, print_header, ask_yes_no,
@@ -34,110 +29,6 @@ PORT = 9222
 REMOTE_DEBUGGING_ADDRESS = f"http://127.0.0.1:{PORT}"
 CDP_CAPTURES_DIR = Path("./cdp_captures")
 DISCOVERY_OUTPUT_DIR = Path("./routine_discovery_output")
-
-
-def check_chrome_running(port: int) -> bool:
-    """Check if Chrome is already running in debug mode."""
-    try:
-        response = requests.get(f"http://127.0.0.1:{port}/json/version", timeout=1)
-        return response.status_code == 200
-    except (requests.RequestException, requests.Timeout):
-        return False
-
-
-def find_chrome_path() -> Optional[str]:
-    """Find Chrome executable path based on OS."""
-    system = platform.system()
-    
-    if system == "Darwin":  # macOS
-        chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        if os.path.isfile(chrome_path):
-            return chrome_path
-    elif system == "Linux":
-        for name in ["google-chrome", "chromium-browser", "chromium", "chrome"]:
-            chrome_path = shutil.which(name)
-            if chrome_path:
-                return chrome_path
-    elif system == "Windows":
-        possible_paths = [
-            os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
-            os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
-            os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
-        ]
-        for path in possible_paths:
-            if os.path.isfile(path):
-                return path
-        chrome_path = shutil.which("chrome") or shutil.which("google-chrome")
-        if chrome_path:
-            return chrome_path
-    
-    return None
-
-
-def launch_chrome(port: int) -> Optional[subprocess.Popen]:
-    """Launch Chrome in debug mode."""
-    chrome_path = find_chrome_path()
-    
-    if not chrome_path:
-        print_colored("⚠️  Chrome not found automatically.", YELLOW)
-        print(f"   Please launch Chrome manually with --remote-debugging-port={port}")
-        input("Press Enter when Chrome is running in debug mode...")
-        return None
-    
-    # Create user data directory
-    if platform.system() == "Windows":
-        chrome_user_dir = os.path.expandvars(r"%USERPROFILE%\tmp\chrome")
-    else:
-        chrome_user_dir = os.path.expanduser("~/tmp/chrome")
-    
-    os.makedirs(chrome_user_dir, exist_ok=True)
-    
-    chrome_args = [
-        chrome_path,
-        f"--remote-debugging-address=127.0.0.1",
-        f"--remote-debugging-port={port}",
-        f"--user-data-dir={chrome_user_dir}",
-        "--remote-allow-origins=*",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "https://github.com/VectorlyApp/web-hacker/blob/main/docs/chrome-debug-mode-explanation.md",
-    ]
-    
-    print("🚀 Launching Chrome...")
-    try:
-        creation_flags = 0
-        if platform.system() == "Windows":
-            creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP
-        
-        process = subprocess.Popen(
-            chrome_args,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=creation_flags,
-        )
-        
-        print("⏳ Waiting for Chrome to start...")
-        for _ in range(10):
-            if check_chrome_running(port):
-                print_colored("✅ Chrome is ready!", GREEN)
-                time.sleep(0.5)
-                return process
-            time.sleep(1)
-        
-        print_colored("⚠️  Chrome failed to start automatically.", YELLOW)
-        try:
-            process.terminate()
-            process.kill()
-        except Exception:
-            pass
-        
-        input("Press Enter when Chrome is running in debug mode...")
-        return None
-        
-    except Exception as e:
-        print_colored(f"⚠️  Error launching Chrome: {e}", YELLOW)
-        input("Press Enter when Chrome is running in debug mode...")
-        return None
 
 
 def step_1_monitor_browser(cdp_captures_dir: Path) -> bool:

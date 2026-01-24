@@ -26,6 +26,7 @@ import difflib
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -54,9 +55,17 @@ from web_hacker.data_models.llms.interaction import (
 from web_hacker.data_models.routine.routine import Routine
 from web_hacker.llms.tools.guide_agent_tools import validate_routine
 from web_hacker.routine_discovery.data_store import DiscoveryDataStore, LocalDiscoveryDataStore
+from web_hacker.sdk import BrowserMonitor
+from web_hacker.utils.chrome_utils import ensure_chrome_running
+from web_hacker.utils.terminal_utils import ask_yes_no
 
 
 console = Console()
+
+# Browser monitoring constants
+PORT = 9222
+REMOTE_DEBUGGING_ADDRESS = f"http://127.0.0.1:{PORT}"
+DEFAULT_CDP_CAPTURES_DIR = Path("./cdp_captures")
 
 
 def configure_logging(quiet: bool = False, log_file: str | None = None) -> None:
@@ -297,6 +306,7 @@ class TerminalGuideChat:
         self,
         llm_model: OpenAIModel | None = None,
         data_store: DiscoveryDataStore | None = None,
+        cdp_captures_dir: Path | None = None,
     ) -> None:
         """Initialize the terminal chat interface."""
         self._pending_invocation: PendingToolInvocation | None = None
@@ -305,6 +315,8 @@ class TerminalGuideChat:
         self._data_store = data_store
         self._loaded_routine_path: Path | None = None
         self._last_execution_ok: bool | None = None
+        self._browser_recording_requested: bool = False
+        self._cdp_captures_dir: Path = cdp_captures_dir or DEFAULT_CDP_CAPTURES_DIR
         self._agent = GuideAgent(
             emit_message_callable=self._handle_message,
             stream_chunk_callable=self._handle_stream_chunk,
@@ -432,6 +444,9 @@ class TerminalGuideChat:
                 console.print("[bold yellow]📝 Agent suggested a routine edit[/bold yellow]")
                 console.print("[dim]Use /diff to see changes, /accept to apply, /reject to discard[/dim]")
                 console.print()
+
+        elif message.type == ChatMessageType.BROWSER_RECORDING_REQUEST:
+            self._browser_recording_requested = True
 
         elif message.type == ChatMessageType.ERROR:
             print_error(message.error or "Unknown error")
@@ -891,6 +906,56 @@ class TerminalGuideChat:
         console.print()
         self._pending_suggested_edit = None
 
+    def _handle_browser_recording(self) -> None:
+        """Handle a browser recording request from the agent."""
+        if not ask_yes_no("Start browser monitoring?"):
+            return
+
+        # Ensure Chrome is running in debug mode (launch if needed)
+        if not ensure_chrome_running(PORT):
+            console.print()
+            console.print("[red]✗ Could not start Chrome in debug mode.[/red]")
+            console.print(f"[dim]Launch Chrome manually with: --remote-debugging-port={PORT}[/dim]")
+            console.print()
+            return
+
+        cdp_captures_dir = self._cdp_captures_dir
+        cdp_captures_dir.mkdir(parents=True, exist_ok=True)
+
+        console.print()
+        console.print("[bold blue]Starting browser monitor...[/bold blue]")
+        console.print(f"[dim]Output directory: {cdp_captures_dir}[/dim]")
+        console.print()
+
+        monitor = BrowserMonitor(
+            remote_debugging_address=REMOTE_DEBUGGING_ADDRESS,
+            output_dir=str(cdp_captures_dir),
+            url="about:blank",
+            incognito=True,
+        )
+
+        try:
+            monitor.start()
+            console.print("[green]Monitoring started! Perform your actions in the browser.[/green]")
+            console.print("[yellow]Press Ctrl+C when done...[/yellow]")
+            console.print()
+
+            while True:
+                time.sleep(1)
+
+        except KeyboardInterrupt:
+            console.print()
+            console.print("Stopping monitor...")
+        finally:
+            summary = monitor.stop()
+
+        console.print()
+        console.print("[bold green]✓ Monitoring complete![/bold green]")
+        if summary:
+            console.print(f"[dim]Duration: {summary.get('duration', 0):.1f}s[/dim]")
+            console.print(f"[dim]Transactions captured: {summary.get('network_transactions', 0)}[/dim]")
+        console.print()
+
     def run(self) -> None:
         """Run the interactive chat loop."""
         print_welcome(str(self._agent.llm_model))
@@ -1010,6 +1075,11 @@ class TerminalGuideChat:
                 # Process the message (no spinner - conflicts with streaming output)
                 self._agent.process_user_message(user_input)
 
+                # Check if agent requested a browser recording
+                if self._browser_recording_requested:
+                    self._browser_recording_requested = False
+                    self._handle_browser_recording()
+
             except KeyboardInterrupt:
                 console.print()
                 console.print("[cyan]Interrupted. Goodbye![/cyan]")
@@ -1126,7 +1196,8 @@ def main() -> None:
         console.print("[green]✓ Vectorstores ready![/green]")
         console.print()
 
-        chat = TerminalGuideChat(llm_model=llm_model, data_store=data_store)
+        cdp_captures_dir = Path(args.cdp_captures_dir) if args.cdp_captures_dir else DEFAULT_CDP_CAPTURES_DIR
+        chat = TerminalGuideChat(llm_model=llm_model, data_store=data_store, cdp_captures_dir=cdp_captures_dir)
         chat.run()
 
     except ValueError as e:

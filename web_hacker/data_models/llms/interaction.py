@@ -126,6 +126,7 @@ class ChatMessageType(StrEnum):
     TOOL_INVOCATION_REQUEST = "tool_invocation_request"
     TOOL_INVOCATION_RESULT = "tool_invocation_result"
     SUGGESTED_EDIT = "suggested_edit"
+    BROWSER_RECORDING_REQUEST = "browser_recording_request"
     ERROR = "error"
 
 
@@ -172,6 +173,10 @@ class EmittedMessage(BaseModel):
     suggested_edit: SuggestedEditUnion | None = Field(
         default=None,
         description="Suggested edit details for SUGGESTED_EDIT messages",
+    )
+    browser_recording_task: str | None = Field(
+        default=None,
+        description="Task description for BROWSER_RECORDING_REQUEST messages",
     )
 
 
