@@ -32,6 +32,10 @@ class OpenAIClient(AbstractLLMVendorClient):
     API type resolution based on parameters.
     """
 
+    # Class constants ______________________________________________________________________________________________________
+
+    MAX_STRUCTURED_RETRIES: int = 3
+
     # Magic methods ________________________________________________________________________________________________________
 
     def __init__(self, model: OpenAIModel) -> None:
@@ -156,6 +160,174 @@ class OpenAIClient(AbstractLLMVendorClient):
             }
         # Already in Responses API format (file_search, or already flat function)
         return tool
+
+    def _build_structured_tool(self, response_model: type[T]) -> dict[str, Any]:
+        """
+        Build a Responses API tool definition from a Pydantic model.
+
+        The tool is named 'make_<ModelName>' and its parameters are the model's JSON schema.
+        This allows using tool_choice to force structured output without responses.parse().
+
+        Args:
+            response_model: The Pydantic model to generate the tool from.
+
+        Returns:
+            Tool definition dict in Responses API format.
+        """
+        schema = response_model.model_json_schema()
+        tool_name = f"make_{response_model.__name__}"
+        return {
+            "type": "function",
+            "name": tool_name,
+            "description": f"Return the structured output as a {response_model.__name__} object.",
+            "parameters": schema,
+        }
+
+    def _parse_structured_tool_call(
+        self,
+        response: Any,
+        response_model: type[T],
+        tool_name: str,
+    ) -> T:
+        """
+        Extract and parse the forced tool call arguments from a Responses API response.
+
+        Args:
+            response: The raw API response.
+            response_model: The Pydantic model to parse into.
+            tool_name: Expected tool name to match.
+
+        Returns:
+            Parsed Pydantic model instance.
+
+        Raises:
+            ValueError: If no matching tool call is found in the response.
+        """
+        output = response.output
+        if output:
+            for item in output:
+                if item.type == "function_call" and item.name == tool_name:
+                    args_str = item.arguments if isinstance(item.arguments, str) else json.dumps(item.arguments)
+                    return response_model.model_validate_json(args_str)
+        raise ValueError(f"No tool call '{tool_name}' found in response output")
+
+    def _call_structured_via_tool(
+        self,
+        kwargs: dict[str, Any],
+        response_model: type[T],
+        is_async: bool = False,
+    ) -> T:
+        """
+        Call the Responses API with a forced tool call for structured output.
+
+        Adds the structured tool to kwargs, forces tool_choice, calls the API,
+        and retries on validation errors up to MAX_STRUCTURED_RETRIES times.
+
+        Args:
+            kwargs: Pre-built kwargs for the Responses API call.
+            response_model: The Pydantic model for structured output.
+            is_async: Whether this is being called in an async context (unused in sync path).
+
+        Returns:
+            Parsed Pydantic model instance.
+
+        Raises:
+            ValueError: If all retries are exhausted.
+        """
+        structured_tool = self._build_structured_tool(response_model)
+        tool_name = structured_tool["name"]
+
+        # Add structured tool to existing tools
+        existing_tools = kwargs.get("tools", [])
+        kwargs["tools"] = existing_tools + [structured_tool]
+        kwargs["tool_choice"] = {"type": "function", "name": tool_name}
+
+        last_error: Exception | None = None
+        for attempt in range(self.MAX_STRUCTURED_RETRIES):
+            response = self._client.responses.create(**kwargs)
+            self._last_response_id = response.id
+
+            try:
+                return self._parse_structured_tool_call(response, response_model, tool_name)
+            except (ValueError, Exception) as e:
+                last_error = e
+                logger.warning(
+                    "Structured output parsing failed (attempt %d/%d): %s",
+                    attempt + 1, self.MAX_STRUCTURED_RETRIES, e,
+                )
+                # On retry, add the error as feedback via previous_response_id
+                kwargs["previous_response_id"] = response.id
+                if "input" in kwargs:
+                    kwargs["input"] = f"Your previous tool call had a validation error: {e}. Please fix the arguments and try again."
+                else:
+                    # Add error feedback as a new user message
+                    input_msgs = kwargs.get("input", [])
+                    if isinstance(input_msgs, list):
+                        input_msgs.append({
+                            "role": "user",
+                            "content": f"Your previous tool call had a validation error: {e}. Please fix the arguments and try again.",
+                        })
+                        kwargs["input"] = input_msgs
+
+        raise ValueError(
+            f"Failed to get valid structured output after {self.MAX_STRUCTURED_RETRIES} attempts. "
+            f"Last error: {last_error}"
+        )
+
+    async def _call_structured_via_tool_async(
+        self,
+        kwargs: dict[str, Any],
+        response_model: type[T],
+    ) -> T:
+        """
+        Async version of _call_structured_via_tool.
+
+        Args:
+            kwargs: Pre-built kwargs for the Responses API call.
+            response_model: The Pydantic model for structured output.
+
+        Returns:
+            Parsed Pydantic model instance.
+
+        Raises:
+            ValueError: If all retries are exhausted.
+        """
+        structured_tool = self._build_structured_tool(response_model)
+        tool_name = structured_tool["name"]
+
+        existing_tools = kwargs.get("tools", [])
+        kwargs["tools"] = existing_tools + [structured_tool]
+        kwargs["tool_choice"] = {"type": "function", "name": tool_name}
+
+        last_error: Exception | None = None
+        for attempt in range(self.MAX_STRUCTURED_RETRIES):
+            response = await self._async_client.responses.create(**kwargs)
+            self._last_response_id = response.id
+
+            try:
+                return self._parse_structured_tool_call(response, response_model, tool_name)
+            except (ValueError, Exception) as e:
+                last_error = e
+                logger.warning(
+                    "Structured output parsing failed (attempt %d/%d): %s",
+                    attempt + 1, self.MAX_STRUCTURED_RETRIES, e,
+                )
+                kwargs["previous_response_id"] = response.id
+                if "input" in kwargs:
+                    kwargs["input"] = f"Your previous tool call had a validation error: {e}. Please fix the arguments and try again."
+                else:
+                    input_msgs = kwargs.get("input", [])
+                    if isinstance(input_msgs, list):
+                        input_msgs.append({
+                            "role": "user",
+                            "content": f"Your previous tool call had a validation error: {e}. Please fix the arguments and try again.",
+                        })
+                        kwargs["input"] = input_msgs
+
+        raise ValueError(
+            f"Failed to get valid structured output after {self.MAX_STRUCTURED_RETRIES} attempts. "
+            f"Last error: {last_error}"
+        )
 
     def _convert_messages_for_responses_api(
         self,
@@ -484,11 +656,21 @@ class OpenAIClient(AbstractLLMVendorClient):
             )
 
             if response_model is not None:
-                # Use responses.parse() for proper structured output
-                kwargs["text_format"] = response_model
-                response = self._client.responses.parse(**kwargs)
-                self._last_response_id = response.id
-                return response.output_parsed
+                # Try responses.parse() first; fall back to tool-call if schema is incompatible
+                try:
+                    parse_kwargs = {**kwargs, "text_format": response_model}
+                    response = self._client.responses.parse(**parse_kwargs)
+                    self._last_response_id = response.id
+                    return response.output_parsed
+                except Exception as e:
+                    if "invalid_json_schema" in str(e) or "additionalProperties" in str(e):
+                        logger.info(
+                            "responses.parse() failed for %s due to schema constraints, "
+                            "falling back to tool-call approach: %s",
+                            response_model.__name__, e,
+                        )
+                        return self._call_structured_via_tool(kwargs, response_model)
+                    raise
 
             response = self._client.responses.create(**kwargs)
             self._last_response_id = response.id
@@ -564,10 +746,20 @@ class OpenAIClient(AbstractLLMVendorClient):
             )
 
             if response_model is not None:
-                kwargs["text_format"] = response_model
-                response = await self._async_client.responses.parse(**kwargs)
-                self._last_response_id = response.id
-                return response.output_parsed
+                try:
+                    parse_kwargs = {**kwargs, "text_format": response_model}
+                    response = await self._async_client.responses.parse(**parse_kwargs)
+                    self._last_response_id = response.id
+                    return response.output_parsed
+                except Exception as e:
+                    if "invalid_json_schema" in str(e) or "additionalProperties" in str(e):
+                        logger.info(
+                            "responses.parse() failed for %s due to schema constraints, "
+                            "falling back to tool-call approach: %s",
+                            response_model.__name__, e,
+                        )
+                        return await self._call_structured_via_tool_async(kwargs, response_model)
+                    raise
 
             response = await self._async_client.responses.create(**kwargs)
             self._last_response_id = response.id
