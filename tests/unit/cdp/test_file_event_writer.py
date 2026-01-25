@@ -13,7 +13,9 @@ from web_hacker.cdp.file_event_writer import FileEventWriter
 
 
 class TestFileEventWriterInit:
-    """Tests for FileEventWriter initialization."""
+    """
+    Tests for FileEventWriter initialization.
+    """
 
     def test_init_creates_directories(self, tmp_path: Path) -> None:
         """Parent directories should be created on init."""
@@ -39,7 +41,9 @@ class TestFileEventWriterInit:
 
 
 class TestFileEventWriterWriteEvent:
-    """Tests for FileEventWriter.write_event method."""
+    """
+    Tests for FileEventWriter.write_event method.
+    """
 
     @pytest.mark.asyncio
     async def test_write_event_network(self, tmp_path: Path) -> None:
@@ -185,7 +189,9 @@ class TestFileEventWriterWriteEvent:
 
 
 class TestFileEventWriterFactory:
-    """Tests for FileEventWriter.create_from_output_dir factory method."""
+    """
+    Tests for FileEventWriter.create_from_output_dir factory method.
+    """
 
     def test_create_from_output_dir(self, tmp_path: Path) -> None:
         """Factory creates correct paths structure."""
@@ -224,7 +230,9 @@ class TestFileEventWriterFactory:
 
 
 class TestFileEventWriterCategoryMapping:
-    """Tests for FileEventWriter category to path mapping."""
+    """
+    Tests for FileEventWriter category to path mapping.
+    """
 
     def test_category_to_path_key_mapping(self) -> None:
         """Verify CATEGORY_TO_PATH_KEY mappings are correct."""

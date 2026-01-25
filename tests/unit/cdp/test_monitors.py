@@ -18,7 +18,9 @@ from web_hacker.cdp.monitors.async_interaction_monitor import AsyncInteractionMo
 
 
 class TestAbstractAsyncMonitor:
-    """Tests for AbstractAsyncMonitor base class."""
+    """
+    Tests for AbstractAsyncMonitor base class.
+    """
 
     def test_subclass_registration(self) -> None:
         """Verify all 4 monitors are registered in _subclasses."""
@@ -49,7 +51,9 @@ class TestAbstractAsyncMonitor:
 
 
 class TestAsyncNetworkMonitorStaticMethods:
-    """Tests for AsyncNetworkMonitor static methods."""
+    """
+    Tests for AsyncNetworkMonitor static methods.
+    """
 
     def test_is_internal_url_chrome(self) -> None:
         """chrome:// URLs should return True."""
@@ -178,7 +182,9 @@ class TestAsyncNetworkMonitorStaticMethods:
 
 
 class TestAsyncNetworkMonitorWsEventSummary:
-    """Tests for AsyncNetworkMonitor.get_ws_event_summary."""
+    """
+    Tests for AsyncNetworkMonitor.get_ws_event_summary.
+    """
 
     def test_get_ws_event_summary_basic(self) -> None:
         """Returns correct summary structure with truncated URL."""
@@ -208,7 +214,9 @@ class TestAsyncNetworkMonitorWsEventSummary:
 
 
 class TestAsyncNetworkMonitorFileOperations:
-    """Tests for AsyncNetworkMonitor file operations."""
+    """
+    Tests for AsyncNetworkMonitor file operations.
+    """
 
     def test_consolidate_transactions(self, tmp_path: Path) -> None:
         """Reads JSONL and returns dict."""
@@ -299,7 +307,9 @@ class TestAsyncNetworkMonitorFileOperations:
 
 
 class TestAsyncStorageMonitorWsEventSummary:
-    """Tests for AsyncStorageMonitor.get_ws_event_summary."""
+    """
+    Tests for AsyncStorageMonitor.get_ws_event_summary.
+    """
 
     def test_get_ws_event_summary_cookie_change(self) -> None:
         """Cookie change events should have correct summary."""
@@ -334,7 +344,9 @@ class TestAsyncStorageMonitorWsEventSummary:
 
 
 class TestAsyncStorageMonitorStateManagement:
-    """Tests for AsyncStorageMonitor state management methods."""
+    """
+    Tests for AsyncStorageMonitor state management methods.
+    """
 
     @pytest.mark.asyncio
     async def test_handle_dom_storage_added(self, mock_event_callback: AsyncMock) -> None:
@@ -467,7 +479,9 @@ class TestAsyncStorageMonitorStateManagement:
 
 
 class TestAsyncWindowPropertyMonitorStaticMethods:
-    """Tests for AsyncWindowPropertyMonitor static methods."""
+    """
+    Tests for AsyncWindowPropertyMonitor static methods.
+    """
 
     def test_is_application_object_native_classname(self) -> None:
         """HTMLElement, SVGElement should return False."""
@@ -488,7 +502,9 @@ class TestAsyncWindowPropertyMonitorStaticMethods:
 
 
 class TestAsyncWindowPropertyMonitorWsEventSummary:
-    """Tests for AsyncWindowPropertyMonitor.get_ws_event_summary."""
+    """
+    Tests for AsyncWindowPropertyMonitor.get_ws_event_summary.
+    """
 
     def test_get_ws_event_summary(self) -> None:
         """Returns correct structure with change_count and changed_paths."""
@@ -512,7 +528,9 @@ class TestAsyncWindowPropertyMonitorWsEventSummary:
 
 
 class TestAsyncInteractionMonitorWsEventSummary:
-    """Tests for AsyncInteractionMonitor.get_ws_event_summary."""
+    """
+    Tests for AsyncInteractionMonitor.get_ws_event_summary.
+    """
 
     def test_get_ws_event_summary(self) -> None:
         """Returns interaction_type and element_tag."""
@@ -537,7 +555,9 @@ class TestAsyncInteractionMonitorWsEventSummary:
 
 
 class TestAsyncInteractionMonitorParseEvent:
-    """Tests for AsyncInteractionMonitor._parse_interaction_event."""
+    """
+    Tests for AsyncInteractionMonitor._parse_interaction_event.
+    """
 
     def test_parse_interaction_event(self, mock_event_callback: AsyncMock) -> None:
         """Parses raw JS data into UiInteractionEvent."""
@@ -581,7 +601,9 @@ class TestAsyncInteractionMonitorParseEvent:
 
 
 class TestAsyncInteractionMonitorFileOperations:
-    """Tests for AsyncInteractionMonitor file operations."""
+    """
+    Tests for AsyncInteractionMonitor file operations.
+    """
 
     def test_consolidate_interactions(self, tmp_path: Path) -> None:
         """Reads JSONL and returns consolidated dict."""

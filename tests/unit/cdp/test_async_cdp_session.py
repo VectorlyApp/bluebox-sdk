@@ -5,14 +5,17 @@ Tests for AsyncCDPSession.
 """
 
 import asyncio
+import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 from web_hacker.cdp.async_cdp_session import AsyncCDPSession
 
 
 class TestAsyncCDPSessionInit:
-    """Tests for AsyncCDPSession initialization."""
+    """
+    Tests for AsyncCDPSession initialization.
+    """
 
     def test_init_creates_monitors(self, mock_event_callback: AsyncMock) -> None:
         """All 4 monitors should be instantiated."""
@@ -43,7 +46,9 @@ class TestAsyncCDPSessionInit:
 
 
 class TestAsyncCDPSessionSend:
-    """Tests for AsyncCDPSession.send method."""
+    """
+    Tests for AsyncCDPSession.send method.
+    """
 
     @pytest.mark.asyncio
     async def test_send_increments_seq(self, mock_event_callback: AsyncMock) -> None:
@@ -79,7 +84,6 @@ class TestAsyncCDPSessionSend:
 
         # verify ws.send was called with sessionId in message
         session.ws.send.assert_called_once()
-        import json
 
         sent_msg = json.loads(session.ws.send.call_args[0][0])
         assert sent_msg["sessionId"] == "test-session-123"
@@ -96,8 +100,6 @@ class TestAsyncCDPSessionSend:
         session.page_session_id = None
 
         await session.send("Target.getTargets")
-
-        import json
 
         sent_msg = json.loads(session.ws.send.call_args[0][0])
         assert "sessionId" not in sent_msg
@@ -116,7 +118,9 @@ class TestAsyncCDPSessionSend:
 
 
 class TestAsyncCDPSessionEnableDomain:
-    """Tests for AsyncCDPSession.enable_domain method."""
+    """
+    Tests for AsyncCDPSession.enable_domain method.
+    """
 
     @pytest.mark.asyncio
     async def test_enable_domain_idempotent(self, mock_event_callback: AsyncMock) -> None:
@@ -160,7 +164,9 @@ class TestAsyncCDPSessionEnableDomain:
 
 
 class TestAsyncCDPSessionHandleMessage:
-    """Tests for AsyncCDPSession.handle_message routing."""
+    """
+    Tests for AsyncCDPSession.handle_message routing.
+    """
 
     @pytest.mark.asyncio
     async def test_handle_message_routes_to_network(
@@ -234,7 +240,9 @@ class TestAsyncCDPSessionHandleMessage:
 
 
 class TestAsyncCDPSessionCommandReply:
-    """Tests for AsyncCDPSession command reply handling."""
+    """
+    Tests for AsyncCDPSession command reply handling.
+    """
 
     @pytest.mark.asyncio
     async def test_handle_command_reply_resolves_future(
@@ -267,7 +275,9 @@ class TestAsyncCDPSessionCommandReply:
 
 
 class TestAsyncCDPSessionGetMonitoringSummary:
-    """Tests for AsyncCDPSession.get_monitoring_summary method."""
+    """
+    Tests for AsyncCDPSession.get_monitoring_summary method.
+    """
 
     def test_get_monitoring_summary(self, mock_event_callback: AsyncMock) -> None:
         """Should aggregate all monitor summaries."""
@@ -292,7 +302,9 @@ class TestAsyncCDPSessionGetMonitoringSummary:
 
 
 class TestAsyncCDPSessionSendAndWait:
-    """Tests for AsyncCDPSession.send_and_wait method."""
+    """
+    Tests for AsyncCDPSession.send_and_wait method.
+    """
 
     @pytest.mark.asyncio
     async def test_send_and_wait_returns_result(
@@ -333,7 +345,9 @@ class TestAsyncCDPSessionSendAndWait:
 
 
 class TestAsyncCDPSessionWaitForPageSessionId:
-    """Tests for AsyncCDPSession.wait_for_page_session_id method."""
+    """
+    Tests for AsyncCDPSession.wait_for_page_session_id method.
+    """
 
     @pytest.mark.asyncio
     async def test_wait_for_page_session_id_already_set(
