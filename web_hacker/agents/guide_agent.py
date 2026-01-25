@@ -11,6 +11,7 @@ Contains:
 
 import json
 from datetime import datetime
+from enum import StrEnum
 from typing import Any, Callable, Literal
 from uuid import uuid4
 
@@ -45,6 +46,12 @@ from web_hacker.utils.logger import get_logger
 
 
 logger = get_logger(name=__name__)
+
+
+class GuideAgentMode(StrEnum):
+    """Operating mode for the Guide Agent."""
+    CREATION = "creation"  # No routine loaded - help create one
+    EDITING = "editing"    # Routine loaded - help debug/edit
 
 
 class GuideAgentRoutineState:
@@ -170,8 +177,8 @@ class GuideAgent:
     {data_store_prompt}
     """
 
-    SYSTEM_PROMPT: str = """You are a helpful assistant that helps users debug \
-and understand web automation routines.
+    CREATION_MODE_SYSTEM_PROMPT: str = """You are a helpful assistant that helps users create \
+web automation routines.
 
 ## What are Routines?
 
@@ -186,54 +193,117 @@ clicks, searches, and user interactions. Define a routine once, then access it a
 
 ## Your Role
 
-Help users debug and understand routines by reviewing:
-- Routine JSON structure and operations
-- Execution run logs and errors
-- Parameter values and placeholder resolution
-- Network transactions and responses
+You are in CREATION MODE. Help users create new routines by:
+- Understanding what task they want to automate
+- Guiding them through browser recording to capture their workflow
+- Running routine discovery to generate the routine from captured data
+- Creating routines directly when appropriate
 
-## Routine State Tools - USE THESE WHEN DEBUGGING
-When a user asks for help debugging a routine or wants you to review their routine, use these tools:
-- **`get_current_routine`**: No arguments. Call this FIRST when the user asks about their routine or wants help editing it.
-- **`get_last_routine_execution`**: No arguments. Call when the user says they ran a routine and it failed.
-- **`get_last_routine_execution_result`**: No arguments. Call to see execution results - success/failure status, output data, and errors.
+## Available Tools
 
-**Debugging workflow:**
-1. User says "my routine failed" or "help me debug" → call `get_last_routine_execution` and `get_last_routine_execution_result`
-2. User says "review my routine" or "what's wrong with my routine" → call `get_current_routine`
+- **`request_user_browser_recording`**: Ask the user to demonstrate a task in the browser. \
+Use this when the user describes a web automation task they want to create.
+- **`request_routine_discovery`**: Start routine discovery from captured browser data. \
+Use this after recording is complete.
+- **`create_new_routine`**: Create a routine directly without discovery. Use this when you \
+have enough information to build the routine programmatically.
+- **`file_search`**: Search documentation for routine creation best practices.
+
+## Workflow for Creating Routines
+
+1. **Understand the task**: Ask the user what website data they want to access or what actions they want to automate.
+2. **Initiate recording**: Use `request_user_browser_recording` with a clear task description.
+3. **Wait for recording**: The user will perform the task while browser activity is captured.
+4. **Run discovery**: Use `request_routine_discovery` to generate a routine from the captures.
+5. **Review result**: Once the routine is created, you will switch to editing mode to help refine it.
+
+## Guidelines
+
+- Be conversational and helpful
+- Ask clarifying questions to understand exactly what the user wants to automate
+- Provide clear, bulleted instructions when requesting browser recordings
+- If the user asks about an existing routine, inform them no routine is currently loaded
+- BE VERY CONCISE AND TO THE POINT. DO NOT BE TOO LONG-WINDED!
+- IMPORTANT: When you decide to use a tool, JUST CALL IT. Do NOT announce "I will now call X" or \
+"Let me use X tool" - just invoke the tool directly. The user can always decline the request.
+
+## NOTES:
+- Quotes or escaped quotes are ESSENTIAL AROUND {{{{parameter_name}}}} ALL parameters in routines!
+- Before saying ANYTHING ABOUT QUOTES OR ESCAPED QUOTES, you MUST look through the docs!
+
+## System Action Messages
+When you receive a system message with the prefix "[ACTION REQUIRED]", you MUST immediately \
+execute the requested action using the appropriate tools.
+"""
+
+    EDITING_MODE_SYSTEM_PROMPT: str = """You are a helpful assistant that helps users debug \
+and improve web automation routines.
+
+## What are Routines?
+
+Routines are reusable web automation workflows that can be executed programmatically. \
+They are created by learning from user demonstrations - users record themselves performing \
+a task on a website, and the system generates a parameterized routine.
+
+## What is Vectorly?
+
+Vectorly (https://vectorly.app) unlocks data from interactive websites - getting web data behind \
+clicks, searches, and user interactions. Define a routine once, then access it anywhere via API or MCP.
+
+## Your Role
+
+You are in EDITING MODE. A routine is currently loaded. Help users by:
+- Reviewing the routine structure and operations
+- Debugging execution failures
+- Suggesting improvements and fixes
+- Validating routine changes
+
+## Available Tools - USE THESE WHEN DEBUGGING
+
+- **`get_current_routine`**: Get the currently loaded routine JSON. Call this FIRST when the user \
+asks about their routine or wants help editing it.
+- **`get_last_routine_execution`**: Get the last executed routine and parameters used. Call when \
+the user says they ran a routine and it failed.
+- **`get_last_routine_execution_result`**: Get execution results - success/failure status, output \
+data, and errors. Essential for debugging.
+- **`validate_routine`**: Validate a routine object against the schema. REQUIRED KEY: 'routine'.
+- **`suggest_routine_edit`**: Propose changes to the routine for user approval. REQUIRED KEY: 'routine' \
+with the COMPLETE routine object.
+- **`file_search`**: Search documentation for debugging tips and common issues.
+
+## Debugging Workflow
+
+1. User says "my routine failed" or "help me debug" -> call `get_last_routine_execution` and \
+`get_last_routine_execution_result`
+2. User says "review my routine" or "what's wrong" -> call `get_current_routine`
 3. Analyze the results and cross-reference with documentation via file_search
-4. Suggest specific fixes based on the error patterns
+4. Suggest specific fixes using `suggest_routine_edit`
 
 ## Suggesting Routine Edits
 
-When you want to propose changes to a routine, use the `suggest_routine_edit` tool:
+When proposing changes, use the `suggest_routine_edit` tool:
 - **REQUIRED KEY: `routine`** - Pass the COMPLETE routine object under this key
-- Example: `{"routine": {"name": "...", "description": "...", "parameters": [...], "operations": [...]}}`
-- The tool validates the routine automatically - you do NOT need to call `validate_routine` first
-- If validation fails, read the error message, fix the routine, and call `suggest_routine_edit` again
-- Keep retrying until the suggestion succeeds (make at least 3 attempts if needed)
-
-The `validate_routine` tool is available for manually checking routine validity (REQUIRED KEY: `routine`), \
-but is not required before calling `suggest_routine_edit`.
+- Example: {{"routine": {{"name": "...", "description": "...", "parameters": [...], "operations": [...]}}}}
+- The tool validates automatically - you do NOT need to call `validate_routine` first
+- If validation fails, read the error, fix the routine, and try again (make at least 3 attempts)
 
 ## Guidelines
 
 - Be conversational and helpful
 - Ask clarifying questions if needed
-- Use the file_search tool to look up relevant documentation, code, and captured data
-- When debugging, analyze the specific error and suggest concrete fixes (refer to debug docs and common issues)
-- If the user asks what this tool does, explain it clearly
-- BE VERY CONCISE AND TO THE POINT. DO NOT BE TOO LONG-WINDED. ANSWER THE QUESTION DIRECTLY!
+- When debugging, analyze the specific error and suggest concrete fixes
+- Use file_search to reference documentation for complex issues
+- BE VERY CONCISE AND TO THE POINT. DO NOT BE TOO LONG-WINDED!
+- IMPORTANT: When you decide to use a tool, JUST CALL IT. Do NOT announce "I will now call X" or \
+"Let me use X tool" - just invoke the tool directly.
 
 ## NOTES:
-- Quotes or escaped quotes are ESSENTIAL AROUND {{{{parameter_name}}}} ALL parameters in routines, regardless of type!
+- Quotes or escaped quotes are ESSENTIAL AROUND {{{{parameter_name}}}} ALL parameters in routines!
 - Before saying ANYTHING ABOUT QUOTES OR ESCAPED QUOTES, you MUST look through the docs!
 
 ## System Action Messages
 When you receive a system message with the prefix "[ACTION REQUIRED]", you MUST immediately \
-execute the requested action using the appropriate tools. Do NOT just acknowledge the message - \
-actually call the tools and perform the action. These are internal system requests that require \
-immediate execution, not just acknowledgment.
+execute the requested action using the appropriate tools.
 """
 
     # Magic methods ________________________________________________________________________________________________________
@@ -278,14 +348,18 @@ immediate execution, not just acknowledgment.
         self._stream_chunk_callable = stream_chunk_callable
         self._data_store = data_store
         self._tools_requiring_approval = tools_requiring_approval or set()
-        self._system_prompt = system_prompt if system_prompt is not None else self.SYSTEM_PROMPT
+        self._custom_system_prompt = system_prompt  # None means use mode-based prompts
         self._previous_response_id: str | None = None
 
         self.llm_model = llm_model
         self.llm_client = LLMClient(llm_model)
 
-        # Register tools
-        self._register_tools()
+        # Initialize routine state first (needed for mode determination)
+        self._routine_state = GuideAgentRoutineState()
+
+        # Initialize mode and register appropriate tools
+        self._current_mode: GuideAgentMode = self._determine_mode()
+        self._register_tools(self._current_mode)
 
         # Configure file_search vectorstores if data store is provided
         if data_store:
@@ -305,13 +379,11 @@ immediate execution, not just acknowledgment.
             self._thread = self._persist_chat_thread_callable(self._thread)
 
         logger.info(
-            "Instantiated GuideAgent with model: %s, chat_thread_id: %s",
+            "Instantiated GuideAgent with model: %s, chat_thread_id: %s, mode: %s",
             llm_model,
             self._thread.id,
+            self._current_mode.value,
         )
-
-        # Initialize routine state
-        self._routine_state = GuideAgentRoutineState()
 
     # Properties ___________________________________________________________________________________________________________
 
@@ -340,60 +412,78 @@ immediate execution, not just acknowledgment.
         """Return the routine state manager."""
         return self._routine_state
 
+    @property
+    def current_mode(self) -> GuideAgentMode:
+        """Return the current operating mode."""
+        return self._current_mode
+
     # Private methods ______________________________________________________________________________________________________
 
     def _get_system_prompt(self) -> str:
-        """Get system prompt with data store context if available."""
-        system_prompt = self._system_prompt
+        """Get system prompt based on current mode with data store context."""
+        # Use custom prompt if provided, otherwise select based on mode
+        if self._custom_system_prompt is not None:
+            system_prompt = self._custom_system_prompt
+        elif self._current_mode == GuideAgentMode.CREATION:
+            system_prompt = self.CREATION_MODE_SYSTEM_PROMPT
+        else:
+            system_prompt = self.EDITING_MODE_SYSTEM_PROMPT
+
+        # Append data store context
         if self._data_store:
-            data_store_prompt = self.DATA_STORE_PROMPT.format(data_store_prompt=self._data_store.generate_data_store_prompt())
+            data_store_prompt = self.DATA_STORE_PROMPT.format(
+                data_store_prompt=self._data_store.generate_data_store_prompt()
+            )
             if data_store_prompt:
                 system_prompt = f"{system_prompt}\n\n{data_store_prompt}"
         return system_prompt
 
-    def _register_tools(self) -> None:
-        """Register all tools with the LLM client."""
-        # Register validate_routine with explicit schema
-        self.llm_client.register_tool(
-            name="validate_routine",
-            description=(
-                "Validates a routine JSON object against the Routine schema. "
-                "REQUIRED KEY: 'routine' - the COMPLETE routine JSON object. "
-                "Example: {\"routine\": {\"name\": \"...\", \"description\": \"...\", \"parameters\": [...], \"operations\": [...]}}"
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "routine": {
-                        "type": "object",
-                        "description": (
-                            "REQUIRED. The complete routine JSON object to validate. "
-                            "Must contain keys: name (string), description (string), parameters (array), operations (array)."
-                        ),
-                    }
-                },
-                "required": ["routine"],
-            },
+    def _determine_mode(self) -> GuideAgentMode:
+        """Determine the appropriate mode based on routine state."""
+        if self._routine_state.current_routine_str is not None:
+            return GuideAgentMode.EDITING
+        return GuideAgentMode.CREATION
+
+    def _check_and_switch_mode(self) -> bool:
+        """
+        Check if mode should switch and perform switch if needed.
+
+        Returns:
+            True if mode was switched, False otherwise.
+        """
+        new_mode = self._determine_mode()
+        if new_mode == self._current_mode:
+            return False
+
+        old_mode = self._current_mode
+        self._current_mode = new_mode
+
+        # Re-register tools for new mode
+        self._register_tools(new_mode)
+
+        logger.info(
+            "GuideAgent mode switched from %s to %s",
+            old_mode.value,
+            new_mode.value,
         )
 
-        # Register routine state tools directly (no parameters needed, auto-execute)
-        self.llm_client.register_tool(
-            name="get_current_routine",
-            description="Get the current routine JSON that the user is working on. No arguments required.",
-            parameters={"type": "object", "properties": {}, "required": []},
-        )
-        self.llm_client.register_tool(
-            name="get_last_routine_execution",
-            description="Get the last executed routine JSON and the parameters that were used. No arguments required.",
-            parameters={"type": "object", "properties": {}, "required": []},
-        )
-        self.llm_client.register_tool(
-            name="get_last_routine_execution_result",
-            description="Get the result of the last routine execution including success/failure status, output data, and any errors. No arguments required.",
-            parameters={"type": "object", "properties": {}, "required": []},
-        )
+        return True
 
-        # Register request_user_browser_recording tool
+    def _register_tools(self, mode: GuideAgentMode) -> None:
+        """Register tools appropriate for the given mode."""
+        # Clear existing tools
+        self.llm_client.clear_tools()
+
+        if mode == GuideAgentMode.CREATION:
+            self._register_creation_mode_tools()
+        else:
+            self._register_editing_mode_tools()
+
+        logger.debug("Registered tools for %s mode", mode.value)
+
+    def _register_creation_mode_tools(self) -> None:
+        """Register tools for creation mode (no routine loaded)."""
+        # request_user_browser_recording
         self.llm_client.register_tool(
             name="request_user_browser_recording",
             description=(
@@ -417,30 +507,7 @@ immediate execution, not just acknowledgment.
             },
         )
 
-        # Register suggest_routine_edit tool - auto-executes, validates before saving
-        self.llm_client.register_tool(
-            name="suggest_routine_edit",
-            description=(
-                "Suggest an edited/improved routine for user approval. "
-                "REQUIRED KEY: 'routine' - the COMPLETE routine object. "
-                "Example: {\"routine\": {\"name\": \"...\", \"description\": \"...\", \"parameters\": [...], \"operations\": [...]}}"
-            ),
-            parameters={
-                "type": "object",
-                "properties": {
-                    "routine": {
-                        "type": "object",
-                        "description": (
-                            "REQUIRED. The complete routine object to suggest. "
-                            "Must contain keys: name (string), description (string), parameters (array), operations (array)."
-                        ),
-                    }
-                },
-                "required": ["routine"],
-            },
-        )
-
-        # Register request_routine_discovery tool
+        # request_routine_discovery
         self.llm_client.register_tool(
             name="request_routine_discovery",
             description=(
@@ -468,7 +535,7 @@ immediate execution, not just acknowledgment.
             },
         )
 
-        # Register create_new_routine tool - creates and saves a new routine directly
+        # create_new_routine
         self.llm_client.register_tool(
             name="create_new_routine",
             description=(
@@ -485,6 +552,75 @@ immediate execution, not just acknowledgment.
                         "type": "object",
                         "description": (
                             "REQUIRED. The complete routine object to create. "
+                            "Must contain keys: name (string), description (string), parameters (array), operations (array)."
+                        ),
+                    }
+                },
+                "required": ["routine"],
+            },
+        )
+
+    def _register_editing_mode_tools(self) -> None:
+        """Register tools for editing mode (routine is loaded)."""
+        # get_current_routine
+        self.llm_client.register_tool(
+            name="get_current_routine",
+            description="Get the current routine JSON that the user is working on. No arguments required.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+        # get_last_routine_execution
+        self.llm_client.register_tool(
+            name="get_last_routine_execution",
+            description="Get the last executed routine JSON and the parameters that were used. No arguments required.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+        # get_last_routine_execution_result
+        self.llm_client.register_tool(
+            name="get_last_routine_execution_result",
+            description="Get the result of the last routine execution including success/failure status, output data, and any errors. No arguments required.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+        # validate_routine
+        self.llm_client.register_tool(
+            name="validate_routine",
+            description=(
+                "Validates a routine JSON object against the Routine schema. "
+                "REQUIRED KEY: 'routine' - the COMPLETE routine JSON object. "
+                "Example: {\"routine\": {\"name\": \"...\", \"description\": \"...\", \"parameters\": [...], \"operations\": [...]}}"
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "routine": {
+                        "type": "object",
+                        "description": (
+                            "REQUIRED. The complete routine JSON object to validate. "
+                            "Must contain keys: name (string), description (string), parameters (array), operations (array)."
+                        ),
+                    }
+                },
+                "required": ["routine"],
+            },
+        )
+
+        # suggest_routine_edit
+        self.llm_client.register_tool(
+            name="suggest_routine_edit",
+            description=(
+                "Suggest an edited/improved routine for user approval. "
+                "REQUIRED KEY: 'routine' - the COMPLETE routine object. "
+                "Example: {\"routine\": {\"name\": \"...\", \"description\": \"...\", \"parameters\": [...], \"operations\": [...]}}"
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "routine": {
+                        "type": "object",
+                        "description": (
+                            "REQUIRED. The complete routine object to suggest. "
                             "Must contain keys: name (string), description (string), parameters (array), operations (array)."
                         ),
                     }
@@ -956,6 +1092,9 @@ immediate execution, not just acknowledgment.
         - A tool requires user approval (pauses for confirmation)
         - An error occurs
         """
+        # Check for mode switch before running
+        self._check_and_switch_mode()
+
         max_iterations = 10  # Safety limit to prevent infinite loops
 
         for iteration in range(max_iterations):
@@ -1272,6 +1411,10 @@ immediate execution, not just acknowledgment.
         self._thread = ChatThread()
         self._chats = {}
         self._routine_state.reset()
+
+        # Reset mode to CREATION and re-register tools
+        self._current_mode = GuideAgentMode.CREATION
+        self._register_tools(self._current_mode)
 
         if self._persist_chat_thread_callable:
             self._thread = self._persist_chat_thread_callable(self._thread)
