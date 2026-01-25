@@ -1,6 +1,6 @@
 # Click/Input Fails - Element Not Found
 
-> Related: [ui-operations.md](../operations/ui-operations.md), [data-extraction.md](../operations/data-extraction.md)
+> UI interactions fail when elements aren't found due to elements not loaded yet, wrong selectors, elements in iframes (not supported), or dynamic IDs. Use `return_html` or `js_evaluate` to diagnose and add sleep delays or fix selectors. Related: [ui-operations.md](../operations/ui-operations.md), [data-extraction.md](../operations/data-extraction.md)
 
 **Symptom:** "Element not found" or click has no effect
 

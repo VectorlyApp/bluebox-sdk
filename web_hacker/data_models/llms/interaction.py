@@ -6,11 +6,13 @@ Data models for LLM interactions and agent communication.
 
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from web_hacker.data_models.resource_base import ResourceBase
+from web_hacker.data_models.routine import Routine
 
 class ChatRole(StrEnum):
     """
@@ -31,6 +33,58 @@ class ToolInvocationStatus(StrEnum):
     DENIED = "denied"
     EXECUTED = "executed"
     FAILED = "failed"
+
+
+class SuggestedEditType(StrEnum):
+    """
+    Types of suggested edits.
+    """
+    ROUTINE = "routine"
+
+
+class SuggestedEditStatus(StrEnum):
+    """
+    Status of a suggested edit.
+    """
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    
+    
+class SuggestedEdit(ResourceBase):
+    """
+    Base model for suggested edits that require user approval.
+    """
+    type: SuggestedEditType = Field(
+        ...,
+        description="Type of suggested edit",
+    )
+    status: SuggestedEditStatus = Field(
+        default=SuggestedEditStatus.PENDING,
+        description="Current status of the suggested edit",
+    )
+    chat_thread_id: str = Field(
+        ...,
+        description="ID of the ChatThread this edit belongs to",
+    )
+
+
+class SuggestedEditRoutine(SuggestedEdit):
+    """
+    Suggested edit for a routine.
+    """
+    type: Literal[SuggestedEditType.ROUTINE] = SuggestedEditType.ROUTINE
+    routine: Routine = Field(..., description="The new/modified routine object")
+
+
+# Union of all suggested edit types - discriminated by 'type' field
+SuggestedEditUnion = Annotated[
+    Union[
+        SuggestedEditRoutine,
+        # Add new types here
+    ],
+    Field(discriminator="type"),
+]
 
 
 class PendingToolInvocation(BaseModel):
@@ -71,10 +125,11 @@ class ChatMessageType(StrEnum):
     CHAT_RESPONSE = "chat_response"
     TOOL_INVOCATION_REQUEST = "tool_invocation_request"
     TOOL_INVOCATION_RESULT = "tool_invocation_result"
+    SUGGESTED_EDIT = "suggested_edit"
     ERROR = "error"
 
 
-class EmittedChatMessage(BaseModel):
+class EmittedMessage(BaseModel):
     """
     Message emitted by the guide agent via callback.
 
@@ -113,6 +168,10 @@ class EmittedChatMessage(BaseModel):
     error: str | None = Field(
         default=None,
         description="Error message if type is ERROR",
+    )
+    suggested_edit: SuggestedEditUnion | None = Field(
+        default=None,
+        description="Suggested edit details for SUGGESTED_EDIT messages",
     )
 
 
@@ -164,7 +223,7 @@ class Chat(BaseModel):
         default_factory=lambda: str(uuid4()),
         description="Unique message ID (UUIDv4)",
     )
-    thread_id: str = Field(
+    chat_thread_id: str = Field(
         ...,
         description="ID of the parent thread this message belongs to",
     )
@@ -184,6 +243,14 @@ class Chat(BaseModel):
         default_factory=list,
         description="For ASSISTANT role messages, any tool calls made",
     )
+    chat_cache_key: str | None = Field(
+        default=None,
+        description="Cache key for the message",
+    )
+    llm_provider_response_id: str | None = Field(
+        default=None,
+        description="Response ID for the message from the LLM provider",
+    )
 
 
 class ChatThread(BaseModel):
@@ -194,9 +261,13 @@ class ChatThread(BaseModel):
         default_factory=lambda: str(uuid4()),
         description="Unique thread ID (UUIDv4)",
     )
-    message_ids: list[str] = Field(
+    chat_ids: list[str] = Field(
         default_factory=list,
         description="Ordered list of message IDs in this thread",
+    )
+    suggested_edit_ids : list[str] = Field(
+        default_factory=list,
+        description="List of suggested edit IDs in this thread",
     )
     pending_tool_invocation: PendingToolInvocation | None = Field(
         default=None,

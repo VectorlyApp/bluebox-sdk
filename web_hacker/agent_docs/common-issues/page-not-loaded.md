@@ -1,6 +1,6 @@
 # Page Not Fully Loaded
 
-> Related: [navigation.md](../operations/navigation.md), [ui-operations.md](../operations/ui-operations.md)
+> Pages not fully loaded after navigation cause missing elements, unexpected fetch data, or failed clicks. Add wait time using `sleep_after_navigation_seconds` or explicit `sleep` operations. Related: [navigation.md](../operations/navigation.md), [ui-operations.md](../operations/ui-operations.md)
 
 **Symptom:** Element not found, fetch returns unexpected data, click fails
 

@@ -1,6 +1,6 @@
 # Fetch Returns HTML Instead of JSON
 
-> Related: [fetch.md](../operations/fetch.md), [js-evaluate.md](../operations/js-evaluate.md)
+> When `fetch` operations return HTML (error pages or login redirects) instead of JSON, usually due to wrong URLs, missing authentication, or CORS blocking. Use `js_evaluate` to diagnose and DOMParser to extract data from HTML responses. Related: [fetch.md](../operations/fetch.md), [js-evaluate.md](../operations/js-evaluate.md)
 
 **Symptom:** Response is HTML error page, not API data
 

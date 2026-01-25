@@ -1004,8 +1004,8 @@ class RoutineJsEvaluateOperation(RoutineOperation):
     BLOCKED:
     - Dynamic code generation: eval(), Function constructor
     - Network requests: fetch(), XMLHttpRequest, WebSocket, sendBeacon (use RoutineFetchOperation instead)
-    - Persistent event hooks: addEventListener(), on*=, MutationObserver, IntersectionObserver
-    - Navigation/lifecycle: window.close(), location.*, history.*
+    - Persistent event hooks: addEventListener(), MutationObserver, IntersectionObserver
+    - Navigation/lifecycle: window.close()
 
     FORMAT REQUIREMENT:
     The JavaScript code MUST be wrapped in an IIFE (Immediately Invoked Function Expression):
@@ -1043,21 +1043,18 @@ class RoutineJsEvaluateOperation(RoutineOperation):
         r'(?:^|[^a-zA-Z0-9_])Function\s*\(', 
 
         # Network / exfiltration
-        r'fetch\s*\(',
+        r'(?<![a-zA-Z0-9_])fetch\s*\(',
         r'XMLHttpRequest',
         r'WebSocket',
         r'sendBeacon',
 
         # Persistent event hooks
         r'addEventListener\s*\(',
-        r'on\w+\s*=',
         r'MutationObserver',
         r'IntersectionObserver',
 
         # Navigation / lifecycle control
         r'window\.close\s*\(',
-        r'location\.',
-        r'history\.',
     ]
 
     @field_validator("js")
@@ -1150,8 +1147,8 @@ class RoutineJsEvaluateOperation(RoutineOperation):
             session_storage_key=self.session_storage_key,
         )
 
-        logger.info(
-            f"Executing JS evaluation: {len(expression)} chars, "
+        logger.debug(
+            f"Executing JS evaluation: {expression} "
             f"timeout={self.timeout_seconds}s, session_storage_key={self.session_storage_key}"
         )
 
@@ -1175,20 +1172,28 @@ class RoutineJsEvaluateOperation(RoutineOperation):
 
         logger.info(f"JS evaluation reply: {reply}")
 
+        # 1. Transport-level errors (rare)
         if "error" in reply:
             raise RuntimeError(f"JS evaluation failed: {reply['error']}")
 
+        # 2. Engine-level JS errors (syntax, reference, etc)
+        if reply.get("result", {}).get("exceptionDetails"):
+            details = reply["result"]["exceptionDetails"]
+            description = details["exception"]["description"]
+            raise RuntimeError(f"JS evaluation failed: {description}")
+
+        # 3. Normal result from wrapper
         result_value = reply["result"]["result"].get("value")
 
         logger.info(f"JS evaluation result: {result_value}")
 
-        # Store console logs and errors in metadata (not result - that goes in routine return value)
+        # Store console logs and errors in metadata
         if routine_execution_context.current_operation_metadata is not None and isinstance(result_value, dict):
             routine_execution_context.current_operation_metadata.details["console_logs"] = result_value.get("console_logs")
             routine_execution_context.current_operation_metadata.details["execution_error"] = result_value.get("execution_error")
             routine_execution_context.current_operation_metadata.details["storage_error"] = result_value.get("storage_error")
 
-        # Check for errors from our wrapper and raise
+        # 4. Wrapper-level runtime errors
         if isinstance(result_value, dict):
             if result_value.get("execution_error"):
                 raise RuntimeError(f"JS evaluation failed: {result_value['execution_error']}")
