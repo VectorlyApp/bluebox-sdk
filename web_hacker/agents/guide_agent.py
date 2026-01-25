@@ -1065,27 +1065,36 @@ execute the requested action using the appropriate tools.
         """Process a user message. Convenience wrapper for process_new_message."""
         self.process_new_message(content, ChatRole.USER)
 
-    def notify_browser_recording_complete(self, transaction_count: int) -> None:
+    def notify_browser_recording_complete(self, accepted: bool, error: str | None = None) -> None:
         """
-        Notify the agent that browser recording has completed.
-
-        Sends a system message instructing the agent to scan the captured data
-        and initiate routine discovery if appropriate.
+        Notify the agent about the browser recording outcome.
 
         Args:
-            transaction_count: Number of network transactions captured.
+            accepted: True if user accepted the recording request, False if rejected.
+            error: Optional error message if something went wrong during recording.
         """
-        system_message = (
-            "[ACTION REQUIRED] Browser recording completed. "
-            "New CDP captures are now available in the vectorstore. "
-            f"{transaction_count} network transactions were captured. "
-            "Scan the captured data NOW using file_search to verify it contains "
-            "the information needed for the user's requested automation. "
-            "Examine the consolidated_transactions.json and confirm the relevant API endpoints, "
-            "request/response payloads, and any authentication data are present. "
-            "If you see the data related to the requested task, initiate a routine discovery process. "
-            "Otherwise you can ask the user for clarifying questions or re-request the browser recording."
-        )
+        if not accepted:
+            # User rejected the recording request
+            system_message = (
+                "Browser recording was rejected by the user. "
+                "Ask the user if they'd like to try again or need help with something else."
+            )
+        elif error:
+            # User accepted but something went wrong
+            system_message = (
+                f"Browser recording failed: {error}. "
+                "Ask the user if they'd like to try again or need help with something else."
+            )
+        else:
+            # Success - recording completed with data
+            system_message = (
+                "[ACTION REQUIRED] Browser recording completed. "
+                "New CDP captures are now available in the vectorstore. "
+                "Use file_search to scan consolidated_transactions.json and verify it contains "
+                "the API endpoints and data needed for the user's requested automation. "
+                "If the data looks good, initiate routine discovery. "
+                "Otherwise ask clarifying questions or re-request the browser recording."
+            )
         self.process_new_message(system_message, ChatRole.SYSTEM)
 
     def process_new_message(self, content: str, role: ChatRole = ChatRole.USER) -> None:

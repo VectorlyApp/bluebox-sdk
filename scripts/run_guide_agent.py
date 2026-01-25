@@ -942,6 +942,7 @@ class TerminalGuideChat:
     def _handle_browser_recording(self, skip_prompt: bool = False) -> None:
         """Handle a browser recording request."""
         if not skip_prompt and not ask_yes_no("Start browser monitoring?"):
+            self._agent.notify_browser_recording_complete(accepted=False)
             return
 
         # Ensure Chrome is running in debug mode (launch if needed)
@@ -950,6 +951,10 @@ class TerminalGuideChat:
             console.print("[red]✗ Could not start Chrome in debug mode.[/red]")
             console.print(f"[dim]Launch Chrome manually with: --remote-debugging-port={PORT}[/dim]")
             console.print()
+            self._agent.notify_browser_recording_complete(
+                accepted=True,
+                error="Could not start Chrome in debug mode"
+            )
             return
 
         cdp_captures_dir = self._cdp_captures_dir
@@ -993,11 +998,19 @@ class TerminalGuideChat:
         if transaction_count == 0:
             console.print("[yellow]⚠ No transactions captured. Skipping vectorstore creation.[/yellow]")
             console.print()
+            self._agent.notify_browser_recording_complete(
+                accepted=True,
+                error="No network transactions were captured during recording"
+            )
             return
 
         if not isinstance(self._data_store, LocalDiscoveryDataStore):
             console.print("[yellow]⚠ No data store available. Skipping vectorstore creation.[/yellow]")
             console.print()
+            self._agent.notify_browser_recording_complete(
+                accepted=True,
+                error="No data store available"
+            )
             return
 
         # Update data store with CDP capture paths
@@ -1030,7 +1043,7 @@ class TerminalGuideChat:
         console.print()
 
         # Notify the agent about the new data
-        self._agent.notify_browser_recording_complete(transaction_count)
+        self._agent.notify_browser_recording_complete(accepted=True)
 
     def _handle_routine_discovery(self, task: str | None) -> None:
         """Handle routine discovery request."""
