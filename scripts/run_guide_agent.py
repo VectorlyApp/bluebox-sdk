@@ -942,7 +942,7 @@ class TerminalGuideChat:
     def _handle_browser_recording(self, skip_prompt: bool = False) -> None:
         """Handle a browser recording request."""
         if not skip_prompt and not ask_yes_no("Start browser monitoring?"):
-            self._agent.notify_browser_recording_complete(accepted=False)
+            self._agent.notify_browser_recording_result(accepted=False)
             return
 
         # Ensure Chrome is running in debug mode (launch if needed)
@@ -951,7 +951,7 @@ class TerminalGuideChat:
             console.print("[red]✗ Could not start Chrome in debug mode.[/red]")
             console.print(f"[dim]Launch Chrome manually with: --remote-debugging-port={PORT}[/dim]")
             console.print()
-            self._agent.notify_browser_recording_complete(
+            self._agent.notify_browser_recording_result(
                 accepted=True,
                 error="Could not start Chrome in debug mode"
             )
@@ -998,7 +998,7 @@ class TerminalGuideChat:
         if transaction_count == 0:
             console.print("[yellow]⚠ No transactions captured. Skipping vectorstore creation.[/yellow]")
             console.print()
-            self._agent.notify_browser_recording_complete(
+            self._agent.notify_browser_recording_result(
                 accepted=True,
                 error="No network transactions were captured during recording"
             )
@@ -1007,7 +1007,7 @@ class TerminalGuideChat:
         if not isinstance(self._data_store, LocalDiscoveryDataStore):
             console.print("[yellow]⚠ No data store available. Skipping vectorstore creation.[/yellow]")
             console.print()
-            self._agent.notify_browser_recording_complete(
+            self._agent.notify_browser_recording_result(
                 accepted=True,
                 error="No data store available"
             )
@@ -1043,7 +1043,7 @@ class TerminalGuideChat:
         console.print()
 
         # Notify the agent about the new data
-        self._agent.notify_browser_recording_complete(accepted=True)
+        self._agent.notify_browser_recording_result(accepted=True)
 
     def _handle_routine_discovery(self, task: str | None) -> None:
         """Handle routine discovery request."""
@@ -1062,7 +1062,7 @@ class TerminalGuideChat:
             if response == "y":
                 break
             if response == "n":
-                self._agent.notify_routine_discovery_complete(accepted=False)
+                self._agent.notify_routine_discovery_result(accepted=False)
                 return
             if response == "m":
                 modified_task = console.input("[yellow]Enter new task description: [/yellow]").strip()
@@ -1080,7 +1080,7 @@ class TerminalGuideChat:
         # Verify we have data store with CDP captures
         if not isinstance(self._data_store, LocalDiscoveryDataStore):
             console.print("[red]✗ No data store available.[/red]")
-            self._agent.notify_routine_discovery_complete(
+            self._agent.notify_routine_discovery_result(
                 accepted=True,
                 error="No data store available"
             )
@@ -1088,7 +1088,7 @@ class TerminalGuideChat:
 
         if self._data_store.cdp_captures_vectorstore_id is None:
             console.print("[red]✗ No CDP captures available. Run /monitor first.[/red]")
-            self._agent.notify_routine_discovery_complete(
+            self._agent.notify_routine_discovery_result(
                 accepted=True,
                 error="No CDP captures available"
             )
@@ -1148,7 +1148,7 @@ class TerminalGuideChat:
             console.print()
 
             # Notify agent to review the routine
-            self._agent.notify_routine_discovery_complete(
+            self._agent.notify_routine_discovery_result(
                 accepted=True,
                 routine=routine,
                 task_description=task,
@@ -1158,7 +1158,7 @@ class TerminalGuideChat:
             console.print()
             console.print(f"[bold red]✗ Discovery failed: {e}[/bold red]")
             console.print()
-            self._agent.notify_routine_discovery_complete(
+            self._agent.notify_routine_discovery_result(
                 accepted=True,
                 error=str(e)
             )

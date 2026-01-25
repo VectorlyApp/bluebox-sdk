@@ -1065,7 +1065,7 @@ execute the requested action using the appropriate tools.
         """Process a user message. Convenience wrapper for process_new_message."""
         self.process_new_message(content, ChatRole.USER)
 
-    def notify_browser_recording_complete(self, accepted: bool, error: str | None = None) -> None:
+    def notify_browser_recording_result(self, accepted: bool, error: str | None = None) -> None:
         """
         Notify the agent about the browser recording outcome.
 
@@ -1097,7 +1097,7 @@ execute the requested action using the appropriate tools.
             )
         self.process_new_message(system_message, ChatRole.SYSTEM)
 
-    def notify_routine_discovery_complete(
+    def notify_routine_discovery_result(
         self,
         accepted: bool,
         error: str | None = None,
