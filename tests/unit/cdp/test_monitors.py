@@ -842,7 +842,9 @@ class TestAsyncNetworkMonitorResponseHandling:
 
 
 class TestAsyncNetworkMonitorLoadingEvents:
-    """Tests for loading finished/failed events."""
+    """
+    
+    Tests for loading finished/failed events."""
 
     @pytest.mark.asyncio
     async def test_on_loading_finished_emits_transaction(
@@ -1085,11 +1087,13 @@ class TestAsyncNetworkMonitorFetchInterception:
 
         await monitor._on_fetch_request_paused(msg, mock_cdp_session)
 
-        # Should call Fetch.getResponseBody
-        calls = [c for c in mock_cdp_session.send.call_args_list
-                 if c[0][0] == "Fetch.getResponseBody"]
+        # should call Fetch.getResponseBody
+        calls = [
+            c for c in mock_cdp_session.send.call_args_list
+            if c[0][0] == "Fetch.getResponseBody"
+        ]
         assert len(calls) == 1
-        # Should track the pending body request
+        # should track the pending body request
         assert 42 in monitor.fetch_get_body_wait
 
     @pytest.mark.asyncio
