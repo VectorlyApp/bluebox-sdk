@@ -432,6 +432,34 @@ immediate execution, not just acknowledgment.
             },
         )
 
+        # Register request_routine_discovery tool
+        self.llm_client.register_tool(
+            name="request_routine_discovery",
+            description=(
+                "Request to start routine discovery from the captured browser data. "
+                "Use this after browser recording is complete and you've verified the captures contain the needed data. "
+                "This will analyze the network transactions and create a reusable routine."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "data_output": {
+                        "type": "string",
+                        "description": "What data the routine should return (e.g., 'flight prices', 'search results')",
+                    },
+                    "parameters": {
+                        "type": "string",
+                        "description": "What parameters/inputs the routine needs (e.g., 'departure city, arrival city, date')",
+                    },
+                    "website": {
+                        "type": "string",
+                        "description": "The website URL where the data was captured",
+                    },
+                },
+                "required": ["data_output"],
+            },
+        )
+
     def _emit_message(self, message: EmittedMessage) -> None:
         """Emit a message via the callback."""
         self._emit_message_callable(message)
@@ -682,6 +710,37 @@ immediate execution, not just acknowledgment.
             "edit_id": suggested_edit.id,
         }
 
+    def _tool_request_routine_discovery(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute request_routine_discovery tool."""
+        data_output = tool_arguments.get("data_output", "")
+        parameters = tool_arguments.get("parameters", "")
+        website = tool_arguments.get("website", "")
+
+        if not data_output:
+            raise ValueError("data_output is required - what should the routine return?")
+
+        # Build task description
+        task_parts = [f"Create a web routine that returns {data_output}"]
+        if parameters:
+            task_parts.append(f"given {parameters}")
+        if website:
+            task_parts.append(f"from {website}")
+        task = " ".join(task_parts) + "."
+
+        self._emit_message(
+            EmittedMessage(
+                type=ChatMessageType.ROUTINE_DISCOVERY_REQUEST,
+                routine_discovery_task=task,
+                chat_thread_id=self._thread.id,
+            )
+        )
+
+        return {
+            "success": True,
+            "message": "Routine discovery request sent. The user will confirm to start the discovery process.",
+            "task": task,
+        }
+
     def _execute_tool(
         self,
         tool_name: str,
@@ -719,6 +778,9 @@ immediate execution, not just acknowledgment.
 
         if tool_name == "request_user_browser_recording":
             return self._tool_request_user_browser_recording(tool_arguments)
+
+        if tool_name == "request_routine_discovery":
+            return self._tool_request_routine_discovery(tool_arguments)
 
         logger.error("Unknown tool \"%s\" with arguments: %s", tool_name, tool_arguments)
         raise UnknownToolError(f"Unknown tool \"{tool_name}\" with arguments: {tool_arguments}")

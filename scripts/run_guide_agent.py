@@ -57,7 +57,9 @@ from web_hacker.data_models.llms.interaction import (
 from web_hacker.data_models.routine.routine import Routine
 from web_hacker.llms.tools.guide_agent_tools import validate_routine
 from web_hacker.routine_discovery.data_store import DiscoveryDataStore, LocalDiscoveryDataStore
+from web_hacker.routine_discovery.message import RoutineDiscoveryMessage, RoutineDiscoveryMessageType
 from web_hacker.sdk import BrowserMonitor
+from web_hacker.sdk.discovery import RoutineDiscovery
 from web_hacker.utils.chrome_utils import ensure_chrome_running
 from web_hacker.utils.terminal_utils import ask_yes_no
 
@@ -319,6 +321,8 @@ class TerminalGuideChat:
         self._loaded_routine_path: Path | None = None
         self._last_execution_ok: bool | None = None
         self._browser_recording_requested: bool = False
+        self._routine_discovery_requested: bool = False
+        self._routine_discovery_task: str | None = None
         self._cdp_captures_dir: Path = cdp_captures_dir or DEFAULT_CDP_CAPTURES_DIR
         self._agent = GuideAgent(
             emit_message_callable=self._handle_message,
@@ -450,6 +454,10 @@ class TerminalGuideChat:
 
         elif message.type == ChatMessageType.BROWSER_RECORDING_REQUEST:
             self._browser_recording_requested = True
+
+        elif message.type == ChatMessageType.ROUTINE_DISCOVERY_REQUEST:
+            self._routine_discovery_requested = True
+            self._routine_discovery_task = message.routine_discovery_task
 
         elif message.type == ChatMessageType.ERROR:
             print_error(message.error or "Unknown error")
@@ -1009,6 +1017,97 @@ class TerminalGuideChat:
         )
         self._agent.process_new_message(system_message, ChatRole.SYSTEM)
 
+    def _handle_routine_discovery(self, task: str | None) -> None:
+        """Handle routine discovery request."""
+        if not task:
+            console.print("[yellow]⚠ No task description provided.[/yellow]")
+            return
+
+        console.print()
+        console.print("[bold cyan]Routine Discovery Task:[/bold cyan]")
+        console.print(f"  {task}")
+        console.print()
+
+        if not ask_yes_no("Start routine discovery?"):
+            return
+
+        # Verify we have data store with CDP captures
+        if not isinstance(self._data_store, LocalDiscoveryDataStore):
+            console.print("[red]✗ No data store available.[/red]")
+            return
+
+        if self._data_store.cdp_captures_vectorstore_id is None:
+            console.print("[red]✗ No CDP captures available. Run /monitor first.[/red]")
+            return
+
+        # Create output directory
+        output_dir = Path("./routine_discovery_output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        console.print()
+        console.print("[bold blue]Starting routine discovery...[/bold blue]")
+
+        # Progress callback for discovery messages
+        def handle_discovery_message(msg: RoutineDiscoveryMessage) -> None:
+            if msg.type == RoutineDiscoveryMessageType.PROGRESS_THINKING:
+                console.print(f"[dim]🤔 {msg.content}[/dim]")
+            elif msg.type == RoutineDiscoveryMessageType.PROGRESS_RESULT:
+                console.print(f"[green]✓ {msg.content}[/green]")
+            elif msg.type == RoutineDiscoveryMessageType.ERROR:
+                console.print(f"[red]✗ {msg.content}[/red]")
+
+        try:
+            # Run discovery using existing data store's vectorstore
+            discovery = RoutineDiscovery(
+                client=self._data_store.client,
+                task=task,
+                cdp_captures_dir=str(self._cdp_captures_dir),
+                output_dir=str(output_dir),
+                llm_model=str(self._agent.llm_model.value),
+                message_callback=handle_discovery_message,
+            )
+            result = discovery.run()
+            routine = result.routine
+
+            console.print()
+            console.print("[bold green]✓ Routine discovered successfully![/bold green]")
+            console.print(f"  Name: {routine.name}")
+            console.print(f"  Operations: {len(routine.operations)}")
+            console.print(f"  Parameters: {len(routine.parameters)}")
+
+            # Save routine to file (name -> lowercase_underscores)
+            safe_name = routine.name.lower().replace(" ", "_").replace("-", "_")
+            safe_name = "".join(c for c in safe_name if c.isalnum() or c == "_")
+            routines_dir = Path("./routines")
+            routines_dir.mkdir(parents=True, exist_ok=True)
+            routine_path = routines_dir / f"{safe_name}.json"
+            routine_path.write_text(json.dumps(routine.model_dump(), indent=2))
+            console.print(f"  Saved to: {routine_path}")
+
+            # Load routine into context (like /load)
+            routine_str = routine_path.read_text()
+            self._loaded_routine_path = routine_path
+            self._agent.routine_state.update_current_routine(routine_str)
+
+            console.print()
+            console.print("[green]✓ Routine loaded into context![/green]")
+            console.print()
+
+            # Notify agent to review the routine
+            system_message = (
+                f"[ACTION REQUIRED] Routine discovery completed successfully. "
+                f"The routine '{routine.name}' has been created with {len(routine.operations)} operations "
+                f"and {len(routine.parameters)} parameters. "
+                "Review the routine using get_current_routine and explain to the user what it does, "
+                "what parameters it needs, and how to use it."
+            )
+            self._agent.process_new_message(system_message, ChatRole.SYSTEM)
+
+        except Exception as e:
+            console.print()
+            console.print(f"[bold red]✗ Discovery failed: {e}[/bold red]")
+            console.print()
+
     def run(self) -> None:
         """Run the interactive chat loop."""
         print_welcome(str(self._agent.llm_model))
@@ -1137,6 +1236,13 @@ class TerminalGuideChat:
                 if self._browser_recording_requested:
                     self._browser_recording_requested = False
                     self._handle_browser_recording()
+
+                # Check if agent requested routine discovery
+                if self._routine_discovery_requested:
+                    self._routine_discovery_requested = False
+                    task = self._routine_discovery_task
+                    self._routine_discovery_task = None
+                    self._handle_routine_discovery(task)
 
             except KeyboardInterrupt:
                 console.print()

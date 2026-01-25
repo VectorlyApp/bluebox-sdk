@@ -127,6 +127,7 @@ class ChatMessageType(StrEnum):
     TOOL_INVOCATION_RESULT = "tool_invocation_result"
     SUGGESTED_EDIT = "suggested_edit"
     BROWSER_RECORDING_REQUEST = "browser_recording_request"
+    ROUTINE_DISCOVERY_REQUEST = "routine_discovery_request"
     ERROR = "error"
 
 
@@ -177,6 +178,10 @@ class EmittedMessage(BaseModel):
     browser_recording_task: str | None = Field(
         default=None,
         description="Task description for BROWSER_RECORDING_REQUEST messages",
+    )
+    routine_discovery_task: str | None = Field(
+        default=None,
+        description="Task description for ROUTINE_DISCOVERY_REQUEST messages",
     )
 
 
