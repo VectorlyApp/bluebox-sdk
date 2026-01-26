@@ -17,7 +17,6 @@ from uuid import uuid4
 
 from web_hacker.data_models.llms.interaction import (
     Chat,
-    EmittedMessageType,
     ChatRole,
     ChatThread,
     EmittedMessage,
