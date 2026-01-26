@@ -19,6 +19,7 @@ class ChatRole(StrEnum):
     Role in a chat message.
     """
     USER = "user"
+    USER_ACTION = "user_action"
     ASSISTANT = "assistant"  # AI
     SYSTEM = "system"
     TOOL = "tool"

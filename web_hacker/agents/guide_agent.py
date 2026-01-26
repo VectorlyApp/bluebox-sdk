@@ -166,7 +166,7 @@ class GuideAgent:
             print(f"[{message.type}] {message.content}")
 
         agent = GuideAgent(emit_message_callable=handle_message)
-        agent.process_user_message("I want to search for flights")
+        agent.process_new_message("I want to search for flights", ChatRole.USER)
     """
 
     # Class constants ______________________________________________________________________________________________________
@@ -221,6 +221,8 @@ have enough information to build the routine programmatically.
 
 - Be conversational and helpful
 - Ask clarifying questions to understand exactly what the user wants to automate (VERY CONSICE AND TO THE POINT!)
+- When asking questions, just ask them directly. NO preamble, NO "Once you answer I will...", \
+NO numbered lists of what you'll do next. Just ask the question.
 - Provide clear, bulleted instructions when requesting browser recordings
 - If the user asks about an existing routine, inform them no routine is currently loaded
 - BE VERY CONCISE AND TO THE POINT. We DONT NEED LONG CONVERSATIONS!
@@ -291,6 +293,8 @@ When proposing changes, use the `suggest_routine_edit` tool:
 
 - Be conversational and helpful
 - Ask clarifying questions if needed (VERY CONCISE AND TO THE POINT!)
+- When asking questions, just ask them directly. NO preamble, NO "Once you answer I will...", \
+NO numbered lists of what you'll do next. Just ask the question.
 - When debugging, analyze the specific error and suggest concrete fixes
 - Use file_search to reference documentation for complex issues
 - BE VERY CONCISE AND TO THE POINT. We DONT NEED LONG CONVERSATIONS!
@@ -1060,10 +1064,6 @@ execute the requested action using the appropriate tools.
             return json.dumps({"error": str(e)})
 
     # Public methods _______________________________________________________________________________________________________
-
-    def process_user_message(self, content: str) -> None:
-        """Process a user message. Convenience wrapper for process_new_message."""
-        self.process_new_message(content, ChatRole.USER)
 
     def notify_browser_recording_result(self, accepted: bool, error: str | None = None) -> None:
         """

@@ -1330,7 +1330,7 @@ class TerminalGuideChat:
                 self._reload_routine_from_file()
 
                 # Process the message (no spinner - conflicts with streaming output)
-                self._agent.process_user_message(user_input)
+                self._agent.process_new_message(user_input, ChatRole.USER)
 
                 # Check if agent requested a browser recording
                 if self._browser_recording_requested:
