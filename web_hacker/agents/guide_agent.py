@@ -689,8 +689,8 @@ and improve web automation routines.
         self._thread.chat_ids.append(chat.id)
         self._thread.updated_at = int(datetime.now().timestamp())
 
-        # Track response_id to chat index for O(1) lookup
-        if llm_provider_response_id:
+        # Track response_id to chat index for O(1) lookup (only for ASSISTANT messages)
+        if llm_provider_response_id and role == ChatRole.ASSISTANT:
             self._response_id_to_chat_index[llm_provider_response_id] = len(self._thread.chat_ids) - 1
 
         # Persist thread if callback provided
@@ -1322,7 +1322,6 @@ and improve web automation routines.
                         ChatRole.TOOL,
                         f"Tool '{tool_name}' result: {result_str}",
                         tool_call_id=call_id,
-                        llm_provider_response_id=response.response_id,
                     )
                     tools_executed = True
 
