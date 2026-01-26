@@ -11,15 +11,23 @@ Contains:
 
 import json
 from datetime import datetime
-from typing import Any, Callable, Literal
+from enum import StrEnum
+from typing import Any, Callable
 from uuid import uuid4
 
 from web_hacker.data_models.llms.interaction import (
     Chat,
-    ChatMessageType,
     ChatRole,
     ChatThread,
     EmittedMessage,
+    ChatResponseEmittedMessage,
+    ToolInvocationRequestEmittedMessage,
+    ToolInvocationResultEmittedMessage,
+    SuggestedEditEmittedMessage,
+    BrowserRecordingRequestEmittedMessage,
+    RoutineDiscoveryRequestEmittedMessage,
+    RoutineCreationRequestEmittedMessage,
+    ErrorEmittedMessage,
     LLMChatResponse,
     LLMToolCall,
     PendingToolInvocation,
@@ -37,6 +45,19 @@ from web_hacker.utils.logger import get_logger
 
 
 logger = get_logger(name=__name__)
+
+
+class GuideAgentMode(StrEnum):
+    """Operating mode for the Guide Agent."""
+    CREATION = "creation"  # No routine loaded - help create one
+    EDITING = "editing"    # Routine loaded - help debug/edit
+
+
+class RoutineChangeType(StrEnum):
+    """Type of change made to the routine."""
+    ADDED = "added"
+    UPDATED = "updated"
+    REMOVED = "removed"
 
 
 class GuideAgentRoutineState:
@@ -58,7 +79,7 @@ class GuideAgentRoutineState:
         self.last_execution_result: dict | None = None
         # Timestamps for tracking state changes (None = no pending update)
         self._routine_change_at: int | None = None
-        self._routine_change_type: Literal["added", "updated", "removed"] | None = None
+        self._routine_change_type: RoutineChangeType | None = None
         self._execution_at: int | None = None
 
     def update_current_routine(self, routine_str: str | None) -> None:
@@ -74,11 +95,11 @@ class GuideAgentRoutineState:
 
         # Determine change type and record timestamp
         if routine_str is None:
-            change_type = "removed"
+            change_type = RoutineChangeType.REMOVED
         elif was_none:
-            change_type = "added"
+            change_type = RoutineChangeType.ADDED
         else:
-            change_type = "updated"
+            change_type = RoutineChangeType.UPDATED
 
         self._routine_change_at = int(datetime.now().timestamp())
         self._routine_change_type = change_type
@@ -107,9 +128,9 @@ class GuideAgentRoutineState:
 
         # Check for routine change
         if self._routine_change_at is not None and self._routine_change_type is not None:
-            if self._routine_change_type == "removed":
+            if self._routine_change_type == RoutineChangeType.REMOVED:
                 messages.append("[System Update] Routine has been removed from context.")
-            elif self._routine_change_type == "added":
+            elif self._routine_change_type == RoutineChangeType.ADDED:
                 messages.append("[System Update] Routine added to context. Use get_current_routine to see the routine.")
             else:  # updated
                 messages.append("[System Update] Routine has been updated. Use get_current_routine to see the changes.")
@@ -151,75 +172,155 @@ class GuideAgent:
             print(f"[{message.type}] {message.content}")
 
         agent = GuideAgent(emit_message_callable=handle_message)
-        agent.process_user_message("I want to search for flights")
+        agent.process_new_message("I want to search for flights", ChatRole.USER)
     """
 
     # Class constants ______________________________________________________________________________________________________
-    
+
     DATA_STORE_PROMPT: str = """
     You have access to the following data and you must refer to it when answering questions or helping debug!
-    It is essecntial that you use this data, documentation, and code:
+    It is essential that you use this data, documentation, and code:
     {data_store_prompt}
     """
 
-    SYSTEM_PROMPT: str = """You are a helpful assistant that helps users debug \
-and understand web automation routines.
+    # Shared prompt sections ________________________________________________________________________________________________
 
-## What are Routines?
+    _ROUTINES_SECTION: str = """## What are Routines?
 
 Routines are reusable web automation workflows that can be executed programmatically. \
 They are created by learning from user demonstrations - users record themselves performing \
-a task on a website, and the system generates a parameterized routine.
+a task on a website, and the system generates a parameterized routine."""
 
-## What is Vectorly?
+    _VECTORLY_SECTION: str = """## What is Vectorly?
 
 Vectorly (https://vectorly.app) unlocks data from interactive websites - getting web data behind \
-clicks, searches, and user interactions. Define a routine once, then access it anywhere via API or MCP.
+clicks, searches, and user interactions. Define a routine once, then access it anywhere via API or MCP."""
 
-## Your Role
+    _GUIDELINES_SECTION: str = """## Guidelines
 
-Help users debug and understand routines by reviewing:
-- Routine JSON structure and operations
-- Execution run logs and errors
-- Parameter values and placeholder resolution
-- Network transactions and responses
+- Be conversational and helpful
+- Ask clarifying questions if needed (VERY CONCISE AND TO THE POINT!)
+- When asking questions, just ask them directly. NO preamble, NO "Once you answer I will...", \
+NO numbered lists of what you'll do next. Just ask the question.
+- BE VERY CONCISE AND TO THE POINT. We DONT NEED LONG CONVERSATIONS!
+- IMPORTANT: When you decide to use a tool, JUST CALL IT. Do NOT announce "I will now call X" or \
+"Let me use X tool" - just invoke the tool directly. The user can always decline the request."""
 
-## Routine State Tools - USE THESE WHEN DEBUGGING
-When a user asks for help debugging a routine or wants you to review their routine, use these tools:
-- **`get_current_routine`**: No arguments. Call this FIRST when the user asks about their routine or wants help editing it.
-- **`get_last_routine_execution`**: No arguments. Call when the user says they ran a routine and it failed.
-- **`get_last_routine_execution_result`**: No arguments. Call to see execution results - success/failure status, output data, and errors.
+    _NOTES_SECTION: str = """## NOTES:
+- Quotes or escaped quotes are ESSENTIAL AROUND {{{{parameter_name}}}} ALL parameters in routines!
+- Before saying ANYTHING ABOUT QUOTES OR ESCAPED QUOTES, you MUST look through the docs!"""
 
-**Debugging workflow:**
-1. User says "my routine failed" or "help me debug" → call `get_last_routine_execution` and `get_last_routine_execution_result`
-2. User says "review my routine" or "what's wrong with my routine" → call `get_current_routine`
+    _SYSTEM_ACTION_SECTION: str = """## System Action Messages
+When you receive a system message with the prefix "[ACTION REQUIRED]", you MUST immediately \
+execute the requested action using the appropriate tools."""
+
+    # Mode-specific sections ________________________________________________________________________________________________
+
+    _CREATION_MODE_ROLE: str = """## Your Role
+
+You are in CREATION MODE. Help users create new routines by:
+- Understanding what task they want to automate
+- Guiding them through browser recording to capture their workflow
+- Running routine discovery to generate the routine from captured data
+- Creating routines directly when appropriate
+
+## Available Tools
+
+- **`request_user_browser_recording`**: Ask the user to demonstrate a task in the browser. \
+Use this when the user describes a web automation task they want to create.
+- **`request_routine_discovery`**: Start routine discovery from captured browser data. \
+Use this after recording is complete.
+- **`create_new_routine`**: Create a routine directly without discovery. Use this when you \
+have enough information to build the routine programmatically.
+- **`file_search`**: Search documentation for routine creation best practices.
+
+## Workflow for Creating Routines
+
+1. **Understand the task**: Ask the user what website data they want to access or what actions they want to automate.
+2. **Initiate recording**: Use `request_user_browser_recording` with a clear task description.
+3. **Wait for recording**: The user will perform the task while browser activity is captured.
+4. **Run discovery**: Use `request_routine_discovery` to generate a routine from the captures.
+5. **Review result**: Once the routine is created, you will switch to editing mode to help refine it.
+
+## Creation Mode Guidelines
+
+- Provide clear, bulleted instructions when requesting browser recordings
+- If the user asks about an existing routine, inform them no routine is currently loaded"""
+
+    _EDITING_MODE_ROLE: str = """## Your Role
+
+You are in EDITING MODE. A routine is currently loaded. Help users by:
+- Reviewing the routine structure and operations
+- Debugging execution failures
+- Suggesting improvements and fixes
+- Validating routine changes
+
+## Available Tools - USE THESE WHEN DEBUGGING
+
+- **`get_current_routine`**: Get the currently loaded routine JSON. Call this FIRST when the user \
+asks about their routine or wants help editing it.
+- **`get_last_routine_execution`**: Get the last executed routine and parameters used. Call when \
+the user says they ran a routine and it failed.
+- **`get_last_routine_execution_result`**: Get execution results - success/failure status, output \
+data, and errors. Essential for debugging.
+- **`validate_routine`**: Validate a routine object against the schema. REQUIRED KEY: 'routine'.
+- **`suggest_routine_edit`**: Propose changes to the routine for user approval. REQUIRED KEY: 'routine' \
+with the COMPLETE routine object.
+- **`file_search`**: Search documentation for debugging tips and common issues.
+
+## Debugging Workflow
+
+1. User says "my routine failed" or "help me debug" -> call `get_last_routine_execution` and \
+`get_last_routine_execution_result`
+2. User says "review my routine" or "what's wrong" -> call `get_current_routine`
 3. Analyze the results and cross-reference with documentation via file_search
-4. Suggest specific fixes based on the error patterns
+4. Suggest specific fixes using `suggest_routine_edit`
 
 ## Suggesting Routine Edits
 
-When you want to propose changes to a routine, use the `suggest_routine_edit` tool:
+When proposing changes, use the `suggest_routine_edit` tool:
 - **REQUIRED KEY: `routine`** - Pass the COMPLETE routine object under this key
-- Example: `{"routine": {"name": "...", "description": "...", "parameters": [...], "operations": [...]}}`
-- The tool validates the routine automatically - you do NOT need to call `validate_routine` first
-- If validation fails, read the error message, fix the routine, and call `suggest_routine_edit` again
-- Keep retrying until the suggestion succeeds (make at least 3 attempts if needed)
+- Example: {{"routine": {{"name": "...", "description": "...", "parameters": [...], "operations": [...]}}}}
+- The tool validates automatically - you do NOT need to call `validate_routine` first
+- If validation fails, read the error, fix the routine, and try again (make at least 3 attempts)
 
-The `validate_routine` tool is available for manually checking routine validity (REQUIRED KEY: `routine`), \
-but is not required before calling `suggest_routine_edit`.
+## Editing Mode Guidelines
 
-## Guidelines
+- When debugging, analyze the specific error and suggest concrete fixes
+- Use file_search to reference documentation for complex issues"""
 
-- Be conversational and helpful
-- Ask clarifying questions if needed
-- Use the file_search tool to look up relevant documentation, code, and captured data
-- When debugging, analyze the specific error and suggest concrete fixes (refer to debug docs and common issues)
-- If the user asks what this tool does, explain it clearly
-- BE VERY CONCISE AND TO THE POINT. DO NOT BE TOO LONG-WINDED. ANSWER THE QUESTION DIRECTLY!
+    # Composed system prompts _______________________________________________________________________________________________
 
-## NOTES:
-- Quotes or escaped quotes are ESSENTIAL AROUND {{{{parameter_name}}}} ALL parameters in routines, regardless of type!
-- Before saying ANYTHING ABOUT QUOTES OR ESCAPED QUOTES, you MUST look through the docs!
+    CREATION_MODE_SYSTEM_PROMPT: str = f"""You are a helpful assistant that helps users create \
+web automation routines.
+
+{_ROUTINES_SECTION}
+
+{_VECTORLY_SECTION}
+
+{_CREATION_MODE_ROLE}
+
+{_GUIDELINES_SECTION}
+
+{_NOTES_SECTION}
+
+{_SYSTEM_ACTION_SECTION}
+"""
+
+    EDITING_MODE_SYSTEM_PROMPT: str = f"""You are a helpful assistant that helps users debug \
+and improve web automation routines.
+
+{_ROUTINES_SECTION}
+
+{_VECTORLY_SECTION}
+
+{_EDITING_MODE_ROLE}
+
+{_GUIDELINES_SECTION}
+
+{_NOTES_SECTION}
+
+{_SYSTEM_ACTION_SECTION}
 """
 
     # Magic methods ________________________________________________________________________________________________________
@@ -236,6 +337,7 @@ but is not required before calling `suggest_routine_edit`.
         existing_chats: list[Chat] | None = None,
         data_store: DiscoveryDataStore | None = None,
         tools_requiring_approval: set[str] | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         """
         Initialize the guide agent.
@@ -263,13 +365,19 @@ but is not required before calling `suggest_routine_edit`.
         self._stream_chunk_callable = stream_chunk_callable
         self._data_store = data_store
         self._tools_requiring_approval = tools_requiring_approval or set()
+        self._custom_system_prompt = system_prompt  # None means use mode-based prompts
         self._previous_response_id: str | None = None
+        self._response_id_to_chat_index: dict[str, int] = {}
 
         self.llm_model = llm_model
         self.llm_client = LLMClient(llm_model)
 
-        # Register tools
-        self._register_tools()
+        # Initialize routine state first (needed for mode determination)
+        self._routine_state = GuideAgentRoutineState()
+
+        # Initialize mode and register appropriate tools
+        self._current_mode: GuideAgentMode = self._determine_mode()
+        self._register_tools(self._current_mode)
 
         # Configure file_search vectorstores if data store is provided
         if data_store:
@@ -289,13 +397,11 @@ but is not required before calling `suggest_routine_edit`.
             self._thread = self._persist_chat_thread_callable(self._thread)
 
         logger.info(
-            "Instantiated GuideAgent with model: %s, chat_thread_id: %s",
+            "Instantiated GuideAgent with model: %s, chat_thread_id: %s, mode: %s",
             llm_model,
             self._thread.id,
+            self._current_mode.value,
         )
-
-        # Initialize routine state
-        self._routine_state = GuideAgentRoutineState()
 
     # Properties ___________________________________________________________________________________________________________
 
@@ -324,20 +430,178 @@ but is not required before calling `suggest_routine_edit`.
         """Return the routine state manager."""
         return self._routine_state
 
+    @property
+    def current_mode(self) -> GuideAgentMode:
+        """Return the current operating mode."""
+        return self._current_mode
+
     # Private methods ______________________________________________________________________________________________________
 
     def _get_system_prompt(self) -> str:
-        """Get system prompt with data store context if available."""
-        system_prompt = self.SYSTEM_PROMPT
+        """Get system prompt based on current mode with data store context."""
+        # Use custom prompt if provided, otherwise select based on mode
+        if self._custom_system_prompt is not None:
+            system_prompt = self._custom_system_prompt
+        elif self._current_mode == GuideAgentMode.CREATION:
+            system_prompt = self.CREATION_MODE_SYSTEM_PROMPT
+        else:
+            system_prompt = self.EDITING_MODE_SYSTEM_PROMPT
+
+        # Append data store context
         if self._data_store:
-            data_store_prompt = self.DATA_STORE_PROMPT.format(data_store_prompt=self._data_store.generate_data_store_prompt())
+            data_store_prompt = self.DATA_STORE_PROMPT.format(
+                data_store_prompt=self._data_store.generate_data_store_prompt()
+            )
             if data_store_prompt:
                 system_prompt = f"{system_prompt}\n\n{data_store_prompt}"
         return system_prompt
 
-    def _register_tools(self) -> None:
-        """Register all tools with the LLM client."""
-        # Register validate_routine with explicit schema
+    def _determine_mode(self) -> GuideAgentMode:
+        """Determine the appropriate mode based on routine state."""
+        if self._routine_state.current_routine_str is not None:
+            return GuideAgentMode.EDITING
+        return GuideAgentMode.CREATION
+
+    def _check_and_switch_mode(self) -> bool:
+        """
+        Check if mode should switch and perform switch if needed.
+
+        Returns:
+            True if mode was switched, False otherwise.
+        """
+        new_mode = self._determine_mode()
+        if new_mode == self._current_mode:
+            return False
+
+        old_mode = self._current_mode
+        self._current_mode = new_mode
+
+        # Re-register tools for new mode
+        self._register_tools(new_mode)
+
+        logger.info(
+            "GuideAgent mode switched from %s to %s",
+            old_mode.value,
+            new_mode.value,
+        )
+
+        return True
+
+    def _register_tools(self, mode: GuideAgentMode) -> None:
+        """Register tools appropriate for the given mode."""
+        # Clear existing tools
+        self.llm_client.clear_tools()
+
+        if mode == GuideAgentMode.CREATION:
+            self._register_creation_mode_tools()
+        else:
+            self._register_editing_mode_tools()
+
+        logger.debug("Registered tools for %s mode", mode.value)
+
+    def _register_creation_mode_tools(self) -> None:
+        """Register tools for creation mode (no routine loaded)."""
+        # request_user_browser_recording
+        self.llm_client.register_tool(
+            name="request_user_browser_recording",
+            description=(
+                "Request the user to perform a browser recording session. "
+                "Use this when you need the user to demonstrate a web task so it can be captured "
+                "and turned into a routine. The user will navigate to a website and perform "
+                "actions while browser activity (navigation, network requests, cookies, etc.) is recorded."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "task_description": {
+                        "type": "string",
+                        "description": (
+                            "Description of what the user should do during the recording. "
+                            "E.g. 'Search for one-way flights from NYC to LA on March 15'"
+                        ),
+                    }
+                },
+                "required": ["task_description"],
+            },
+        )
+
+        # request_routine_discovery
+        self.llm_client.register_tool(
+            name="request_routine_discovery",
+            description=(
+                "Request to start routine discovery from the captured browser data. "
+                "Use this after browser recording is complete and you've verified the captures contain the needed data. "
+                "This will analyze the network transactions and create a reusable routine."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "data_output": {
+                        "type": "string",
+                        "description": "What data the routine should return (e.g., 'flight prices', 'search results')",
+                    },
+                    "parameters": {
+                        "type": "string",
+                        "description": "What parameters/inputs the routine needs (e.g., 'departure city, arrival city, date')",
+                    },
+                    "website": {
+                        "type": "string",
+                        "description": "The website URL where the data was captured",
+                    },
+                },
+                "required": ["data_output"],
+            },
+        )
+
+        # create_new_routine
+        self.llm_client.register_tool(
+            name="create_new_routine",
+            description=(
+                "Create and save a new routine directly. Use this when you want to create a routine "
+                "from scratch without going through the discovery process. The routine will be "
+                "saved to a file and loaded into the current context. "
+                "REQUIRED KEY: 'routine' - the COMPLETE routine object. "
+                "Example: {\"routine\": {\"name\": \"...\", \"description\": \"...\", \"parameters\": [...], \"operations\": [...]}}"
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "routine": {
+                        "type": "object",
+                        "description": (
+                            "REQUIRED. The complete routine object to create. "
+                            "Must contain keys: name (string), description (string), parameters (array), operations (array)."
+                        ),
+                    }
+                },
+                "required": ["routine"],
+            },
+        )
+
+    def _register_editing_mode_tools(self) -> None:
+        """Register tools for editing mode (routine is loaded)."""
+        # get_current_routine
+        self.llm_client.register_tool(
+            name="get_current_routine",
+            description="Get the current routine JSON that the user is working on. No arguments required.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+        # get_last_routine_execution
+        self.llm_client.register_tool(
+            name="get_last_routine_execution",
+            description="Get the last executed routine JSON and the parameters that were used. No arguments required.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+        # get_last_routine_execution_result
+        self.llm_client.register_tool(
+            name="get_last_routine_execution_result",
+            description="Get the result of the last routine execution including success/failure status, output data, and any errors. No arguments required.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+
+        # validate_routine
         self.llm_client.register_tool(
             name="validate_routine",
             description=(
@@ -360,24 +624,7 @@ but is not required before calling `suggest_routine_edit`.
             },
         )
 
-        # Register routine state tools directly (no parameters needed, auto-execute)
-        self.llm_client.register_tool(
-            name="get_current_routine",
-            description="Get the current routine JSON that the user is working on. No arguments required.",
-            parameters={"type": "object", "properties": {}, "required": []},
-        )
-        self.llm_client.register_tool(
-            name="get_last_routine_execution",
-            description="Get the last executed routine JSON and the parameters that were used. No arguments required.",
-            parameters={"type": "object", "properties": {}, "required": []},
-        )
-        self.llm_client.register_tool(
-            name="get_last_routine_execution_result",
-            description="Get the result of the last routine execution including success/failure status, output data, and any errors. No arguments required.",
-            parameters={"type": "object", "properties": {}, "required": []},
-        )
-
-        # Register suggest_routine_edit tool - auto-executes, validates before saving
+        # suggest_routine_edit
         self.llm_client.register_tool(
             name="suggest_routine_edit",
             description=(
@@ -442,6 +689,10 @@ but is not required before calling `suggest_routine_edit`.
         self._thread.chat_ids.append(chat.id)
         self._thread.updated_at = int(datetime.now().timestamp())
 
+        # Track response_id to chat index for O(1) lookup
+        if llm_provider_response_id:
+            self._response_id_to_chat_index[llm_provider_response_id] = len(self._thread.chat_ids) - 1
+
         # Persist thread if callback provided
         if self._persist_chat_thread_callable:
             self._thread = self._persist_chat_thread_callable(self._thread)
@@ -456,44 +707,39 @@ but is not required before calling `suggest_routine_edit`.
             List of message dicts with 'role', 'content', and optionally 'tool_call_id' or 'tool_calls' keys.
         """
         messages: list[dict[str, Any]] = []
-        
-        # determine which chats to include based on the previous response id
+
+        # Determine which chats to include based on the previous response id
         chats_to_include = self._thread.chat_ids
         if self._previous_response_id is not None:
-            
-            # get index of the previous response id
-            index = None
-            for idx, chat_id in enumerate(self._thread.chat_ids):
-                if self._chats.get(chat_id).llm_provider_response_id == self._previous_response_id:
-                    index = idx
-                    break
-                
-            # include all chats after the previous response id
+            index = self._response_id_to_chat_index.get(self._previous_response_id)
             if index is not None:
                 chats_to_include = self._thread.chat_ids[index + 1:]
-        
-        
+
         for chat_id in chats_to_include:
             chat = self._chats.get(chat_id)
-            if chat:
-                msg: dict[str, Any] = {
-                    "role": chat.role.value,
-                    "content": chat.content,
-                }
-                # Include tool_call_id for TOOL role messages
-                if chat.tool_call_id:
-                    msg["tool_call_id"] = chat.tool_call_id
-                # Include tool_calls for ASSISTANT role messages
-                if chat.tool_calls:
-                    msg["tool_calls"] = [
-                        {
-                            "name": tc.tool_name,
-                            "arguments": tc.tool_arguments,
-                            "call_id": tc.call_id,
-                        }
-                        for tc in chat.tool_calls
-                    ]
-                messages.append(msg)
+            if not chat:
+                continue
+            # Skip USER_ACTION - these are for history only, not sent to LLM
+            if chat.role == ChatRole.USER_ACTION:
+                continue
+            msg: dict[str, Any] = {
+                "role": chat.role.value,
+                "content": chat.content,
+            }
+            # Include tool_call_id for TOOL role messages
+            if chat.tool_call_id:
+                msg["tool_call_id"] = chat.tool_call_id
+            # Include tool_calls for ASSISTANT role messages
+            if chat.tool_calls:
+                msg["tool_calls"] = [
+                    {
+                        "name": tc.tool_name,
+                        "arguments": tc.tool_arguments,
+                        "call_id": tc.call_id,
+                    }
+                    for tc in chat.tool_calls
+                ]
+            messages.append(msg)
         return messages
 
     def _create_tool_invocation_request(
@@ -579,6 +825,31 @@ but is not required before calling `suggest_routine_edit`.
             return {"error": "No routine execution result available. No routine has been executed yet."}
         return {"result": self._routine_state.last_execution_result}
 
+    def _tool_request_user_browser_recording(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute request_user_browser_recording tool."""
+        task_description = tool_arguments.get("task_description", "")
+        if not task_description:
+            raise ValueError("task_description is required.")
+
+        self._emit_message(
+            BrowserRecordingRequestEmittedMessage(
+                browser_recording_task=task_description,
+                chat_thread_id=self._thread.id,
+            )
+        )
+
+        return {
+            "success": True,
+            "message": (
+                "Browser recording request sent to user. "
+                "Give the user brief bulleted instructions on what to do:\n"
+                "- A new browser tab will open\n"
+                "- Navigate to <WEBSITE>\n"
+                "- Perform the following: <STEPS>\n"
+                "- Ensure requested data is located in the browser tab."
+            ),
+        }
+
     def _tool_suggest_routine_edit(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute suggest_routine_edit tool."""
         # Accept both "routine" and "routine_dict" keys for flexibility
@@ -612,8 +883,7 @@ but is not required before calling `suggest_routine_edit`.
 
         # Emit the suggested edit for host to handle
         self._emit_message(
-            EmittedMessage(
-                type=ChatMessageType.SUGGESTED_EDIT,
+            SuggestedEditEmittedMessage(
                 suggested_edit=suggested_edit,
                 chat_thread_id=self._thread.id,
             )
@@ -621,8 +891,83 @@ but is not required before calling `suggest_routine_edit`.
 
         return {
             "success": True,
-            "message": "Edit suggested and sent to user for approval. Pay attention to changes in the routine to see if the user accepted the edits or not.",
+            "message": (
+                "Edit suggested and sent to user for approval. "
+                "Pay attention to changes in the routine to see if the user accepted the edits or not. "
+                "Give the user a very brief summary (diffs) of the changes."
+            ),
             "edit_id": suggested_edit.id,
+        }
+
+    def _tool_request_routine_discovery(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute request_routine_discovery tool."""
+        data_output = tool_arguments.get("data_output", "")
+        parameters = tool_arguments.get("parameters", "")
+        website = tool_arguments.get("website", "")
+
+        if not data_output:
+            raise ValueError("data_output is required - what should the routine return?")
+
+        # Build task description
+        task_parts = [f"Create a web routine that returns {data_output}"]
+        if parameters:
+            task_parts.append(f"given {parameters}")
+        if website:
+            task_parts.append(f"from {website}")
+        task = " ".join(task_parts) + "."
+
+        self._emit_message(
+            RoutineDiscoveryRequestEmittedMessage(
+                routine_discovery_task=task,
+                chat_thread_id=self._thread.id,
+            )
+        )
+
+        return {
+            "success": True,
+            "message": (
+                "Routine discovery request sent. "
+                "The user will confirm to start the discovery process. "
+                "Give the user a very brief summary of the discovery process: "
+                "find network transactions relevant to the request, "
+                "extract and resolve parameters, cookies, tokens, etc., "
+                "and construct the routine."
+            ),
+            "task": task,
+        }
+
+    def _tool_create_new_routine(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute create_new_routine tool."""
+        # Accept both "routine" and "routine_dict" keys for flexibility
+        routine_dict = tool_arguments.get("routine") or tool_arguments.get("routine_dict")
+        # Fallback: if no nested key, try using tool_arguments directly as the routine
+        if not routine_dict and "name" in tool_arguments and "operations" in tool_arguments:
+            routine_dict = tool_arguments
+        if not routine_dict:
+            raise ValueError("routine was empty. Pass the COMPLETE routine object under the 'routine' key.")
+
+        # Create Routine object to validate
+        try:
+            routine = Routine(**routine_dict)
+        except Exception as e:
+            raise ValueError(f"Invalid routine object: {e}. Fix the routine object and try again.")
+
+        # Emit the routine creation request for host to handle
+        self._emit_message(
+            RoutineCreationRequestEmittedMessage(
+                created_routine=routine,
+                chat_thread_id=self._thread.id,
+            )
+        )
+
+        return {
+            "success": True,
+            "message": (
+                f"Routine '{routine.name}' creation request sent. "
+                "The user will now be asked to confirm the routine creation. "
+                "At this point give the user a very brief summary of the routine."
+            ),
+            "routine_name": routine.name,
         }
 
     def _execute_tool(
@@ -660,6 +1005,15 @@ but is not required before calling `suggest_routine_edit`.
         if tool_name == "suggest_routine_edit":
             return self._tool_suggest_routine_edit(tool_arguments)
 
+        if tool_name == "request_user_browser_recording":
+            return self._tool_request_user_browser_recording(tool_arguments)
+
+        if tool_name == "request_routine_discovery":
+            return self._tool_request_routine_discovery(tool_arguments)
+
+        if tool_name == "create_new_routine":
+            return self._tool_create_new_routine(tool_arguments)
+
         logger.error("Unknown tool \"%s\" with arguments: %s", tool_name, tool_arguments)
         raise UnknownToolError(f"Unknown tool \"{tool_name}\" with arguments: {tool_arguments}")
 
@@ -691,8 +1045,7 @@ but is not required before calling `suggest_routine_edit`.
             invocation.status = ToolInvocationStatus.EXECUTED
 
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.TOOL_INVOCATION_RESULT,
+                ToolInvocationResultEmittedMessage(
                     tool_invocation=invocation,
                     tool_result=result,
                 )
@@ -709,10 +1062,9 @@ but is not required before calling `suggest_routine_edit`.
             invocation.status = ToolInvocationStatus.FAILED
 
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.TOOL_INVOCATION_RESULT,
+                ToolInvocationResultEmittedMessage(
                     tool_invocation=invocation,
-                    error=str(e),
+                    tool_result={"error": str(e)},
                 )
             )
 
@@ -726,24 +1078,135 @@ but is not required before calling `suggest_routine_edit`.
 
     # Public methods _______________________________________________________________________________________________________
 
-    def process_user_message(self, content: str) -> None:
+    def notify_browser_recording_result(self, accepted: bool, error: str | None = None) -> None:
         """
-        Process a user message and emit responses via callback.
+        Notify the agent about the browser recording outcome.
+
+        Args:
+            accepted: True if user accepted the recording request, False if rejected.
+            error: Optional error message if something went wrong during recording.
+        """
+        if not accepted:
+            # User rejected the recording request
+            self.log_user_action("Declined browser recording")
+            system_message = (
+                "Browser recording was rejected by the user. "
+                "Ask the user if they'd like to try again or need help with something else."
+            )
+        elif error:
+            # User accepted but something went wrong
+            self.log_user_action(f"Browser recording failed: {error}")
+            system_message = (
+                f"Browser recording failed: {error}. "
+                "Ask the user if they'd like to try again or need help with something else."
+            )
+        else:
+            # Success - recording completed with data
+            self.log_user_action("Completed browser recording")
+            system_message = (
+                "[ACTION REQUIRED] Browser recording completed. "
+                "New CDP captures are now available in the vectorstore. "
+                "Use file_search to scan consolidated_transactions.json and verify it contains "
+                "the API endpoints and data needed for the user's requested automation. "
+                "If the data looks good, initiate routine discovery. "
+                "Otherwise ask clarifying questions or re-request the browser recording."
+            )
+        self.process_new_message(system_message, ChatRole.SYSTEM)
+
+    def notify_routine_discovery_response(
+        self,
+        accepted: bool,
+        task_description: str | None = None,
+    ) -> None:
+        """
+        Log that routine discovery was started or declined.
+
+        If accepted: logs system message (no agent response) - user can keep chatting.
+        If declined: triggers agent response to handle rejection.
+
+        Args:
+            accepted: True if user accepted, False if declined.
+            task_description: The task description for discovery.
+        """
+        if accepted:
+            task_info = f" for task: '{task_description}'" if task_description else ""
+            self.log_user_action("Approved routine discovery")
+            message = (
+                f"Routine discovery has started{task_info}. "
+                "Discovery is currently RUNNING in the background - it is NOT complete yet. "
+                "The user can continue chatting while discovery runs. "
+                "You will be notified when discovery completes."
+            )
+            self._add_chat(ChatRole.SYSTEM, message)
+        else:
+            self.log_user_action("Declined routine discovery")
+            message = (
+                "Routine discovery was declined by the user. "
+                "Ask the user if they'd like to try again or need help with something else."
+            )
+            self.process_new_message(message, ChatRole.SYSTEM)
+
+    def notify_routine_discovery_result(
+        self,
+        error: str | None = None,
+        routine: Routine | None = None,
+    ) -> None:
+        """
+        Notify the agent that routine discovery has completed.
+        Triggers agent response to explain routine or handle error.
+
+        Args:
+            error: Optional error message if discovery failed.
+            routine: The discovered routine on success.
+        """
+        if error:
+            system_message = (
+                f"Routine discovery failed: {error}. "
+                "Ask the user if they'd like to try again or need help with something else."
+            )
+        else:
+            routine_name = routine.name if routine else "Unknown"
+            ops_count = len(routine.operations) if routine else 0
+            params_count = len(routine.parameters) if routine else 0
+            system_message = (
+                f"[ACTION REQUIRED] Routine discovery completed successfully. "
+                f"The routine '{routine_name}' has been created with {ops_count} operations "
+                f"and {params_count} parameters. "
+                "Review the routine using get_current_routine and very briefly explain the routine."
+            )
+        self.process_new_message(system_message, ChatRole.SYSTEM)
+
+    def log_user_action(self, action: str) -> None:
+        """
+        Log a user action to chat history without sending to LLM.
+
+        Use this for recording user decisions (e.g., rejections, confirmations)
+        that should be persisted in the conversation history but not sent
+        to the LLM as context.
+
+        Args:
+            action: Description of the user action to log.
+        """
+        self._add_chat(ChatRole.USER_ACTION, action)
+
+    def process_new_message(self, content: str, role: ChatRole = ChatRole.USER) -> None:
+        """
+        Process a new message and emit responses via callback.
 
         This method handles the agentic conversation loop:
-        1. Adds user message to history
+        1. Adds the message to history
         2. Calls LLM to generate response
         3. If tool calls: execute tools, add results to history, call LLM again
         4. Repeat until LLM responds with text only (or tool needs approval)
 
         Args:
-            content: The user's message content
+            content: The message content
+            role: The role of the message sender (USER or SYSTEM)
         """
         # Block new messages if there's a pending tool invocation
         if self._thread.pending_tool_invocation:
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.ERROR,
+                ErrorEmittedMessage(
                     error="Please confirm or deny the pending tool invocation before sending new messages",
                 )
             )
@@ -754,10 +1217,8 @@ but is not required before calling `suggest_routine_edit`.
         if system_update:
             self._add_chat(ChatRole.SYSTEM, system_update)
 
-        # Add user message to history
-        self._add_chat(ChatRole.USER, content)
-        
-        
+        # Add message to history
+        self._add_chat(role, content)
 
         # Run the agentic loop
         self._run_agent_loop()
@@ -771,6 +1232,9 @@ but is not required before calling `suggest_routine_edit`.
         - A tool requires user approval (pauses for confirmation)
         - An error occurs
         """
+        # Check for mode switch before running
+        self._check_and_switch_mode()
+
         max_iterations = 10  # Safety limit to prevent infinite loops
 
         for iteration in range(max_iterations):
@@ -804,8 +1268,7 @@ but is not required before calling `suggest_routine_edit`.
                     )
                     if response.content:
                         self._emit_message(
-                            EmittedMessage(
-                                type=ChatMessageType.CHAT_RESPONSE,
+                            ChatResponseEmittedMessage(
                                 content=response.content,
                                 chat_id=chat.id,
                                 chat_thread_id=self._thread.id,
@@ -830,8 +1293,7 @@ but is not required before calling `suggest_routine_edit`.
                             tool_name, tool_arguments, call_id
                         )
                         self._emit_message(
-                            EmittedMessage(
-                                type=ChatMessageType.TOOL_INVOCATION_REQUEST,
+                            ToolInvocationRequestEmittedMessage(
                                 tool_invocation=pending,
                             )
                         )
@@ -862,8 +1324,7 @@ but is not required before calling `suggest_routine_edit`.
             except Exception as e:
                 logger.exception("Error in agent loop: %s", e)
                 self._emit_message(
-                    EmittedMessage(
-                        type=ChatMessageType.ERROR,
+                    ErrorEmittedMessage(
                         error=str(e),
                     )
                 )
@@ -871,8 +1332,7 @@ but is not required before calling `suggest_routine_edit`.
 
         logger.warning("Agent loop hit max iterations (%d)", max_iterations)
         self._emit_message(
-            EmittedMessage(
-                type=ChatMessageType.ERROR,
+            ErrorEmittedMessage(
                 error=f"Agent loop exceeded maximum iterations ({max_iterations})",
             )
         )
@@ -922,8 +1382,7 @@ but is not required before calling `suggest_routine_edit`.
 
         if not pending:
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.ERROR,
+                ErrorEmittedMessage(
                     error="No pending tool invocation to confirm",
                 )
             )
@@ -931,8 +1390,7 @@ but is not required before calling `suggest_routine_edit`.
 
         if pending.invocation_id != invocation_id:
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.ERROR,
+                ErrorEmittedMessage(
                     error=f"Invocation ID mismatch: expected {pending.invocation_id}",
                 )
             )
@@ -952,8 +1410,7 @@ but is not required before calling `suggest_routine_edit`.
                 self._thread = self._persist_chat_thread_callable(self._thread)
 
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.TOOL_INVOCATION_RESULT,
+                ToolInvocationResultEmittedMessage(
                     tool_invocation=pending,
                     tool_result=result,
                 )
@@ -978,10 +1435,9 @@ but is not required before calling `suggest_routine_edit`.
             self._thread.pending_tool_invocation = None
 
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.TOOL_INVOCATION_RESULT,
+                ToolInvocationResultEmittedMessage(
                     tool_invocation=pending,
-                    error=str(e),
+                    tool_result={"error": str(e)},
                 )
             )
 
@@ -1019,8 +1475,7 @@ but is not required before calling `suggest_routine_edit`.
 
         if not pending:
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.ERROR,
+                ErrorEmittedMessage(
                     error="No pending tool invocation to deny",
                 )
             )
@@ -1028,8 +1483,7 @@ but is not required before calling `suggest_routine_edit`.
 
         if pending.invocation_id != invocation_id:
             self._emit_message(
-                EmittedMessage(
-                    type=ChatMessageType.ERROR,
+                ErrorEmittedMessage(
                     error=f"Invocation ID mismatch: expected {pending.invocation_id}",
                 )
             )
@@ -1054,10 +1508,9 @@ but is not required before calling `suggest_routine_edit`.
         )
 
         self._emit_message(
-            EmittedMessage(
-                type=ChatMessageType.TOOL_INVOCATION_RESULT,
+            ToolInvocationResultEmittedMessage(
                 tool_invocation=pending,
-                content=denial_message,
+                tool_result={"denied": True, "message": denial_message},
             )
         )
 
@@ -1097,7 +1550,13 @@ but is not required before calling `suggest_routine_edit`.
         old_chat_thread_id = self._thread.id
         self._thread = ChatThread()
         self._chats = {}
+        self._previous_response_id = None
+        self._response_id_to_chat_index = {}
         self._routine_state.reset()
+
+        # Reset mode to CREATION and re-register tools
+        self._current_mode = GuideAgentMode.CREATION
+        self._register_tools(self._current_mode)
 
         if self._persist_chat_thread_callable:
             self._thread = self._persist_chat_thread_callable(self._thread)
@@ -1107,3 +1566,27 @@ but is not required before calling `suggest_routine_edit`.
             old_chat_thread_id,
             self._thread.id,
         )
+
+    def refresh_vectorstores(self) -> None:
+        """
+        Refresh the file_search vectorstores from the data store.
+
+        Call this after adding new vectorstores to the data store (e.g., after
+        creating a CDP captures vectorstore from browser recording).
+        """
+        if self._data_store:
+            vector_store_ids = self._data_store.get_vectorstore_ids()
+            logger.info(
+                "refresh_vectorstores called - data_store has cdp_vs=%s, doc_vs=%s, returning ids=%s",
+                getattr(self._data_store, 'cdp_captures_vectorstore_id', None),
+                getattr(self._data_store, 'documentation_vectorstore_id', None),
+                vector_store_ids,
+            )
+            if vector_store_ids:
+                self.llm_client.set_file_search_vectorstores(vector_store_ids)
+                logger.info("Refreshed vectorstores: %s", vector_store_ids)
+            else:
+                self.llm_client.set_file_search_vectorstores(None)
+                logger.warning("Cleared vectorstores (none available) - file_search will NOT be available!")
+        else:
+            logger.warning("refresh_vectorstores called but no data_store configured!")

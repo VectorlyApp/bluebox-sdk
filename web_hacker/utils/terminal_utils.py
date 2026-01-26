@@ -32,7 +32,7 @@ def ask_yes_no(prompt: str) -> bool:
     Keeps asking until valid input is provided.
     """
     while True:
-        response = input(f"{prompt} (y/n): ").strip().lower()
+        response = input(f"{YELLOW}{prompt} (y/n): {NC}").strip().lower()
         if response in ('y', 'n'):
             return response == 'y'
         print_colored("   ⚠️  Please enter 'y' or 'n'", YELLOW)

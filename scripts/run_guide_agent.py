@@ -11,6 +11,7 @@ Commands:
   /show                    Show current routine details
   /validate                Validate the current routine
   /execute [params.json]   Execute the loaded routine
+  /monitor                 Start browser monitoring session
   /diff                    Show pending suggested edit diff
   /accept                  Accept pending suggested edit
   /reject                  Reject pending suggested edit
@@ -26,6 +27,7 @@ import difflib
 import json
 import logging
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -45,8 +47,18 @@ from web_hacker.agents.guide_agent import GuideAgent
 from web_hacker.config import Config
 from web_hacker.data_models.llms.vendors import OpenAIModel
 from web_hacker.data_models.llms.interaction import (
-    ChatMessageType,
+    EmittedMessageType,
+    ChatRole,
     EmittedMessage,
+    BaseEmittedMessage,
+    ChatResponseEmittedMessage,
+    ToolInvocationRequestEmittedMessage,
+    ToolInvocationResultEmittedMessage,
+    SuggestedEditEmittedMessage,
+    BrowserRecordingRequestEmittedMessage,
+    RoutineDiscoveryRequestEmittedMessage,
+    RoutineCreationRequestEmittedMessage,
+    ErrorEmittedMessage,
     PendingToolInvocation,
     SuggestedEditRoutine,
     ToolInvocationStatus,
@@ -54,9 +66,19 @@ from web_hacker.data_models.llms.interaction import (
 from web_hacker.data_models.routine.routine import Routine
 from web_hacker.llms.tools.guide_agent_tools import validate_routine
 from web_hacker.routine_discovery.data_store import DiscoveryDataStore, LocalDiscoveryDataStore
+from web_hacker.data_models.routine_discovery.message import RoutineDiscoveryMessage, RoutineDiscoveryMessageType
+from web_hacker.sdk import BrowserMonitor
+from web_hacker.sdk.discovery import RoutineDiscovery
+from web_hacker.utils.chrome_utils import ensure_chrome_running
+from web_hacker.utils.terminal_utils import ask_yes_no
 
 
 console = Console()
+
+# Browser monitoring constants
+PORT = 9222
+REMOTE_DEBUGGING_ADDRESS = f"http://127.0.0.1:{PORT}"
+DEFAULT_CDP_CAPTURES_DIR = Path("./cdp_captures")
 
 
 def configure_logging(quiet: bool = False, log_file: str | None = None) -> None:
@@ -119,6 +141,7 @@ can be turned into a reusable routine.
   [cyan]/show[/cyan]                    Show current routine details
   [cyan]/validate[/cyan]                Validate the current routine
   [cyan]/execute \[params.json][/cyan]   Execute the loaded routine
+  [cyan]/monitor[/cyan]                 Start browser monitoring session
   [cyan]/diff[/cyan]                    Show pending suggested edit diff
   [cyan]/accept[/cyan]                  Accept pending suggested edit
   [cyan]/reject[/cyan]                  Reject pending suggested edit
@@ -297,6 +320,7 @@ class TerminalGuideChat:
         self,
         llm_model: OpenAIModel | None = None,
         data_store: DiscoveryDataStore | None = None,
+        cdp_captures_dir: Path | None = None,
     ) -> None:
         """Initialize the terminal chat interface."""
         self._pending_invocation: PendingToolInvocation | None = None
@@ -305,6 +329,12 @@ class TerminalGuideChat:
         self._data_store = data_store
         self._loaded_routine_path: Path | None = None
         self._last_execution_ok: bool | None = None
+        self._browser_recording_requested: bool = False
+        self._routine_discovery_requested: bool = False
+        self._routine_discovery_task: str | None = None
+        self._routine_creation_requested: bool = False
+        self._created_routine: Routine | None = None
+        self._cdp_captures_dir: Path = cdp_captures_dir or DEFAULT_CDP_CAPTURES_DIR
         self._agent = GuideAgent(
             emit_message_callable=self._handle_message,
             stream_chunk_callable=self._handle_stream_chunk,
@@ -402,39 +432,49 @@ class TerminalGuideChat:
         # Use plain print for streaming - Rich console.print breaks on char-by-char output
         print(chunk, end="", flush=True)
 
-    def _handle_message(self, message: EmittedMessage) -> None:
+    def _handle_message(self, message: BaseEmittedMessage) -> None:
         """Handle messages emitted by the Guide Agent."""
-        if message.type == ChatMessageType.CHAT_RESPONSE:
+        if isinstance(message, ChatResponseEmittedMessage):
             if self._streaming_started:
                 print()  # End the streamed line
                 print()  # Add spacing
                 self._streaming_started = False
             else:
-                print_assistant_message(message.content or "")
+                print_assistant_message(message.content)
 
-        elif message.type == ChatMessageType.TOOL_INVOCATION_REQUEST:
-            if message.tool_invocation:
-                self._pending_invocation = message.tool_invocation
-                print_tool_request(message.tool_invocation)
+        elif isinstance(message, ToolInvocationRequestEmittedMessage):
+            self._pending_invocation = message.tool_invocation
+            print_tool_request(message.tool_invocation)
 
-        elif message.type == ChatMessageType.TOOL_INVOCATION_RESULT:
-            if message.tool_invocation:
-                print_tool_result(
-                    message.tool_invocation,
-                    message.tool_result,
-                    message.error,
-                )
+        elif isinstance(message, ToolInvocationResultEmittedMessage):
+            # Check if result contains an error
+            error = message.tool_result.get("error") if isinstance(message.tool_result, dict) else None
+            print_tool_result(
+                message.tool_invocation,
+                message.tool_result,
+                error,
+            )
 
-        elif message.type == ChatMessageType.SUGGESTED_EDIT:
-            if message.suggested_edit:
-                self._pending_suggested_edit = message.suggested_edit
-                console.print()
-                console.print("[bold yellow]📝 Agent suggested a routine edit[/bold yellow]")
-                console.print("[dim]Use /diff to see changes, /accept to apply, /reject to discard[/dim]")
-                console.print()
+        elif isinstance(message, SuggestedEditEmittedMessage):
+            self._pending_suggested_edit = message.suggested_edit
+            console.print()
+            console.print("[bold yellow]📝 Agent suggested a routine edit[/bold yellow]")
+            console.print("[dim]Use /diff to see changes, /accept to apply, /reject to discard[/dim]")
+            console.print()
 
-        elif message.type == ChatMessageType.ERROR:
-            print_error(message.error or "Unknown error")
+        elif isinstance(message, BrowserRecordingRequestEmittedMessage):
+            self._browser_recording_requested = True
+
+        elif isinstance(message, RoutineDiscoveryRequestEmittedMessage):
+            self._routine_discovery_requested = True
+            self._routine_discovery_task = message.routine_discovery_task
+
+        elif isinstance(message, RoutineCreationRequestEmittedMessage):
+            self._routine_creation_requested = True
+            self._created_routine = message.created_routine
+
+        elif isinstance(message, ErrorEmittedMessage):
+            print_error(message.error)
 
     def _handle_tool_confirmation(self, user_input: str) -> bool:
         """Handle yes/no confirmation for pending tool invocation."""
@@ -785,6 +825,14 @@ class TerminalGuideChat:
                 if params is None:
                     return  # User cancelled
 
+        # Ensure Chrome is running in debug mode
+        if not ensure_chrome_running(PORT):
+            console.print()
+            console.print("[red]✗ Could not start Chrome in debug mode.[/red]")
+            console.print(f"[dim]Launch Chrome manually with: --remote-debugging-port={PORT}[/dim]")
+            console.print()
+            return
+
         try:
             console.print()
             with console.status("[bold yellow]Executing routine...[/bold yellow]"):
@@ -891,6 +939,265 @@ class TerminalGuideChat:
         console.print()
         self._pending_suggested_edit = None
 
+    def _handle_browser_recording(self, skip_prompt: bool = False) -> None:
+        """Handle a browser recording request."""
+        if not skip_prompt and not ask_yes_no("Start browser monitoring?"):
+            self._agent.notify_browser_recording_result(accepted=False)
+            return
+
+        # Ensure Chrome is running in debug mode (launch if needed)
+        if not ensure_chrome_running(PORT):
+            console.print()
+            console.print("[red]✗ Could not start Chrome in debug mode.[/red]")
+            console.print(f"[dim]Launch Chrome manually with: --remote-debugging-port={PORT}[/dim]")
+            console.print()
+            self._agent.notify_browser_recording_result(
+                accepted=True,
+                error="Could not start Chrome in debug mode"
+            )
+            return
+
+        cdp_captures_dir = self._cdp_captures_dir
+        cdp_captures_dir.mkdir(parents=True, exist_ok=True)
+
+        console.print()
+        console.print("[bold blue]Starting browser monitor...[/bold blue]")
+        console.print(f"[dim]Output directory: {cdp_captures_dir}[/dim]")
+        console.print()
+
+        monitor = BrowserMonitor(
+            remote_debugging_address=REMOTE_DEBUGGING_ADDRESS,
+            output_dir=str(cdp_captures_dir),
+            create_tab=False,
+        )
+
+        try:
+            monitor.start()
+            console.print("[green]Monitoring started! Perform your actions in the browser.[/green]")
+            console.print("[yellow]Press Ctrl+C when done...[/yellow]")
+            console.print()
+
+            while monitor.is_alive:
+                time.sleep(1)
+
+        except KeyboardInterrupt:
+            console.print()
+            console.print("Stopping monitor...")
+        finally:
+            summary = monitor.stop()
+
+        console.print()
+        console.print("[bold green]✓ Monitoring complete![/bold green]")
+        transaction_count = summary.get('network_transactions', 0) if summary else 0
+        if summary:
+            console.print(f"[dim]Duration: {summary.get('duration', 0):.1f}s[/dim]")
+            console.print(f"[dim]Transactions captured: {transaction_count}[/dim]")
+        console.print()
+
+        # Create vectorstore from captured data if we have transactions
+        if transaction_count == 0:
+            console.print("[yellow]⚠ No transactions captured. Skipping vectorstore creation.[/yellow]")
+            console.print()
+            self._agent.notify_browser_recording_result(
+                accepted=True,
+                error="No network transactions were captured during recording"
+            )
+            return
+
+        if not isinstance(self._data_store, LocalDiscoveryDataStore):
+            console.print("[yellow]⚠ No data store available. Skipping vectorstore creation.[/yellow]")
+            console.print()
+            self._agent.notify_browser_recording_result(
+                accepted=True,
+                error="No data store available"
+            )
+            return
+
+        # Update data store with CDP capture paths
+        self._data_store.tmp_dir = str(cdp_captures_dir / "tmp")
+        self._data_store.transactions_dir = str(cdp_captures_dir / "network" / "transactions")
+        self._data_store.consolidated_transactions_path = str(cdp_captures_dir / "network" / "consolidated_transactions.json")
+        self._data_store.storage_jsonl_path = str(cdp_captures_dir / "storage" / "events.jsonl")
+        self._data_store.window_properties_path = str(cdp_captures_dir / "window_properties" / "window_properties.json")
+        self._data_store.cached_transaction_ids = None  # Clear cache
+
+        # Delete old CDP vectorstore if it exists
+        if self._data_store.cdp_captures_vectorstore_id is not None:
+            console.print("[dim]Cleaning up previous CDP vectorstore...[/dim]")
+            try:
+                self._data_store.client.vector_stores.delete(
+                    vector_store_id=self._data_store.cdp_captures_vectorstore_id
+                )
+            except Exception:
+                pass  # Ignore errors - vectorstore may have expired
+            self._data_store.cdp_captures_vectorstore_id = None
+
+        # Create new vectorstore
+        with console.status("[bold blue]Creating CDP captures vectorstore...[/bold blue]"):
+            self._data_store.make_cdp_captures_vectorstore()
+
+        # Refresh agent's vectorstore access so file_search can find CDP captures
+        self._agent.refresh_vectorstores()
+
+        console.print("[green]✓ CDP captures vectorstore ready![/green]")
+        console.print()
+
+        # Notify the agent about the new data
+        self._agent.notify_browser_recording_result(accepted=True)
+
+    def _handle_routine_discovery(self, task: str | None) -> None:
+        """Handle routine discovery request."""
+        if not task:
+            console.print("[yellow]⚠ No task description provided.[/yellow]")
+            return
+
+        console.print()
+        console.print("[bold cyan]Routine Discovery Task:[/bold cyan]")
+        console.print(f"  {task}")
+        console.print()
+
+        # Allow user to accept, reject, or modify the task
+        while True:
+            response = console.input("[yellow]Start routine discovery? (y/n/m to modify): [/yellow]").strip().lower()
+            if response == "y":
+                break
+            if response == "n":
+                self._agent.notify_routine_discovery_response(accepted=False)
+                return
+            if response == "m":
+                modified_task = console.input("[yellow]Enter new task description: [/yellow]").strip()
+                if modified_task:
+                    task = modified_task
+                    console.print()
+                    console.print("[bold cyan]Updated Task:[/bold cyan]")
+                    console.print(f"  {task}")
+                    console.print()
+                else:
+                    console.print("[yellow]⚠ Empty input, task unchanged.[/yellow]")
+            else:
+                console.print("[yellow]⚠ Please enter 'y', 'n', or 'm'[/yellow]")
+
+        # User accepted - log that discovery is starting (no agent response yet)
+        self._agent.notify_routine_discovery_response(accepted=True, task_description=task)
+
+        # Verify we have data store with CDP captures
+        if not isinstance(self._data_store, LocalDiscoveryDataStore):
+            console.print("[red]✗ No data store available.[/red]")
+            self._agent.notify_routine_discovery_result(error="No data store available")
+            return
+
+        if self._data_store.cdp_captures_vectorstore_id is None:
+            console.print("[red]✗ No CDP captures available. Run /monitor first.[/red]")
+            self._agent.notify_routine_discovery_result(error="No CDP captures available")
+            return
+
+        # Create output directory
+        output_dir = Path("./routine_discovery_output")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        console.print()
+        console.print("[bold blue]Starting routine discovery...[/bold blue]")
+
+        # Progress callback for discovery messages
+        def handle_discovery_message(msg: RoutineDiscoveryMessage) -> None:
+            if msg.type == RoutineDiscoveryMessageType.PROGRESS_THINKING:
+                console.print(f"[dim]🤔 {msg.content}[/dim]")
+            elif msg.type == RoutineDiscoveryMessageType.PROGRESS_RESULT:
+                console.print(f"[green]✓ {msg.content}[/green]")
+            elif msg.type == RoutineDiscoveryMessageType.ERROR:
+                console.print(f"[red]✗ {msg.content}[/red]")
+
+        try:
+            # Run discovery using existing data store's vectorstore
+            discovery = RoutineDiscovery(
+                client=self._data_store.client,
+                task=task,
+                cdp_captures_dir=str(self._cdp_captures_dir),
+                output_dir=str(output_dir),
+                llm_model=str(self._agent.llm_model.value),
+                message_callback=handle_discovery_message,
+            )
+            result = discovery.run()
+            routine = result.routine
+
+            console.print()
+            console.print("[bold green]✓ Routine discovered successfully![/bold green]")
+            console.print(f"  Name: {routine.name}")
+            console.print(f"  Operations: {len(routine.operations)}")
+            console.print(f"  Parameters: {len(routine.parameters)}")
+
+            # Save routine to file (name -> lowercase_underscores)
+            safe_name = routine.name.lower().replace(" ", "_").replace("-", "_")
+            safe_name = "".join(c for c in safe_name if c.isalnum() or c == "_")
+            routines_dir = Path("./example_routines")
+            routines_dir.mkdir(parents=True, exist_ok=True)
+            routine_path = routines_dir / f"{safe_name}.json"
+            routine_path.write_text(json.dumps(routine.model_dump(), indent=2))
+            console.print(f"  Saved to: {routine_path}")
+
+            # Load routine into context (like /load)
+            routine_str = routine_path.read_text()
+            self._loaded_routine_path = routine_path
+            self._agent.routine_state.update_current_routine(routine_str)
+
+            console.print()
+            console.print("[green]✓ Routine loaded into context![/green]")
+            console.print()
+
+            # Notify agent to review the routine
+            self._agent.notify_routine_discovery_result(routine=routine)
+
+        except Exception as e:
+            console.print()
+            console.print(f"[bold red]✗ Discovery failed: {e}[/bold red]")
+            console.print()
+            self._agent.notify_routine_discovery_result(error=str(e))
+
+    def _handle_routine_creation(self, routine: Routine | None) -> None:
+        """Handle routine creation request - save and load the routine."""
+        if not routine:
+            console.print("[yellow]⚠ No routine provided.[/yellow]")
+            return
+
+        console.print()
+        console.print("[bold cyan]Creating new routine:[/bold cyan]")
+        console.print(f"  Name: {routine.name}")
+        console.print(f"  Operations: {len(routine.operations)}")
+        console.print(f"  Parameters: {len(routine.parameters)}")
+        console.print()
+
+        try:
+            # Save routine to file (name -> lowercase_underscores)
+            safe_name = routine.name.lower().replace(" ", "_").replace("-", "_")
+            safe_name = "".join(c for c in safe_name if c.isalnum() or c == "_")
+            routines_dir = Path("./example_routines")
+            routines_dir.mkdir(parents=True, exist_ok=True)
+            routine_path = routines_dir / f"{safe_name}.json"
+            routine_path.write_text(json.dumps(routine.model_dump(), indent=2))
+            console.print(f"[green]✓ Saved to: {routine_path}[/green]")
+
+            # Load routine into context (like /load)
+            routine_str = routine_path.read_text()
+            self._loaded_routine_path = routine_path
+            self._agent.routine_state.update_current_routine(routine_str)
+
+            console.print("[green]✓ Routine loaded into context![/green]")
+            console.print()
+
+            # Notify agent about the created routine
+            system_message = (
+                f"[ACTION REQUIRED] Routine '{routine.name}' has been created and saved to {routine_path}. "
+                f"It has {len(routine.operations)} operations and {len(routine.parameters)} parameters. "
+                "The routine is now loaded into context. Review it using get_current_routine and explain "
+                "to the user what it does, what parameters it needs, and how to use it."
+            )
+            self._agent.process_new_message(system_message, ChatRole.SYSTEM)
+
+        except Exception as e:
+            console.print()
+            console.print(f"[bold red]✗ Failed to create routine: {e}[/bold red]")
+            console.print()
+
     def run(self) -> None:
         """Run the interactive chat loop."""
         print_welcome(str(self._agent.llm_model))
@@ -930,6 +1237,7 @@ class TerminalGuideChat:
   [cyan]/show[/cyan]                    Show current routine details
   [cyan]/validate[/cyan]                Validate the current routine
   [cyan]/execute \[params.json][/cyan]   Execute the loaded routine
+  [cyan]/monitor[/cyan]                 Start browser monitoring session
   [cyan]/diff[/cyan]                    Show pending suggested edit diff
   [cyan]/accept[/cyan]                  Accept pending suggested edit
   [cyan]/reject[/cyan]                  Reject pending suggested edit
@@ -995,6 +1303,10 @@ class TerminalGuideChat:
                     self._handle_unload_command()
                     continue
 
+                if cmd == "/monitor":
+                    self._handle_browser_recording(skip_prompt=True)
+                    continue
+
                 if user_input.strip().startswith("/load "):
                     self._handle_load_command(user_input.strip()[6:].strip())
                     continue
@@ -1008,7 +1320,26 @@ class TerminalGuideChat:
                 self._reload_routine_from_file()
 
                 # Process the message (no spinner - conflicts with streaming output)
-                self._agent.process_user_message(user_input)
+                self._agent.process_new_message(user_input, ChatRole.USER)
+
+                # Check if agent requested a browser recording
+                if self._browser_recording_requested:
+                    self._browser_recording_requested = False
+                    self._handle_browser_recording()
+
+                # Check if agent requested routine discovery
+                if self._routine_discovery_requested:
+                    self._routine_discovery_requested = False
+                    task = self._routine_discovery_task
+                    self._routine_discovery_task = None
+                    self._handle_routine_discovery(task)
+
+                # Check if agent requested routine creation
+                if self._routine_creation_requested:
+                    self._routine_creation_requested = False
+                    routine = self._created_routine
+                    self._created_routine = None
+                    self._handle_routine_creation(routine)
 
             except KeyboardInterrupt:
                 console.print()
@@ -1126,7 +1457,8 @@ def main() -> None:
         console.print("[green]✓ Vectorstores ready![/green]")
         console.print()
 
-        chat = TerminalGuideChat(llm_model=llm_model, data_store=data_store)
+        cdp_captures_dir = Path(args.cdp_captures_dir) if args.cdp_captures_dir else DEFAULT_CDP_CAPTURES_DIR
+        chat = TerminalGuideChat(llm_model=llm_model, data_store=data_store, cdp_captures_dir=cdp_captures_dir)
         chat.run()
 
     except ValueError as e:

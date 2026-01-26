@@ -308,7 +308,7 @@ You have access to vectorstore that contains network transactions and storage da
 
             self.emit_message_callable(RoutineDiscoveryMessage(
                 type=RoutineDiscoveryMessageType.PROGRESS_RESULT,
-                content=f"Successfully processed network transaction {len(routine_transactions) + 1}"
+                content=f"Successfully processed network {len(routine_transactions) + 1} transaction(s)"
             ))
 
             # save the extracted and resolved variables (optional)

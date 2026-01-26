@@ -136,14 +136,34 @@ class BrowserMonitor:
             except Exception as e:
                 raise BrowserConnectionError(f"Failed to create browser tab: {e}")
         else:
-            # Connect to existing browser
+            # Try to attach to an existing page tab, or create one if none exist
             try:
-                ver = requests.get(f"{self.remote_debugging_address}/json/version", timeout=5)
-                ver.raise_for_status()
-                data = ver.json()
-                ws_url = data.get("webSocketDebuggerUrl")
-                if not ws_url:
-                    raise BrowserConnectionError("Could not get WebSocket URL from browser")
+                resp = requests.get(f"{self.remote_debugging_address}/json/list", timeout=5)
+                resp.raise_for_status()
+                tabs = resp.json()
+                page_tabs = [t for t in tabs if t.get("type") == "page"]
+
+                if page_tabs:
+                    # Attach to existing tab
+                    target_id = page_tabs[0]["id"]
+                    host_port = self.remote_debugging_address.replace("http://", "").replace("https://", "")
+                    ws_url = f"ws://{host_port}/devtools/page/{target_id}"
+                else:
+                    # No existing tabs - create a new one
+                    logger.info("No existing page tabs found, creating a new tab...")
+                    target_id, browser_context_id, browser_ws = cdp_new_tab(
+                        remote_debugging_address=self.remote_debugging_address,
+                        incognito=self.incognito,
+                        url=self.url,
+                    )
+                    try:
+                        browser_ws.close()
+                    except Exception:
+                        pass
+                    self.context_id = browser_context_id
+                    self.created_tab = True
+                    host_port = self.remote_debugging_address.replace("http://", "").replace("https://", "")
+                    ws_url = f"ws://{host_port}/devtools/page/{target_id}"
             except Exception as e:
                 raise BrowserConnectionError(f"Failed to connect to browser: {e}")
 
@@ -297,6 +317,15 @@ class BrowserMonitor:
 
         summary = self.get_summary()
 
+        # Count actual transaction directories on disk
+        transactions_dir = Path(self.output_dir) / "network" / "transactions"
+        if transactions_dir.exists():
+            summary["network_transactions"] = sum(
+                1 for d in transactions_dir.iterdir() if d.is_dir()
+            )
+        else:
+            summary["network_transactions"] = 0
+
         # Cleanup browser context only if browser is still connected
         if self.created_tab and self.context_id and self._is_browser_connected():
             try:
@@ -310,6 +339,11 @@ class BrowserMonitor:
         logger.info("Browser monitoring stopped.")
         return summary
     
+    @property
+    def is_alive(self) -> bool:
+        """Check if the monitoring thread is still running."""
+        return self._run_thread is not None and self._run_thread.is_alive()
+
     def get_summary(self) -> dict:
         """Get current monitoring summary without stopping."""
         if not self.session:
