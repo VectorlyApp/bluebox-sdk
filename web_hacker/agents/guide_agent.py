@@ -1079,18 +1079,21 @@ execute the requested action using the appropriate tools.
         """
         if not accepted:
             # User rejected the recording request
+            self.log_user_action("Declined browser recording")
             system_message = (
                 "Browser recording was rejected by the user. "
                 "Ask the user if they'd like to try again or need help with something else."
             )
         elif error:
             # User accepted but something went wrong
+            self.log_user_action(f"Browser recording failed: {error}")
             system_message = (
                 f"Browser recording failed: {error}. "
                 "Ask the user if they'd like to try again or need help with something else."
             )
         else:
             # Success - recording completed with data
+            self.log_user_action("Completed browser recording")
             system_message = (
                 "[ACTION REQUIRED] Browser recording completed. "
                 "New CDP captures are now available in the vectorstore. "
@@ -1118,6 +1121,7 @@ execute the requested action using the appropriate tools.
         """
         if accepted:
             task_info = f" for task: '{task_description}'" if task_description else ""
+            self.log_user_action("Approved routine discovery")
             message = (
                 f"Routine discovery has started{task_info}. "
                 "Discovery is currently RUNNING in the background - it is NOT complete yet. "
@@ -1126,6 +1130,7 @@ execute the requested action using the appropriate tools.
             )
             self._add_chat(ChatRole.SYSTEM, message)
         else:
+            self.log_user_action("Declined routine discovery")
             message = (
                 "Routine discovery was declined by the user. "
                 "Ask the user if they'd like to try again or need help with something else."
