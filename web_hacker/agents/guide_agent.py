@@ -708,25 +708,29 @@ execute the requested action using the appropriate tools.
         
         for chat_id in chats_to_include:
             chat = self._chats.get(chat_id)
-            if chat:
-                msg: dict[str, Any] = {
-                    "role": chat.role.value,
-                    "content": chat.content,
-                }
-                # Include tool_call_id for TOOL role messages
-                if chat.tool_call_id:
-                    msg["tool_call_id"] = chat.tool_call_id
-                # Include tool_calls for ASSISTANT role messages
-                if chat.tool_calls:
-                    msg["tool_calls"] = [
-                        {
-                            "name": tc.tool_name,
-                            "arguments": tc.tool_arguments,
-                            "call_id": tc.call_id,
-                        }
-                        for tc in chat.tool_calls
-                    ]
-                messages.append(msg)
+            if not chat:
+                continue
+            # Skip USER_ACTION - these are for history only, not sent to LLM
+            if chat.role == ChatRole.USER_ACTION:
+                continue
+            msg: dict[str, Any] = {
+                "role": chat.role.value,
+                "content": chat.content,
+            }
+            # Include tool_call_id for TOOL role messages
+            if chat.tool_call_id:
+                msg["tool_call_id"] = chat.tool_call_id
+            # Include tool_calls for ASSISTANT role messages
+            if chat.tool_calls:
+                msg["tool_calls"] = [
+                    {
+                        "name": tc.tool_name,
+                        "arguments": tc.tool_arguments,
+                        "call_id": tc.call_id,
+                    }
+                    for tc in chat.tool_calls
+                ]
+            messages.append(msg)
         return messages
 
     def _create_tool_invocation_request(
@@ -1137,6 +1141,19 @@ execute the requested action using the appropriate tools.
                 "what parameters it needs, and how to use it."
             )
         self.process_new_message(system_message, ChatRole.SYSTEM)
+
+    def log_user_action(self, action: str) -> None:
+        """
+        Log a user action to chat history without sending to LLM.
+
+        Use this for recording user decisions (e.g., rejections, confirmations)
+        that should be persisted in the conversation history but not sent
+        to the LLM as context.
+
+        Args:
+            action: Description of the user action to log.
+        """
+        self._add_chat(ChatRole.USER_ACTION, action)
 
     def process_new_message(self, content: str, role: ChatRole = ChatRole.USER) -> None:
         """
