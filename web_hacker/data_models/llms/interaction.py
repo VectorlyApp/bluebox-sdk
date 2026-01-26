@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from web_hacker.data_models.resource_base import ResourceBase
 from web_hacker.data_models.routine import Routine
@@ -19,6 +19,7 @@ class ChatRole(StrEnum):
     Role in a chat message.
     """
     USER = "user"
+    USER_ACTION = "user_action"
     ASSISTANT = "assistant"  # AI
     SYSTEM = "system"
     TOOL = "tool"
@@ -117,7 +118,7 @@ class PendingToolInvocation(BaseModel):
     )
 
 
-class ChatMessageType(StrEnum):
+class EmittedMessageType(StrEnum):
     """
     Types of messages the chat can emit via callback.
     """
@@ -126,18 +127,22 @@ class ChatMessageType(StrEnum):
     TOOL_INVOCATION_REQUEST = "tool_invocation_request"
     TOOL_INVOCATION_RESULT = "tool_invocation_result"
     SUGGESTED_EDIT = "suggested_edit"
+    BROWSER_RECORDING_REQUEST = "browser_recording_request"
+    ROUTINE_DISCOVERY_REQUEST = "routine_discovery_request"
+    ROUTINE_CREATION_REQUEST = "routine_creation_request"
     ERROR = "error"
 
 
-class EmittedMessage(BaseModel):
+# Emitted message classes - discriminated by 'type' field _______________________________________
+
+class BaseEmittedMessage(BaseModel):
     """
-    Message emitted by the guide agent via callback.
+    Base class for messages emitted by the guide agent via callback.
 
     This is the internal message format used by GuideAgent to communicate
     with its host (e.g., CLI, WebSocket handler in servers repo).
     """
-
-    type: ChatMessageType = Field(
+    type: EmittedMessageType = Field(
         ...,
         description="The type of message being emitted",
     )
@@ -145,34 +150,104 @@ class EmittedMessage(BaseModel):
         default_factory=lambda: datetime.now(tz=timezone.utc),
         description="When the message was created",
     )
-    content: str | None = Field(
-        default=None,
-        description="Text content for chat responses or error messages",
-    )
-    chat_id: str | None = Field(
-        default=None,
-        description="ID of the Chat message (for CHAT_RESPONSE messages)",
-    )
     chat_thread_id: str | None = Field(
         default=None,
         description="ID of the ChatThread this message belongs to",
     )
-    tool_invocation: PendingToolInvocation | None = Field(
+
+
+class ChatResponseEmittedMessage(BaseEmittedMessage):
+    """Chat response message with text content."""
+    type: Literal[EmittedMessageType.CHAT_RESPONSE] = EmittedMessageType.CHAT_RESPONSE
+    content: str = Field(..., description="Text content of the chat response")
+    chat_id: str | None = Field(
         default=None,
-        description="Tool invocation details for request/result messages",
+        description="ID of the Chat message",
     )
-    tool_result: dict[str, Any] | None = Field(
-        default=None,
+
+
+class ToolInvocationRequestEmittedMessage(BaseEmittedMessage):
+    """Tool invocation request awaiting confirmation."""
+    type: Literal[EmittedMessageType.TOOL_INVOCATION_REQUEST] = EmittedMessageType.TOOL_INVOCATION_REQUEST
+    tool_invocation: PendingToolInvocation = Field(
+        ...,
+        description="Tool invocation details",
+    )
+
+
+class ToolInvocationResultEmittedMessage(BaseEmittedMessage):
+    """Result of a tool invocation."""
+    type: Literal[EmittedMessageType.TOOL_INVOCATION_RESULT] = EmittedMessageType.TOOL_INVOCATION_RESULT
+    tool_invocation: PendingToolInvocation = Field(
+        ...,
+        description="Tool invocation that was executed",
+    )
+    tool_result: dict[str, Any] = Field(
+        ...,
         description="Result data from tool execution",
     )
-    error: str | None = Field(
-        default=None,
-        description="Error message if type is ERROR",
+
+
+class SuggestedEditEmittedMessage(BaseEmittedMessage):
+    """Suggested edit for user approval."""
+    type: Literal[EmittedMessageType.SUGGESTED_EDIT] = EmittedMessageType.SUGGESTED_EDIT
+    suggested_edit: SuggestedEditUnion = Field(
+        ...,
+        description="Suggested edit details",
     )
-    suggested_edit: SuggestedEditUnion | None = Field(
-        default=None,
-        description="Suggested edit details for SUGGESTED_EDIT messages",
+
+
+class BrowserRecordingRequestEmittedMessage(BaseEmittedMessage):
+    """Request to start browser recording."""
+    type: Literal[EmittedMessageType.BROWSER_RECORDING_REQUEST] = EmittedMessageType.BROWSER_RECORDING_REQUEST
+    browser_recording_task: str = Field(
+        ...,
+        description="Task description for the browser recording",
     )
+
+
+class RoutineDiscoveryRequestEmittedMessage(BaseEmittedMessage):
+    """Request to start routine discovery."""
+    type: Literal[EmittedMessageType.ROUTINE_DISCOVERY_REQUEST] = EmittedMessageType.ROUTINE_DISCOVERY_REQUEST
+    routine_discovery_task: str = Field(
+        ...,
+        description="Task description for routine discovery",
+    )
+
+
+class RoutineCreationRequestEmittedMessage(BaseEmittedMessage):
+    """Request to create and save a new routine."""
+    type: Literal[EmittedMessageType.ROUTINE_CREATION_REQUEST] = EmittedMessageType.ROUTINE_CREATION_REQUEST
+    created_routine: Routine = Field(
+        ...,
+        description="The routine object to create",
+    )
+
+
+class ErrorEmittedMessage(BaseEmittedMessage):
+    """Error message."""
+    type: Literal[EmittedMessageType.ERROR] = EmittedMessageType.ERROR
+    error: str = Field(..., description="Error message")
+    content: str | None = Field(
+        default=None,
+        description="Additional error context",
+    )
+
+
+# Union of all emitted message types - discriminated by 'type' field
+EmittedMessage = Annotated[
+    Union[
+        ChatResponseEmittedMessage,
+        ToolInvocationRequestEmittedMessage,
+        ToolInvocationResultEmittedMessage,
+        SuggestedEditEmittedMessage,
+        BrowserRecordingRequestEmittedMessage,
+        RoutineDiscoveryRequestEmittedMessage,
+        RoutineCreationRequestEmittedMessage,
+        ErrorEmittedMessage,
+    ],
+    Field(discriminator="type"),
+]
 
 
 class LLMToolCall(BaseModel):
