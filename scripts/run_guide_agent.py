@@ -33,8 +33,8 @@ from typing import Any
 
 from openai import OpenAI
 
-# Package root for code_paths (scripts/ is sibling to web_hacker/)
-WEB_HACKER_PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "web_hacker"
+# Package root for code_paths (scripts/ is sibling to bluebox/)
+WEB_HACKER_PACKAGE_ROOT = Path(__file__).resolve().parent.parent / "bluebox"
 from rich import box
 from rich.console import Console
 from rich.markdown import Markdown
@@ -43,10 +43,10 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from web_hacker.agents.guide_agent import GuideAgent
-from web_hacker.config import Config
-from web_hacker.data_models.llms.vendors import OpenAIModel
-from web_hacker.data_models.llms.interaction import (
+from bluebox.agents.guide_agent import GuideAgent
+from bluebox.config import Config
+from bluebox.data_models.llms.vendors import OpenAIModel
+from bluebox.data_models.llms.interaction import (
     EmittedMessageType,
     ChatRole,
     EmittedMessage,
@@ -63,14 +63,14 @@ from web_hacker.data_models.llms.interaction import (
     SuggestedEditRoutine,
     ToolInvocationStatus,
 )
-from web_hacker.data_models.routine.routine import Routine
-from web_hacker.llms.tools.guide_agent_tools import validate_routine
-from web_hacker.routine_discovery.data_store import DiscoveryDataStore, LocalDiscoveryDataStore
-from web_hacker.data_models.routine_discovery.message import RoutineDiscoveryMessage, RoutineDiscoveryMessageType
-from web_hacker.sdk import BrowserMonitor
-from web_hacker.sdk.discovery import RoutineDiscovery
-from web_hacker.utils.chrome_utils import ensure_chrome_running
-from web_hacker.utils.terminal_utils import ask_yes_no
+from bluebox.data_models.routine.routine import Routine
+from bluebox.llms.tools.guide_agent_tools import validate_routine
+from bluebox.routine_discovery.data_store import DiscoveryDataStore, LocalDiscoveryDataStore
+from bluebox.data_models.routine_discovery.message import RoutineDiscoveryMessage, RoutineDiscoveryMessageType
+from bluebox.sdk import BrowserMonitor
+from bluebox.sdk.discovery import RoutineDiscovery
+from bluebox.utils.chrome_utils import ensure_chrome_running
+from bluebox.utils.terminal_utils import ask_yes_no
 
 
 console = Console()
@@ -83,14 +83,14 @@ DEFAULT_CDP_CAPTURES_DIR = Path("./cdp_captures")
 
 def configure_logging(quiet: bool = False, log_file: str | None = None) -> None:
     """
-    Configure logging for all web_hacker modules.
+    Configure logging for all bluebox modules.
 
     Args:
         quiet: If True, suppress all logs to console.
         log_file: If provided, write logs to this file instead of console.
     """
-    # Get the parent logger for all web_hacker modules
-    wh_logger = logging.getLogger("web_hacker")
+    # Get the parent logger for all bluebox modules
+    wh_logger = logging.getLogger("bluebox")
 
     if quiet:
         # Suppress all logs
@@ -1387,7 +1387,7 @@ def main() -> None:
         "--docs-dir",
         type=str,
         default=str(WEB_HACKER_PACKAGE_ROOT / "agent_docs"),
-        help="Documentation directory (default: web_hacker/agent_docs)",
+        help="Documentation directory (default: bluebox/agent_docs)",
     )
     parser.add_argument(
         "-q", "--quiet",

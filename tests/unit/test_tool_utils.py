@@ -4,7 +4,7 @@ tests/unit/test_tool_utils.py
 Unit tests for LLM tool utilities.
 """
 
-from web_hacker.llms.tools.tool_utils import (
+from bluebox.llms.tools.tool_utils import (
     extract_description_from_docstring,
     generate_parameters_schema,
 )

@@ -7,7 +7,7 @@ Tests for endpoint data model including validation, type checking, and parameter
 import pytest
 from pydantic import ValidationError
 
-from web_hacker.data_models.routine.endpoint import (
+from bluebox.data_models.routine.endpoint import (
     Endpoint,
     HTTPMethod,
     CREDENTIALS,

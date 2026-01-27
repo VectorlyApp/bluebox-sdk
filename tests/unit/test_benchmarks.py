@@ -9,7 +9,7 @@ import re
 
 from unittest.mock import MagicMock, patch
 
-from web_hacker.data_models.benchmarks import (
+from bluebox.data_models.benchmarks import (
     ExpressionOperator,
     OPERATOR_SYMBOLS,
     _format_value,

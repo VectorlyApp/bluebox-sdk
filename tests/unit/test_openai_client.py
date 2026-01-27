@@ -6,8 +6,8 @@ Unit tests for OpenAI client validation logic.
 
 import pytest
 
-from web_hacker.data_models.llms.vendors import OpenAIAPIType, OpenAIModel
-from web_hacker.llms.openai_client import OpenAIClient
+from bluebox.data_models.llms.vendors import OpenAIAPIType, OpenAIModel
+from bluebox.llms.openai_client import OpenAIClient
 
 
 class TestValidateAndResolveAPIType:
@@ -182,21 +182,21 @@ class TestLLMChatResponseFields:
 
     def test_response_id_field_exists(self) -> None:
         """Test that response_id field exists on LLMChatResponse."""
-        from web_hacker.data_models.llms.interaction import LLMChatResponse
+        from bluebox.data_models.llms.interaction import LLMChatResponse
 
         response = LLMChatResponse(content="test", response_id="resp_123")
         assert response.response_id == "resp_123"
 
     def test_reasoning_content_field_exists(self) -> None:
         """Test that reasoning_content field exists on LLMChatResponse."""
-        from web_hacker.data_models.llms.interaction import LLMChatResponse
+        from bluebox.data_models.llms.interaction import LLMChatResponse
 
         response = LLMChatResponse(content="test", reasoning_content="I thought about this...")
         assert response.reasoning_content == "I thought about this..."
 
     def test_default_values_are_none(self) -> None:
         """Test that new fields default to None."""
-        from web_hacker.data_models.llms.interaction import LLMChatResponse
+        from bluebox.data_models.llms.interaction import LLMChatResponse
 
         response = LLMChatResponse(content="test")
         assert response.response_id is None

@@ -1,0 +1,171 @@
+"""
+bluebox/llms/abstract_llm_vendor_client.py
+
+Abstract base class for LLM vendor clients.
+"""
+
+from abc import ABC, abstractmethod
+from collections.abc import Generator
+from typing import Any, ClassVar, TypeVar
+
+from pydantic import BaseModel
+
+from bluebox.data_models.llms.interaction import LLMChatResponse
+from bluebox.data_models.llms.vendors import OpenAIModel
+
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class AbstractLLMVendorClient(ABC):
+    """
+    Abstract base class defining the interface for LLM vendor clients.
+
+    All vendor-specific clients must implement this interface to ensure
+    consistent behavior across the LLMClient.
+    """
+
+    # Class attributes ____________________________________________________________________________________________________
+
+    DEFAULT_MAX_TOKENS: ClassVar[int] = 4_096
+    DEFAULT_TEMPERATURE: ClassVar[float] = 0.7
+    DEFAULT_STRUCTURED_TEMPERATURE: ClassVar[float] = 0.0
+
+    # Magic methods ________________________________________________________________________________________________________
+
+    def __init__(self, model: OpenAIModel) -> None:
+        """
+        Initialize the vendor client.
+
+        Args:
+            model: The LLM model to use.
+        """
+        self.model = model
+        self._tools: list[dict[str, Any]] = []
+
+    # Tool management ______________________________________________________________________________________________________
+
+    @abstractmethod
+    def register_tool(
+        self,
+        name: str,
+        description: str,
+        parameters: dict[str, Any],
+    ) -> None:
+        """
+        Register a tool for function calling.
+
+        Args:
+            name: The name of the tool/function.
+            description: Description of what the tool does.
+            parameters: JSON Schema describing the tool's parameters.
+        """
+        pass
+
+    def clear_tools(self) -> None:
+        """Clear all registered tools."""
+        self._tools = []
+
+    @property
+    def tools(self) -> list[dict[str, Any]]:
+        """Return the list of registered tools."""
+        return self._tools
+
+    # Unified API methods __________________________________________________________________________________________________
+
+    @abstractmethod
+    def call_sync(
+        self,
+        messages: list[dict[str, str]] | None = None,
+        input: str | None = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        response_model: type[T] | None = None,
+        extended_reasoning: bool = False,
+        stateful: bool = False,
+        previous_response_id: str | None = None,
+    ) -> LLMChatResponse | T:
+        """
+        Unified sync call to the LLM.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys.
+            input: Input string (shorthand for simple prompts).
+            system_prompt: Optional system prompt for context.
+            max_tokens: Maximum tokens in the response.
+            temperature: Sampling temperature (0.0-1.0).
+            response_model: Pydantic model class for structured response.
+            extended_reasoning: Enable extended reasoning (if supported).
+            stateful: Enable stateful conversation (if supported).
+            previous_response_id: Previous response ID for chaining (if supported).
+
+        Returns:
+            LLMChatResponse or parsed Pydantic model if response_model is provided.
+        """
+        pass
+
+    @abstractmethod
+    async def call_async(
+        self,
+        messages: list[dict[str, str]] | None = None,
+        input: str | None = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        response_model: type[T] | None = None,
+        extended_reasoning: bool = False,
+        stateful: bool = False,
+        previous_response_id: str | None = None,
+    ) -> LLMChatResponse | T:
+        """
+        Unified async call to the LLM.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys.
+            input: Input string (shorthand for simple prompts).
+            system_prompt: Optional system prompt for context.
+            max_tokens: Maximum tokens in the response.
+            temperature: Sampling temperature (0.0-1.0).
+            response_model: Pydantic model class for structured response.
+            extended_reasoning: Enable extended reasoning (if supported).
+            stateful: Enable stateful conversation (if supported).
+            previous_response_id: Previous response ID for chaining (if supported).
+
+        Returns:
+            LLMChatResponse or parsed Pydantic model if response_model is provided.
+        """
+        pass
+
+    @abstractmethod
+    def call_stream_sync(
+        self,
+        messages: list[dict[str, str]] | None = None,
+        input: str | None = None,
+        system_prompt: str | None = None,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        extended_reasoning: bool = False,
+        stateful: bool = False,
+        previous_response_id: str | None = None,
+    ) -> Generator[str | LLMChatResponse, None, None]:
+        """
+        Unified streaming call to the LLM.
+
+        Yields text chunks as they arrive, then yields the final LLMChatResponse.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys.
+            input: Input string (shorthand for simple prompts).
+            system_prompt: Optional system prompt for context.
+            max_tokens: Maximum tokens in the response.
+            temperature: Sampling temperature (0.0-1.0).
+            extended_reasoning: Enable extended reasoning (if supported).
+            stateful: Enable stateful conversation (if supported).
+            previous_response_id: Previous response ID for chaining (if supported).
+
+        Yields:
+            str: Text chunks as they arrive.
+            LLMChatResponse: Final response with complete content and optional tool call.
+        """
+        pass

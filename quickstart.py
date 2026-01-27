@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quickstart: Full workflow for web-hacker using the Python SDK.
+Quickstart: Full workflow for bluebox-sdk using the Python SDK.
 This script guides you through: Monitor → Discover → Execute
 
 Usage:
@@ -14,15 +14,15 @@ from pathlib import Path
 
 import websocket
 
-from web_hacker.sdk import WebHacker, BrowserMonitor
-from web_hacker.data_models.routine.routine import Routine
-from web_hacker.cdp.connection import get_existing_tabs
-from web_hacker.utils.chrome_utils import check_chrome_running, launch_chrome
-from web_hacker.utils.terminal_utils import (
+from bluebox.sdk import Bluebox, BrowserMonitor
+from bluebox.data_models.routine.routine import Routine
+from bluebox.cdp.connection import get_existing_tabs
+from bluebox.utils.chrome_utils import check_chrome_running, launch_chrome
+from bluebox.utils.terminal_utils import (
     GREEN, YELLOW, BLUE, CYAN,
     print_colored, print_header, ask_yes_no,
 )
-from web_hacker.utils.infra_utils import clear_directory
+from bluebox.utils.infra_utils import clear_directory
 
 # Configuration
 PORT = 9222
@@ -105,7 +105,7 @@ def step_1_monitor_browser(cdp_captures_dir: Path) -> bool:
 
 
 def step_2_discover_routine(
-    hacker: WebHacker,
+    hacker: Bluebox,
     cdp_captures_dir: Path,
     discovery_output_dir: Path,
 ) -> Routine | None:
@@ -225,7 +225,7 @@ def step_2_discover_routine(
 
 
 def step_3_execute_routine(
-    hacker: WebHacker,
+    hacker: Bluebox,
     routine: Routine,
     discovery_output_dir: Path,
 ) -> None:
@@ -364,9 +364,9 @@ def main() -> None:
 
     # Initialize client
     print()
-    print("🔧 Initializing WebHacker...")
+    print("🔧 Initializing Bluebox...")
     try:
-        hacker = WebHacker(
+        hacker = Bluebox(
             remote_debugging_address=REMOTE_DEBUGGING_ADDRESS,
             llm_model="gpt-5.1",
         )

@@ -8,7 +8,7 @@ interpolation pattern matching, and error handling.
 import pytest
 from pydantic import ValidationError
 
-from web_hacker.data_models.routine.operation import (
+from bluebox.data_models.routine.operation import (
     RoutineDownloadOperation,
     RoutineFetchOperation,
     RoutineNavigateOperation,
@@ -16,15 +16,15 @@ from web_hacker.data_models.routine.operation import (
     RoutineReturnOperation,
     RoutineJsEvaluateOperation,
 )
-from web_hacker.data_models.routine.routine import Routine
-from web_hacker.data_models.routine.parameter import Parameter, ParameterType
-from web_hacker.data_models.routine.endpoint import Endpoint, HTTPMethod
-from web_hacker.data_models.routine.placeholder import (
+from bluebox.data_models.routine.routine import Routine
+from bluebox.data_models.routine.parameter import Parameter, ParameterType
+from bluebox.data_models.routine.endpoint import Endpoint, HTTPMethod
+from bluebox.data_models.routine.placeholder import (
     extract_placeholders_from_json_str,
     PlaceholderQuoteType,
     ExtractedPlaceholder,
 )
-from web_hacker.utils.data_utils import extract_base_url_from_url
+from bluebox.utils.data_utils import extract_base_url_from_url
 
 
 class TestExtractPlaceholdersFromJson:

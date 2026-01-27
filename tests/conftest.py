@@ -10,8 +10,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from web_hacker.data_models.routine.routine import Routine
-from web_hacker.data_models.routine.operation import RoutineOperationUnion
+from bluebox.data_models.routine.routine import Routine
+from bluebox.data_models.routine.operation import RoutineOperationUnion
 
 
 @pytest.fixture(autouse=True)
@@ -24,8 +24,8 @@ def mock_openai_clients() -> dict[str, MagicMock]:
     instantiate OpenAIClient without a valid API key.
     """
     with (
-        patch("web_hacker.llms.openai_client.OpenAI") as mock_openai,
-        patch("web_hacker.llms.openai_client.AsyncOpenAI") as mock_async_openai,
+        patch("bluebox.llms.openai_client.OpenAI") as mock_openai,
+        patch("bluebox.llms.openai_client.AsyncOpenAI") as mock_async_openai,
     ):
         mock_openai.return_value = MagicMock()
         mock_async_openai.return_value = MagicMock()

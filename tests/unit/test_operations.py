@@ -7,8 +7,8 @@ Tests for routine operations, with comprehensive coverage of JS evaluation opera
 import pytest
 from pydantic import ValidationError
 
-from web_hacker.data_models.routine.operation import RoutineJsEvaluateOperation, RoutineOperationTypes
-from web_hacker.utils.data_utils import apply_params
+from bluebox.data_models.routine.operation import RoutineJsEvaluateOperation, RoutineOperationTypes
+from bluebox.utils.data_utils import apply_params
 
 
 # TODO: Add validation for other operation types

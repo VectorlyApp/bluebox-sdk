@@ -75,10 +75,10 @@ jobs:
           # Install with --no-deps
           uv pip install dist/*.whl --no-deps
           
-          # Count packages after install (should be exactly 1 more: web-hacker)
+          # Count packages after install (should be exactly 1 more: bluebox-sdk)
           AFTER_COUNT=$(pip list --format=freeze | wc -l)
           INSTALLED=$((AFTER_COUNT - BEFORE_COUNT))
-          
+
           if [[ "$INSTALLED" -ne 1 ]]; then
             echo "ERROR: Expected 1 new package, got $INSTALLED"
             pip list
@@ -89,12 +89,12 @@ jobs:
       - name: Test full install from PyPI deps
         run: |
           source test-venv/bin/activate
-          
+
           # Now install normally - deps should come from PyPI
           uv pip install dist/*.whl
-          
+
           # Verify import works
-          python -c "import web_hacker; print('✓ web_hacker imported successfully')"
+          python -c "import bluebox; print('✓ bluebox imported successfully')"
           
           # Verify deps were installed
           PACKAGE_COUNT=$(pip list --format=freeze | wc -l)

@@ -5,7 +5,7 @@
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-10b981?style=for-the-badge&logo=apache&logoColor=white" /></a>
 </p>
 
-# web-hacker
+# bluebox-sdk
 
 REVERSE ENGINEER ANY WEB APP! ⚡️
 
@@ -62,7 +62,7 @@ Example:
 
 ### Operations
 
-Operations define the executable steps of a Routine. They are represented as a **typed list** (see [`RoutineOperationUnion`](https://github.com/VectorlyApp/web-hacker/blob/main/web_hacker/data_models/routine/operation.py)) and are executed sequentially by a browser.
+Operations define the executable steps of a Routine. They are represented as a **typed list** (see [`RoutineOperationUnion`](https://github.com/VectorlyApp/web-hacker/blob/main/bluebox/data_models/routine/operation.py)) and are executed sequentially by a browser.
 
 Each operation specifies a `type` and its parameters:
 
@@ -228,25 +228,25 @@ This substitutes parameter values and injects `auth_token` from cookies. The JSO
 ```bash
 # Create and activate a virtual environment
 # Option 1: Using uv (recommended - handles Python version automatically)
-uv venv web-hacker-env
-source web-hacker-env/bin/activate  # On Windows: web-hacker-env\Scripts\activate
-uv pip install web-hacker
+uv venv bluebox-env
+source bluebox-env/bin/activate  # On Windows: bluebox-env\Scripts\activate
+uv pip install bluebox-sdk
 
 # Option 2: Using python3 (if Python 3.12+ is your default)
-python3 -m venv web-hacker-env
-source web-hacker-env/bin/activate  # On Windows: web-hacker-env\Scripts\activate
-pip install web-hacker
+python3 -m venv bluebox-env
+source bluebox-env/bin/activate  # On Windows: bluebox-env\Scripts\activate
+pip install bluebox-sdk
 
 # Option 3: Using pyenv (if you need a specific Python version)
 pyenv install 3.12.3  # if not already installed
 pyenv local 3.12.3
-python -m venv web-hacker-env
-source web-hacker-env/bin/activate  # On Windows: web-hacker-env\Scripts\activate
-pip install web-hacker
+python -m venv bluebox-env
+source bluebox-env/bin/activate  # On Windows: bluebox-env\Scripts\activate
+pip install bluebox-sdk
 
 # Troubleshooting: If pip is not found, recreate the venv or use:
 python -m ensurepip --upgrade  # Install pip in the venv
-pip install web-hacker
+pip install bluebox-sdk
 ```
 
 ### From Source (Development)
@@ -259,15 +259,15 @@ git clone https://github.com/VectorlyApp/web-hacker.git
 cd web-hacker
 
 # Create and activate virtual environment
-python3 -m venv web-hacker-env
-source web-hacker-env/bin/activate  # On Windows: web-hacker-env\Scripts\activate
+python3 -m venv bluebox-env
+source bluebox-env/bin/activate  # On Windows: bluebox-env\Scripts\activate
 
 # Install in editable mode
 pip install -e .
 
 # Or using uv (faster)
-uv venv web-hacker-env
-source web-hacker-env/bin/activate
+uv venv bluebox-env
+source bluebox-env/bin/activate
 uv pip install -e .
 ```
 
@@ -276,8 +276,8 @@ uv pip install -e .
 The fastest way to get started is using the quickstart script, which automates the entire workflow:
 
 ```bash
-# Make sure web-hacker is installed
-pip install web-hacker # Or install from the latest code
+# Make sure bluebox-sdk is installed
+pip install bluebox-sdk # Or install from the latest code
 
 # Set your OpenAI API key
 export OPENAI_API_KEY="sk-..."
@@ -389,7 +389,7 @@ Use the CDP browser monitor to block trackers and capture network, storage, and 
 **Run this command to start monitoring:**
 
 ```bash
-web-hacker-monitor --host 127.0.0.1 --port 9222 --output-dir ./cdp_captures --url about:blank --incognito
+bluebox-monitor --host 127.0.0.1 --port 9222 --output-dir ./cdp_captures --url about:blank --incognito
 ```
 
 The script will open a new tab (starting at `about:blank`). Navigate to your target website, then manually perform the actions you want to automate (e.g., search, login, export report). Keep Chrome focused during this process. Press `Ctrl+C` and the script will consolidate transactions and produce a HAR automatically.
@@ -426,7 +426,7 @@ Use the **routine-discovery pipeline** to analyze captured data and synthesize a
 **Linux/macOS (bash):**
 
 ```bash
-web-hacker-discover \
+bluebox-discover \
   --task "Recover API endpoints for searching for trains and their prices" \
   --cdp-captures-dir ./cdp_captures \
   --output-dir ./routine_discovery_output \
@@ -437,7 +437,7 @@ web-hacker-discover \
 
 ```powershell
 # Simple task (no quotes inside):
-web-hacker-discover --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5.1
+bluebox-discover --task "Recover the API endpoints for searching for trains and their prices" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5.1
 ```
 
 **Example tasks:**
@@ -489,13 +489,13 @@ Run the example routine:
 ```bash
 # Using a parameters file:
 
-web-hacker-execute \
+bluebox-execute \
   --routine-path example_routines/amtrak_one_way_train_search_routine.json \
   --parameters-path example_routines/amtrak_one_way_train_search_input.json
 
 # Or pass parameters inline (JSON string):
 
-web-hacker-execute \
+bluebox-execute \
   --routine-path example_routines/amtrak_one_way_train_search_routine.json \
   --parameters-dict '{"origin": "BOS", "destination": "NYP", "departureDate": "2026-03-22"}'
 ```
@@ -503,7 +503,7 @@ web-hacker-execute \
 Run a discovered routine:
 
 ```bash
-web-hacker-execute \
+bluebox-execute \
   --routine-path routine_discovery_output/routine.json \
   --parameters-path routine_discovery_output/test_parameters.json
 ```
@@ -537,11 +537,11 @@ For programmatic control, use the Python SDK instead of CLI commands:
 ### Basic Usage
 
 ```python
-from web_hacker.sdk import WebHacker
-from web_hacker.data_models.routine.routine import Routine
+from bluebox.sdk import Bluebox
+from bluebox.data_models.routine.routine import Routine
 
 # Initialize (uses OPENAI_API_KEY from environment)
-hacker = WebHacker()
+hacker = Bluebox()
 
 # Load and execute an existing routine
 routine = Routine.model_validate_json(open("routine.json").read())
@@ -558,9 +558,9 @@ if result.ok:
 
 ```python
 import json
-from web_hacker.sdk import WebHacker, BrowserMonitor
+from bluebox.sdk import Bluebox, BrowserMonitor
 
-hacker = WebHacker()
+hacker = Bluebox()
 
 # Step 1: Monitor browser activity
 monitor = BrowserMonitor(output_dir="./captures")
@@ -591,7 +591,7 @@ result = hacker.execute_routine(
 
 | Class                | Description                              |
 | -------------------- | ---------------------------------------- |
-| `WebHacker`        | Main client for the full workflow        |
+| `Bluebox`        | Main client for the full workflow        |
 | `BrowserMonitor`   | Capture browser network/storage activity |
 | `RoutineDiscovery` | Discover routines from captured data     |
 | `RoutineExecutor`  | Execute routines programmatically        |
@@ -637,16 +637,16 @@ Benchmarks validate the routine discovery pipeline against known ground-truth ro
 
 ```bash
 # Run all benchmarks
-python web_hacker/scripts/run_benchmarks.py
+python bluebox/scripts/run_benchmarks.py
 
 # With verbose output (shows each test result as it runs)
-python web_hacker/scripts/run_benchmarks.py -v
+python bluebox/scripts/run_benchmarks.py -v
 
 # Use a specific model
-python web_hacker/scripts/run_benchmarks.py --model gpt-4.1
+python bluebox/scripts/run_benchmarks.py --model gpt-4.1
 
 # Custom output directory
-python web_hacker/scripts/run_benchmarks.py --output-dir ./my_benchmarks
+python bluebox/scripts/run_benchmarks.py --output-dir ./my_benchmarks
 ```
 
 Results are saved to the output directory:

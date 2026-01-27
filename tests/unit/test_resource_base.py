@@ -13,7 +13,7 @@ from uuid import UUID
 import pytest
 from pydantic import BaseModel, Field
 
-from web_hacker.data_models.resource_base import ResourceBase
+from bluebox.data_models.resource_base import ResourceBase
 
 
 class SampleResource(ResourceBase):

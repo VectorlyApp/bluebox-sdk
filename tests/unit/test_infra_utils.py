@@ -1,5 +1,5 @@
 """
-Tests for web_hacker/utils/infra_utils.py
+Tests for bluebox/utils/infra_utils.py
 
 Tests for resolve_glob_patterns function.
 """
@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from web_hacker.utils.infra_utils import resolve_glob_patterns
+from bluebox.utils.infra_utils import resolve_glob_patterns
 
 
 class TestResolveGlobPatterns:

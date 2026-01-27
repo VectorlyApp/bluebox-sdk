@@ -5,7 +5,7 @@ Unit tests for DevRoutine.validate method in dev_routine.py.
 """
 
 import pytest
-from web_hacker.data_models.routine.dev_routine import (
+from bluebox.data_models.routine.dev_routine import (
     DevRoutine,
     DevEndpoint,
     DevNavigateOperation,
@@ -13,8 +13,8 @@ from web_hacker.data_models.routine.dev_routine import (
     DevFetchOperation,
     DevReturnOperation,
 )
-from web_hacker.data_models.routine.endpoint import HTTPMethod, CREDENTIALS
-from web_hacker.data_models.routine.parameter import Parameter
+from bluebox.data_models.routine.endpoint import HTTPMethod, CREDENTIALS
+from bluebox.data_models.routine.parameter import Parameter
 
 
 def _make_endpoint(url: str = "https://api.example.com", headers: str = "{}", body: str = "{}") -> DevEndpoint:

@@ -11,7 +11,7 @@ import logging
 import json
 import pytest
 
-from web_hacker.utils.data_utils import (
+from bluebox.utils.data_utils import (
     assert_balanced_js_delimiters,
     convert_decimals_to_floats,
     convert_floats_to_decimals,
@@ -21,7 +21,7 @@ from web_hacker.utils.data_utils import (
     get_text_from_html,
     apply_params,
 )
-from web_hacker.utils.exceptions import UnsupportedFileFormat
+from bluebox.utils.exceptions import UnsupportedFileFormat
 
 
 class TestGetTextFromHtml:

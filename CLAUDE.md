@@ -1,13 +1,13 @@
-# web-hacker Development Guide
+# bluebox-sdk Development Guide
 
-This file provides context and guidelines for working with the web-hacker codebase.
+This file provides context and guidelines for working with the bluebox-sdk codebase.
 
 ## Bash Commands
 
 ### Development Setup
 
-- `uv venv web-hacker-env && source web-hacker-env/bin/activate` - Create and activate virtual environment (recommended)
-- `python3 -m venv web-hacker-env && source web-hacker-env/bin/activate` - Alternative venv creation
+- `uv venv bluebox-env && source bluebox-env/bin/activate` - Create and activate virtual environment (recommended)
+- `python3 -m venv bluebox-env && source bluebox-env/bin/activate` - Alternative venv creation
 - `uv pip install -e .` - Install package in editable mode (faster with uv)
 - `pip install -e .` - Install package in editable mode (standard)
 
@@ -16,14 +16,14 @@ This file provides context and guidelines for working with the web-hacker codeba
 - `pytest tests/ -v` - Run all tests with verbose output
 - `pytest tests/unit/test_js_utils.py -v` - Run specific test file
 - `pytest tests/unit/test_js_utils.py::test_function_name -v` - Run specific test
-- `python web_hacker/scripts/run_benchmarks.py` - Run routine discovery benchmarks
-- `python web_hacker/scripts/run_benchmarks.py -v` - Run benchmarks with verbose output
+- `python bluebox/scripts/run_benchmarks.py` - Run routine discovery benchmarks
+- `python bluebox/scripts/run_benchmarks.py -v` - Run benchmarks with verbose output
 
 ### CLI Tools
 
-- `web-hacker-monitor --host 127.0.0.1 --port 9222 --output-dir ./cdp_captures --url about:blank --incognito` - Start browser monitoring
-- `web-hacker-discover --task "your task description" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5.1` - Discover routines from captures
-- `web-hacker-execute --routine-path example_routines/amtrak_one_way_train_search_routine.json --parameters-path example_routines/amtrak_one_way_train_search_input.json` - Execute a routine
+- `bluebox-monitor --host 127.0.0.1 --port 9222 --output-dir ./cdp_captures --url about:blank --incognito` - Start browser monitoring
+- `bluebox-discover --task "your task description" --cdp-captures-dir ./cdp_captures --output-dir ./routine_discovery_output --llm-model gpt-5.1` - Discover routines from captures
+- `bluebox-execute --routine-path example_routines/amtrak_one_way_train_search_routine.json --parameters-path example_routines/amtrak_one_way_train_search_input.json` - Execute a routine
 
 ### Chrome Debug Mode
 
@@ -32,7 +32,7 @@ This file provides context and guidelines for working with the web-hacker codeba
 
 ### Type Checking & Linting
 
-- `pylint web_hacker/` - Run pylint (uses .pylintrc config)
+- `pylint bluebox/` - Run pylint (uses .pylintrc config)
 
 ## Code Style
 
@@ -47,7 +47,7 @@ This file provides context and guidelines for working with the web-hacker codeba
 ### Imports
 
 - **IMPORTANT**: NO lazy imports! All imports must be at the top of the file
-- Use absolute imports from `web_hacker.*`
+- Use absolute imports from `bluebox.*`
 - Group imports: stdlib, third-party, local (with blank lines between groups)
 
 ### Python Version
@@ -57,20 +57,20 @@ This file provides context and guidelines for working with the web-hacker codeba
 
 ### Data Models
 
-- Use Pydantic `BaseModel` for all data models (see `web_hacker/data_models/`)
+- Use Pydantic `BaseModel` for all data models (see `bluebox/data_models/`)
 - Use `Field()` for field descriptions and defaults
 - Use `model_validator` for custom validation logic
-- All models should be in `web_hacker/data_models/` directory
+- All models should be in `bluebox/data_models/` directory
 
 ### Error Handling
 
-- Use custom exceptions from `web_hacker.utils.exceptions`
+- Use custom exceptions from `bluebox.utils.exceptions`
 - Return `RoutineExecutionResult` for routine execution results
-- Log errors using `web_hacker.utils.logger.get_logger()`
+- Log errors using `bluebox.utils.logger.get_logger()`
 
 ### JavaScript Code Generation
 
-- All JavaScript code should be generated through functions in `web_hacker/utils/js_utils.py`
+- All JavaScript code should be generated through functions in `bluebox/utils/js_utils.py`
 - JavaScript code must be wrapped in IIFE format: `(function() { ... })()`
 - Use helper functions from `_get_placeholder_resolution_js_helpers()` for placeholder resolution
 
@@ -87,24 +87,24 @@ This file provides context and guidelines for working with the web-hacker codeba
 ### Routine Development Workflow
 
 1. Launch Chrome in debug mode (or use quickstart.py)
-2. Run `web-hacker-monitor` and perform actions manually
-3. Run `web-hacker-discover` with task description
+2. Run `bluebox-monitor` and perform actions manually
+3. Run `bluebox-discover` with task description
 4. Review generated `routine.json`
-5. Test with `web-hacker-execute`
+5. Test with `bluebox-execute`
 6. Fix any placeholder escaping issues (string params need `\"{{param}}\"`)
 
 ## Core Files and Utilities
 
 ### Key Modules
 
-- `web_hacker/data_models/routine/routine.py` - Main Routine model
-- `web_hacker/data_models/routine/operation.py` - Operation types and execution
-- `web_hacker/data_models/routine/parameter.py` - Parameter definitions
-- `web_hacker/data_models/routine/placeholder.py` - Placeholder resolution
-- `web_hacker/cdp/connection.py` - Chrome DevTools Protocol connection
-- `web_hacker/utils/js_utils.py` - JavaScript code generation
-- `web_hacker/utils/web_socket_utils.py` - WebSocket utilities for CDP
-- `web_hacker/sdk/client.py` - Main SDK client
+- `bluebox/data_models/routine/routine.py` - Main Routine model
+- `bluebox/data_models/routine/operation.py` - Operation types and execution
+- `bluebox/data_models/routine/parameter.py` - Parameter definitions
+- `bluebox/data_models/routine/placeholder.py` - Placeholder resolution
+- `bluebox/cdp/connection.py` - Chrome DevTools Protocol connection
+- `bluebox/utils/js_utils.py` - JavaScript code generation
+- `bluebox/utils/web_socket_utils.py` - WebSocket utilities for CDP
+- `bluebox/sdk/client.py` - Main SDK client
 
 ### Important Patterns
 
@@ -141,7 +141,7 @@ This file provides context and guidelines for working with the web-hacker codeba
 
 - Prefer running single tests or test files for faster iteration
 - Run full test suite before committing: `pytest tests/ -v`
-- Benchmarks validate routine discovery pipeline: `python web_hacker/scripts/run_benchmarks.py`
+- Benchmarks validate routine discovery pipeline: `python bluebox/scripts/run_benchmarks.py`
 
 ## Environment Setup
 
@@ -155,7 +155,7 @@ This file provides context and guidelines for working with the web-hacker codeba
 ### Virtual Environment
 
 - Always use a virtual environment
-- Activate before working: `source web-hacker-env/bin/activate`
+- Activate before working: `source bluebox-env/bin/activate`
 - Install dependencies: `uv pip install -e .` or `pip install -e .`
 
 ### Environment Variables
