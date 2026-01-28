@@ -517,19 +517,16 @@ class HarDataStore:
             if unique_terms_found == 0:
                 continue
 
-            # Calculate score: (avg hits per term * unique terms) / content length
-            # Multiply by 1000 to keep scores in reasonable range
-            content_len = len(content_lower)
+            # Calculate score: avg hits per term * unique terms
             avg_hits = total_hits / num_terms
-            score = (avg_hits * unique_terms_found / content_len) * 1000
+            score = avg_hits * unique_terms_found
 
             results.append({
                 "id": entry.id,
                 "url": entry.url,
                 "unique_terms_found": unique_terms_found,
                 "total_hits": total_hits,
-                "content_length": content_len,
-                "score": round(score, 4),
+                "score": score,
             })
 
         # Sort by score descending
