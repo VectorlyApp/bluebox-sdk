@@ -263,6 +263,8 @@ asks about their routine or wants help editing it.
 the user says they ran a routine and it failed.
 - **`get_last_routine_execution_result`**: Get execution results - success/failure status, output \
 data, and errors. Essential for debugging.
+- **`execute_routine`**: Execute the current routine with provided parameters. Use this to test if \
+a routine works correctly. Returns execution results including output data or errors.
 - **`validate_routine`**: Validate a routine object against the schema. REQUIRED KEY: 'routine'.
 - **`suggest_routine_edit`**: Propose changes to the routine for user approval. REQUIRED KEY: 'routine' \
 with the COMPLETE routine object.
@@ -601,6 +603,38 @@ and improve web automation routines.
             parameters={"type": "object", "properties": {}, "required": []},
         )
 
+        # execute_routine
+        self.llm_client.register_tool(
+            name="execute_routine",
+            description=(
+                "Execute the current routine with provided parameters. "
+                "Use this to test if a routine works correctly with specific inputs. "
+                "Returns the execution result including any output data or errors."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "parameters": {
+                        "type": "object",
+                        "description": (
+                            "REQUIRED. The parameters to pass to the routine. "
+                            "Must match the parameter definitions in the routine. "
+                            "Example: {\"origin\": \"NYC\", \"destination\": \"LAX\"}"
+                        ),
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Optional timeout in seconds (default: 180.0)",
+                    },
+                    "close_tab_when_done": {
+                        "type": "boolean",
+                        "description": "Whether to close the browser tab after execution (default: true)",
+                    },
+                },
+                "required": ["parameters"],
+            },
+        )
+
         # validate_routine
         self.llm_client.register_tool(
             name="validate_routine",
@@ -825,6 +859,55 @@ and improve web automation routines.
             return {"error": "No routine execution result available. No routine has been executed yet."}
         return {"result": self._routine_state.last_execution_result}
 
+    def _tool_execute_routine(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute execute_routine tool."""
+        from bluebox.llms.tools.execute_routine_tool import execute_routine_from_json
+
+        # Get current routine
+        if self._routine_state.current_routine_str is None:
+            return {"error": "No current routine loaded. Cannot execute without a routine."}
+
+        # Get parameters
+        parameters = tool_arguments.get("parameters")
+        if not parameters:
+            raise ValueError("parameters is required")
+
+        timeout = tool_arguments.get("timeout", 180.0)
+        close_tab_when_done = tool_arguments.get("close_tab_when_done", True)
+
+        # Execute routine
+        result = execute_routine_from_json(
+            routine_json_str=self._routine_state.current_routine_str,
+            parameters=parameters,
+            timeout=timeout,
+            close_tab_when_done=close_tab_when_done,
+        )
+
+        # Update execution state if successful
+        if result.get("success"):
+            try:
+                routine_dict = json.loads(self._routine_state.current_routine_str)
+                self._routine_state.update_last_execution(
+                    routine=routine_dict,
+                    parameters=parameters,
+                    result=result["result"],
+                )
+            except json.JSONDecodeError:
+                pass  # Invalid JSON, skip state update
+        else:
+            # Also update state on failure
+            try:
+                routine_dict = json.loads(self._routine_state.current_routine_str)
+                self._routine_state.update_last_execution(
+                    routine=routine_dict,
+                    parameters=parameters,
+                    result=result,
+                )
+            except json.JSONDecodeError:
+                pass
+
+        return result
+
     def _tool_request_user_browser_recording(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute request_user_browser_recording tool."""
         task_description = tool_arguments.get("task_description", "")
@@ -1009,6 +1092,9 @@ and improve web automation routines.
 
         if tool_name == "get_last_routine_execution_result":
             return self._tool_get_last_routine_execution_result()
+
+        if tool_name == "execute_routine":
+            return self._tool_execute_routine(tool_arguments)
 
         if tool_name == "suggest_routine_edit":
             return self._tool_suggest_routine_edit(tool_arguments)
