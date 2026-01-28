@@ -11,8 +11,8 @@ Contains:
 
 from typing import Any
 
-from ..data_models.routine.execution import RoutineExecutionResult
-from ..data_models.routine.routine import Routine
+from bluebox.data_models.routine.execution import RoutineExecutionResult
+from bluebox.data_models.routine.routine import Routine
 
 
 class RoutineExecutor:

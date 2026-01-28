@@ -10,10 +10,9 @@ Contains:
 - Uses: LocalDiscoveryDataStore, RoutineDiscoveryAgent
 """
 
-from pathlib import Path
-from typing import Optional, Callable
 import os
-import json
+from pathlib import Path
+from typing import Callable
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -58,7 +57,7 @@ class RoutineDiscovery:
         cdp_captures_dir: str = "./cdp_captures",
         output_dir: str = "./routine_discovery_output",
         llm_model: str = "gpt-5.1",
-        message_callback: Optional[Callable[[RoutineDiscoveryMessage], None]] = None,
+        message_callback: Callable[[RoutineDiscoveryMessage], None] | None = None,
     ):
         """
         Initialize the RoutineDiscovery SDK.
@@ -78,12 +77,12 @@ class RoutineDiscovery:
         self.llm_model = llm_model
         self.message_callback = message_callback or self._default_message_handler
 
-        self.agent: Optional[RoutineDiscoveryAgent] = None
-        self.data_store: Optional[LocalDiscoveryDataStore] = None
+        self.agent: RoutineDiscoveryAgent | None = None
+        self.data_store: LocalDiscoveryDataStore | None = None
 
     def _default_message_handler(self, message: RoutineDiscoveryMessage) -> None:
         """Default message handler that logs to console."""
-        from ..data_models.routine_discovery.message import RoutineDiscoveryMessageType
+        from bluebox.data_models.routine_discovery.message import RoutineDiscoveryMessageType
 
         if message.type == RoutineDiscoveryMessageType.INITIATED:
             logger.info(f"🚀 {message.content}")
