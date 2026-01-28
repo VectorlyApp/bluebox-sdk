@@ -265,6 +265,8 @@ the user says they ran a routine and it failed.
 data, and errors. Essential for debugging.
 - **`execute_routine`**: Execute the current routine with provided parameters. Use this to test if \
 a routine works correctly. Returns execution results including output data or errors.
+- **`execute_suggested_routine`**: Execute a suggested routine edit without accepting it. Use this \
+to test proposed changes before finalizing them. Returns execution results.
 - **`validate_routine`**: Validate a routine object against the schema. REQUIRED KEY: 'routine'.
 - **`suggest_routine_edit`**: Propose changes to the routine for user approval. REQUIRED KEY: 'routine' \
 with the COMPLETE routine object.
@@ -285,6 +287,7 @@ When proposing changes, use the `suggest_routine_edit` tool:
 - Example: {{"routine": {{"name": "...", "description": "...", "parameters": [...], "operations": [...]}}}}
 - The tool validates automatically - you do NOT need to call `validate_routine` first
 - If validation fails, read the error, fix the routine, and try again (make at least 3 attempts)
+- After suggesting edits, you can use `execute_suggested_routine` to test the changes before the user accepts them
 
 ## Editing Mode Guidelines
 
@@ -390,6 +393,7 @@ and improve web automation routines.
         # Initialize or load conversation state
         self._thread = chat_thread or ChatThread()
         self._chats: dict[str, Chat] = {}
+        self._suggested_edits: dict[str, SuggestedEditUnion] = {}
         if existing_chats:
             for chat in existing_chats:
                 self._chats[chat.id] = chat
@@ -632,6 +636,42 @@ and improve web automation routines.
                     },
                 },
                 "required": ["parameters"],
+            },
+        )
+
+        # execute_suggested_routine
+        self.llm_client.register_tool(
+            name="execute_suggested_routine",
+            description=(
+                "Execute a suggested routine edit without accepting it. "
+                "Use this to test if a proposed routine change works correctly before finalizing it. "
+                "Returns the execution result including any output data or errors."
+            ),
+            parameters={
+                "type": "object",
+                "properties": {
+                    "suggested_edit_id": {
+                        "type": "string",
+                        "description": "The ID of the suggested edit to execute (from suggest_routine_edit result)",
+                    },
+                    "parameters": {
+                        "type": "object",
+                        "description": (
+                            "REQUIRED. The parameters to pass to the routine. "
+                            "Must match the parameter definitions in the routine. "
+                            "Example: {\"origin\": \"NYC\", \"destination\": \"LAX\"}"
+                        ),
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Optional timeout in seconds (default: 180.0)",
+                    },
+                    "close_tab_when_done": {
+                        "type": "boolean",
+                        "description": "Whether to close the browser tab after execution (default: true)",
+                    },
+                },
+                "required": ["suggested_edit_id", "parameters"],
             },
         )
 
@@ -908,6 +948,45 @@ and improve web automation routines.
 
         return result
 
+    def _tool_execute_suggested_routine(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Execute execute_suggested_routine tool."""
+        from bluebox.llms.tools.execute_routine_tool import execute_routine_from_dict
+
+        # Get suggested edit ID
+        suggested_edit_id = tool_arguments.get("suggested_edit_id")
+        if not suggested_edit_id:
+            raise ValueError("suggested_edit_id is required")
+
+        # Look up the suggestion
+        suggested_edit = self._suggested_edits.get(suggested_edit_id)
+        if not suggested_edit:
+            return {"error": f"Suggested edit '{suggested_edit_id}' not found. Use suggest_routine_edit first."}
+
+        # Only handle SuggestedEditRoutine type
+        if not isinstance(suggested_edit, SuggestedEditRoutine):
+            return {"error": "Can only execute routine suggestions"}
+
+        # Get parameters
+        parameters = tool_arguments.get("parameters")
+        if not parameters:
+            raise ValueError("parameters is required")
+
+        timeout = tool_arguments.get("timeout", 180.0)
+        close_tab_when_done = tool_arguments.get("close_tab_when_done", True)
+
+        # Execute the suggested routine
+        result = execute_routine_from_dict(
+            routine_dict=suggested_edit.routine.model_dump(),
+            parameters=parameters,
+            timeout=timeout,
+            close_tab_when_done=close_tab_when_done,
+        )
+
+        # Note: We DON'T update routine_state here because this is a test execution
+        # The current routine remains unchanged until the user accepts the suggestion
+
+        return result
+
     def _tool_request_user_browser_recording(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute request_user_browser_recording tool."""
         task_description = tool_arguments.get("task_description", "")
@@ -958,6 +1037,9 @@ and improve web automation routines.
         # Persist suggested edit if callback provided (may assign new ID)
         if self._persist_suggested_edit_callable:
             suggested_edit = self._persist_suggested_edit_callable(suggested_edit)
+
+        # Store in memory for later execution
+        self._suggested_edits[suggested_edit.id] = suggested_edit
 
         # Add to thread's suggested_edit_ids and persist thread
         self._thread.suggested_edit_ids.append(suggested_edit.id)
@@ -1095,6 +1177,9 @@ and improve web automation routines.
 
         if tool_name == "execute_routine":
             return self._tool_execute_routine(tool_arguments)
+
+        if tool_name == "execute_suggested_routine":
+            return self._tool_execute_suggested_routine(tool_arguments)
 
         if tool_name == "suggest_routine_edit":
             return self._tool_suggest_routine_edit(tool_arguments)
@@ -1643,6 +1728,7 @@ and improve web automation routines.
         old_chat_thread_id = self._thread.id
         self._thread = ChatThread()
         self._chats = {}
+        self._suggested_edits = {}
         self._previous_response_id = None
         self._response_id_to_chat_index = {}
         self._routine_state.reset()
