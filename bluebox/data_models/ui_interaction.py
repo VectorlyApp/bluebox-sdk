@@ -10,7 +10,6 @@ Contains:
 """
 
 from enum import StrEnum
-from typing import Optional
 from pydantic import BaseModel, Field
 
 from bluebox.data_models.ui_elements import UiElement
@@ -50,45 +49,45 @@ class Interaction(BaseModel):
     while InteractionType provides the "what".
     """
     # Mouse properties
-    mouse_button: Optional[int] = Field(
+    mouse_button: int | None = Field(
         default=None,
         description="Mouse button pressed (0=left, 1=middle, 2=right). None for non-mouse interactions."
     )
-    mouse_x_viewport: Optional[int] = Field(
+    mouse_x_viewport: int | None = Field(
         default=None,
         description="X coordinate relative to viewport. None for non-mouse interactions."
     )
-    mouse_y_viewport: Optional[int] = Field(
+    mouse_y_viewport: int | None = Field(
         default=None,
         description="Y coordinate relative to viewport. None for non-mouse interactions."
     )
-    mouse_x_page: Optional[int] = Field(
+    mouse_x_page: int | None = Field(
         default=None,
         description="X coordinate relative to page (includes scroll). None for non-mouse interactions."
     )
-    mouse_y_page: Optional[int] = Field(
+    mouse_y_page: int | None = Field(
         default=None,
         description="Y coordinate relative to page (includes scroll). None for non-mouse interactions."
     )
-    
+
     # Keyboard properties
-    key_value: Optional[str] = Field(
+    key_value: str | None = Field(
         default=None,
         description="The key value pressed (e.g., 'a', 'Enter', 'Shift'). None for non-keyboard interactions."
     )
-    key_code: Optional[str] = Field(
+    key_code: str | None = Field(
         default=None,
         description="The physical key code (e.g., 'KeyA', 'Enter', 'ShiftLeft'). None for non-keyboard interactions."
     )
-    key_code_deprecated: Optional[int] = Field(
+    key_code_deprecated: int | None = Field(
         default=None,
         description="Deprecated numeric key code. None for non-keyboard interactions."
     )
-    key_which_deprecated: Optional[int] = Field(
+    key_which_deprecated: int | None = Field(
         default=None,
         description="Deprecated numeric key code. None for non-keyboard interactions."
     )
-    
+
     # Modifier keys (apply to both mouse and keyboard interactions)
     ctrl_pressed: bool = Field(
         default=False,
@@ -121,23 +120,22 @@ class UiInteractionEvent(BaseModel):
     """
     # Interaction type
     type: InteractionType
-    
+
     # Timestamp
     timestamp: int = Field(
         description="Client-side timestamp (milliseconds since epoch) when the interaction occurred."
     )
-    
+
     # How the interaction occurred (mouse coordinates, keyboard keys, modifiers, etc.)
     interaction: Interaction | None = Field(
         default=None,
         description="Details about how the interaction occurred (mouse position, keys pressed, modifiers, etc.)."
     )
-    
+
     # Element that was interacted with
     element: UiElement
-    
+
     # Page context
     url: str = Field(
         description="URL of the page where the interaction occurred."
     )
-
