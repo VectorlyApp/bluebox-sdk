@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, ClassVar
 
 from bluebox.cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
-from bluebox.cdp.data_models import NetworkTransactionEvent
+from bluebox.data_models.cdp import NetworkTransactionEvent
 from bluebox.data_models.routine.endpoint import ResourceType
 from bluebox.utils.data_utils import get_text_from_html
 from bluebox.utils.logger import get_logger

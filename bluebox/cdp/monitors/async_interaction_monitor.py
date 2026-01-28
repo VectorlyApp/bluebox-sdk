@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from bluebox.cdp.monitors.abstract_async_monitor import AbstractAsyncMonitor
 from bluebox.data_models.ui_elements import UiElement, BoundingBox
-from bluebox.data_models.ui_interaction import UiInteractionEvent, InteractionType, Interaction
+from bluebox.data_models.cdp import UiInteractionEvent, InteractionType, Interaction
 from bluebox.utils.logger import get_logger
 
 if TYPE_CHECKING:
