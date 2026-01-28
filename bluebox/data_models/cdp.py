@@ -4,7 +4,7 @@ bluebox/data_models/cdp.py
 Data models for async CDP events.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any
 
@@ -13,12 +13,14 @@ from pydantic import BaseModel, Field, ConfigDict
 from bluebox.data_models.ui_elements import UiElement
 
 
+## Base event
+
 class BaseCDPEvent(BaseModel):
     """
     Base model for all CDP event details.
     """
     timestamp: int = Field(
-        default_factory=lambda: int(datetime.now().timestamp()),
+        default_factory=lambda: datetime.now(tz=timezone.utc).timestamp(),
         description="Unix timestamp (seconds) when the event occurred"
     )
 

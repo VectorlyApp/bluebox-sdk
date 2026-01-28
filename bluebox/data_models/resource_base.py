@@ -8,7 +8,7 @@ Examples: "Routine_123e4567-e89b-12d3-a456-426614174000"
 """
 
 from abc import ABC
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -30,11 +30,11 @@ class ResourceBase(BaseModel, ABC):
     )
 
     created_at: float = Field(
-        default_factory=lambda: datetime.now().timestamp(),
+        default_factory=lambda: datetime.now(tz=timezone.utc).timestamp(),
         description="Unix timestamp (seconds) when resource was created"
     )
     updated_at: float = Field(
-        default_factory=lambda: datetime.now().timestamp(),
+        default_factory=lambda: datetime.now(tz=timezone.utc).timestamp(),
         description="Unix timestamp (seconds) when resource was last updated"
     )
     metadata: dict[str, Any] | None = Field(

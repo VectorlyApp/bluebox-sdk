@@ -8,6 +8,7 @@ Tracks mouse clicks, keyboard events, and element details via JavaScript injecti
 from __future__ import annotations
 
 import json
+import os
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
@@ -31,8 +32,7 @@ class AsyncInteractionMonitor(AbstractAsyncMonitor):
     # Class constant
     BINDING_NAME = "__webHackerInteractionLog"
 
-
-    # Abstract method implementations _________________________________________________________________________
+    # Class methods ______________________________________________________________________________________________
 
     @classmethod
     def get_ws_event_summary(cls, detail: dict[str, Any]) -> dict[str, Any]:
@@ -44,8 +44,82 @@ class AsyncInteractionMonitor(AbstractAsyncMonitor):
             "url": detail.get("url"),
         }
 
+    # Static methods _____________________________________________________________________________________________
 
-    # Magic methods ___________________________________________________________________________________________
+    @staticmethod
+    def consolidate_interactions(
+        interaction_events_path: str,
+        output_path: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Consolidate all interactions from JSONL file into a single JSON structure.
+
+        Args:
+            interaction_events_path: Path to interaction events JSONL file.
+            output_path: Optional path to write consolidated JSON file.
+
+        Returns:
+            Dict with structure:
+            {
+                "interactions": [...],
+                "summary": {
+                    "total": 123,
+                    "by_type": {...},
+                    "by_url": {...}
+                }
+            }
+        """
+        if not os.path.exists(interaction_events_path):
+            return {"interactions": [], "summary": {"total": 0, "by_type": {}, "by_url": {}}}
+
+        interactions = []
+        by_type: dict[str, int] = defaultdict(int)
+        by_url: dict[str, int] = defaultdict(int)
+
+        try:
+            with open(interaction_events_path, mode="r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        interaction = json.loads(line)
+                        interactions.append(interaction)
+
+                        # Update statistics
+                        interaction_type = interaction.get("type", "unknown")
+                        by_type[interaction_type] += 1
+                        url = interaction.get("url", "unknown")
+                        by_url[url] += 1
+                    except json.JSONDecodeError as e:
+                        logger.warning("Failed to parse interaction line: %s", e)
+                        continue
+        except Exception as e:
+            logger.error("Failed to read interaction log: %s", e)
+            return {"interactions": [], "summary": {"total": 0, "by_type": {}, "by_url": {}}}
+
+        consolidated = {
+            "interactions": interactions,
+            "summary": {
+                "total": len(interactions),
+                "by_type": dict(by_type),
+                "by_url": dict(by_url),
+            },
+        }
+
+        # Save to file if output path provided
+        if output_path:
+            try:
+                with open(output_path, mode="w", encoding="utf-8") as f:
+                    json.dump(consolidated, f, indent=2, ensure_ascii=False)
+                logger.info("Consolidated interactions saved to: %s", output_path)
+            except Exception as e:
+                logger.error("Failed to save consolidated interactions: %s", e)
+
+        return consolidated
+
+
+    # Magic methods _____________________________________________________________________________________________
 
     def __init__(self, event_callback_fn: Callable[[str, dict], Awaitable[None]]) -> None:
         """
@@ -64,7 +138,7 @@ class AsyncInteractionMonitor(AbstractAsyncMonitor):
         self.pending_dom_commands: dict[int, dict[str, Any]] = {}
 
 
-    # Private methods _________________________________________________________________________________________
+    # Private methods ___________________________________________________________________________________________
 
     async def _inject_interaction_listeners(self, cdp_session: AsyncCDPSession) -> None:
         """Inject JavaScript listeners for mouse and keyboard events."""
@@ -534,79 +608,3 @@ class AsyncInteractionMonitor(AbstractAsyncMonitor):
             "interactions_by_type": dict(self.interaction_types),
             "interactions_by_url": dict(self.interactions_by_url),
         }
-
-    @staticmethod
-    def consolidate_interactions(
-        interaction_events_path: str,
-        output_path: str | None = None,
-    ) -> dict[str, Any]:
-        """
-        Consolidate all interactions from JSONL file into a single JSON structure.
-
-        Args:
-            interaction_events_path: Path to interaction events JSONL file.
-            output_path: Optional path to write consolidated JSON file.
-
-        Returns:
-            Dict with structure:
-            {
-                "interactions": [...],
-                "summary": {
-                    "total": 123,
-                    "by_type": {...},
-                    "by_url": {...}
-                }
-            }
-        """
-        import os
-        from collections import defaultdict
-
-        if not os.path.exists(interaction_events_path):
-            return {"interactions": [], "summary": {"total": 0, "by_type": {}, "by_url": {}}}
-
-        interactions = []
-        by_type: dict[str, int] = defaultdict(int)
-        by_url: dict[str, int] = defaultdict(int)
-
-        try:
-            with open(interaction_events_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        interaction = json.loads(line)
-                        interactions.append(interaction)
-
-                        # Update statistics
-                        interaction_type = interaction.get("type", "unknown")
-                        by_type[interaction_type] += 1
-                        url = interaction.get("url", "unknown")
-                        by_url[url] += 1
-                    except json.JSONDecodeError as e:
-                        logger.warning("Failed to parse interaction line: %s", e)
-                        continue
-        except Exception as e:
-            logger.error("Failed to read interaction log: %s", e)
-            return {"interactions": [], "summary": {"total": 0, "by_type": {}, "by_url": {}}}
-
-        consolidated = {
-            "interactions": interactions,
-            "summary": {
-                "total": len(interactions),
-                "by_type": dict(by_type),
-                "by_url": dict(by_url),
-            },
-        }
-
-        # Save to file if output path provided
-        if output_path:
-            try:
-                with open(output_path, mode="w", encoding="utf-8") as f:
-                    json.dump(consolidated, f, indent=2, ensure_ascii=False)
-                logger.info("Consolidated interactions saved to: %s", output_path)
-            except Exception as e:
-                logger.error("Failed to save consolidated interactions: %s", e)
-
-        return consolidated
-    
