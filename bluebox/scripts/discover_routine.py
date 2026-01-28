@@ -16,8 +16,8 @@ PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 
 from bluebox.config import Config
 from bluebox.utils.exceptions import ApiKeyNotFoundError
-from bluebox.routine_discovery.agent import RoutineDiscoveryAgent
-from bluebox.routine_discovery.data_store import LocalDiscoveryDataStore
+from bluebox.agents.routine_discovery_agent import RoutineDiscoveryAgent
+from bluebox.llms.infra.data_store import LocalDiscoveryDataStore
 from bluebox.data_models.routine_discovery.message import (
     RoutineDiscoveryMessage,
     RoutineDiscoveryMessageType,

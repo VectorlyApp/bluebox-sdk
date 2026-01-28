@@ -106,6 +106,23 @@ This file provides context and guidelines for working with the bluebox-sdk codeb
 - `bluebox/utils/web_socket_utils.py` - WebSocket utilities for CDP
 - `bluebox/sdk/client.py` - Main SDK client
 
+### Agents
+
+AI agents that power routine discovery and conversational interactions:
+
+- `bluebox/agents/routine_discovery_agent.py` - Analyzes CDP captures to generate routines (identifies transactions, extracts/resolves variables, constructs operations)
+- `bluebox/agents/guide_agent.py` - Conversational agent for guiding users through routine creation/editing (maintains chat history, dynamic tool registration)
+
+**LLM Infrastructure:**
+- `bluebox/llms/infra/data_store.py` - Data stores for CDP captures and vectorstore management (used by both agents)
+
+**Import patterns:**
+```python
+from bluebox.agents.guide_agent import GuideAgent
+from bluebox.agents.routine_discovery_agent import RoutineDiscoveryAgent
+from bluebox.llms.infra.data_store import DiscoveryDataStore, LocalDiscoveryDataStore
+```
+
 ### Important Patterns
 
 - **Routine Execution**: Operations execute sequentially, maintaining state via `RoutineExecutionContext`
