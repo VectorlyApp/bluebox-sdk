@@ -263,7 +263,7 @@ asks about their routine or wants help editing it.
 the user says they ran a routine and it failed.
 - **`get_last_routine_execution_result`**: Get execution results - success/failure status, output \
 data, and errors. Essential for debugging.
-- **`execute_routine`**: Execute the current routine with provided parameters. Use this to test if \
+- **`execute_current_routine`**: Execute the current routine with provided parameters. Use this to test if \
 a routine works correctly. Returns execution results including output data or errors.
 - **`execute_suggested_routine`**: Execute a suggested routine edit without accepting it. Use this \
 to test proposed changes before finalizing them. Returns execution results.
@@ -607,9 +607,9 @@ and improve web automation routines.
             parameters={"type": "object", "properties": {}, "required": []},
         )
 
-        # execute_routine
+        # execute_current_routine
         self.llm_client.register_tool(
-            name="execute_routine",
+            name="execute_current_routine",
             description=(
                 "Execute the current routine with provided parameters. "
                 "Use this to test if a routine works correctly with specific inputs. "
@@ -1175,7 +1175,7 @@ and improve web automation routines.
         if tool_name == "get_last_routine_execution_result":
             return self._tool_get_last_routine_execution_result()
 
-        if tool_name == "execute_routine":
+        if tool_name == "execute_current_routine":
             return self._tool_execute_routine(tool_arguments)
 
         if tool_name == "execute_suggested_routine":
