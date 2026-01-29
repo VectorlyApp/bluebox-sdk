@@ -299,6 +299,48 @@ The quickstart script will:
 
 **Note:** The quickstart script is included in the repository. If you installed from PyPI, you can download it from the [GitHub repository](https://github.com/VectorlyApp/bluebox/blob/main/quickstart.py).
 
+## Guide Agent Terminal (Interactive Mode) 💬
+
+For iterative routine development, debugging, and more complex workflows, use the Guide Agent terminal app. It provides a full chat interface with an LLM-powered agent that can help you create, edit, and refine routines interactively.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/bb2df1e0-46e2-456e-b991-6583fc9038da" alt="Guide Agent Terminal" width="824" />
+</p>
+
+```bash
+# Set your OpenAI API key
+export OPENAI_API_KEY="sk-..."
+
+# Run the guide agent terminal
+python scripts/run_guide_agent.py
+```
+
+**Features:**
+
+- **Interactive chat** with streaming LLM responses
+- **Load/edit routines** with hot-reload on file changes
+- **Browser monitoring** directly from the terminal (`/monitor`)
+- **Routine discovery** with agent-guided task description
+- **Suggested edits** with diff/accept/reject workflow
+- **Routine validation and execution** (`/validate`, `/execute`)
+
+**Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/load <file.json>` | Load a routine file (auto-reloads on edits) |
+| `/execute [params.json]` | Execute the loaded routine |
+| `/monitor` | Start browser monitoring session |
+| `/validate` | Validate the current routine |
+| `/diff`, `/accept`, `/reject` | Review agent-suggested edits |
+| `/show`, `/status` | Display routine details and state |
+| `/help` | Show all commands |
+
+**When to use Guide Agent vs Quickstart:**
+
+- **Quickstart (`quickstart.py`)**: First-time users, demos, simple one-off automation tasks
+- **Guide Agent (`scripts/run_guide_agent.py`)**: Iterative routine development, debugging, complex workflows requiring back-and-forth with the agent
+
 ## Reverse Engineer Web Apps
 
 The reverse engineering process follows a simple three-step workflow:
