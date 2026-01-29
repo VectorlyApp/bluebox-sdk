@@ -279,7 +279,9 @@ The fastest way to get started is using the quickstart script, which automates t
 
 ```bash
 # Make sure bluebox-sdk is installed
-pip install bluebox-sdk # Or install from the latest code
+pip install bluebox-sdk 
+# Or install from the latest code
+# pip install "git+https://github.com/VectorlyApp/bluebox-sdk.git"
 
 # Set your OpenAI API key
 export OPENAI_API_KEY="sk-..."
