@@ -338,7 +338,6 @@ and improve web automation routines.
         data_store: DiscoveryDataStore | None = None,
         tools_requiring_approval: set[str] | None = None,
         system_prompt: str | None = None,
-        remote_debugging_address: str = "http://127.0.0.1:9222",
     ) -> None:
         """
         Initialize the guide agent.
@@ -358,11 +357,8 @@ and improve web automation routines.
             data_store: Optional data store for accessing CDP captures and documentation.
             tools_requiring_approval: Set of tool names that require user approval before execution.
                 If empty or None, all tools auto-execute without approval.
-            remote_debugging_address: Chrome DevTools Protocol address for browser connection.
-                Defaults to local Chrome. Set to cloud browser URL for remote execution.
         """
         self._emit_message_callable = emit_message_callable
-        self._remote_debugging_address = remote_debugging_address
         self._persist_chat_callable = persist_chat_callable
         self._persist_chat_thread_callable = persist_chat_thread_callable
         self._persist_suggested_edit_callable = persist_suggested_edit_callable
@@ -392,7 +388,6 @@ and improve web automation routines.
         # Initialize or load conversation state
         self._thread = chat_thread or ChatThread()
         self._chats: dict[str, Chat] = {}
-        self._suggested_edits: dict[str, SuggestedEditUnion] = {}
         if existing_chats:
             for chat in existing_chats:
                 self._chats[chat.id] = chat
@@ -880,9 +875,6 @@ and improve web automation routines.
         # Persist suggested edit if callback provided (may assign new ID)
         if self._persist_suggested_edit_callable:
             suggested_edit = self._persist_suggested_edit_callable(suggested_edit)
-
-        # Store in memory for later execution
-        self._suggested_edits[suggested_edit.id] = suggested_edit
 
         # Add to thread's suggested_edit_ids and persist thread
         self._thread.suggested_edit_ids.append(suggested_edit.id)
@@ -1565,7 +1557,6 @@ and improve web automation routines.
         old_chat_thread_id = self._thread.id
         self._thread = ChatThread()
         self._chats = {}
-        self._suggested_edits = {}
         self._previous_response_id = None
         self._response_id_to_chat_index = {}
         self._routine_state.reset()
