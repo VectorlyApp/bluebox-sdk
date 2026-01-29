@@ -35,6 +35,7 @@ from bluebox.data_models.routine.routine import Routine
 from bluebox.data_models.routine.dev_routine import DevRoutine
 from bluebox.llms.tools.execute_routine_tool import execute_routine_from_dict
 from bluebox.utils.exceptions import TransactionIdentificationFailedError
+from bluebox.utils.llm_utils import manual_llm_parse_text_to_model
 from bluebox.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -667,8 +668,12 @@ You have access to vectorstore that contains network transactions and storage da
     def productionize_routine(self, routine: DevRoutine) -> Routine:
         """
         Productionize the routine into a production routine.
+
+        Uses prompt-based parsing instead of structured outputs to avoid
+        OpenAI schema validation issues with complex nested types.
+
         Args:
-            routine (Routine): The routine to productionize.
+            routine (DevRoutine): The routine to productionize.
         Returns:
             Routine: The productionized routine.
         """
@@ -679,17 +684,29 @@ You have access to vectorstore that contains network transactions and storage da
         )
         self._add_to_message_history("user", message)
 
-        # call to the LLM API for productionization of the routine
+        # call to the LLM API for productionization of the routine (without structured output)
         response = self.llm_client.call_sync(
             messages=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
-            response_model=Routine
         )
-        production_routine = response.parsed
 
         # save the response id
         self.last_response_id = response.response_id
-        self._add_to_message_history("assistant", encode(production_routine.model_dump()))
+
+        # collect the text from the response
+        response_text = response.content or ""
+        self._add_to_message_history("assistant", response_text)
+
+        # parse the response to the pydantic model using manual LLM parsing
+        # context includes the last 2 messages (user prompt + assistant response) to help with parsing
+        production_routine = manual_llm_parse_text_to_model(
+            text=response_text,
+            pydantic_model=Routine,
+            client=self.llm_client._client._client,  # Access the underlying OpenAI client
+            context=encode(self.message_history[-2:]) + f"\n\n{self.PLACEHOLDER_INSTRUCTIONS}",
+            llm_model=self.llm_client.llm_model.value,
+            n_tries=5
+        )
 
         return production_routine
 
