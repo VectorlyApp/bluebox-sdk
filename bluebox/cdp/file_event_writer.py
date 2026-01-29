@@ -2,7 +2,7 @@
 bluebox/cdp/file_event_writer.py
 
 File-based event writer callback for AsyncCDPSession.
-Used by web-hacker CLI and SDK to write CDP events to disk.
+Used by Bluebox CLI and SDK to write CDP events to disk.
 """
 
 import json
@@ -67,18 +67,23 @@ class FileEventWriter:
         self.interaction_events_path = Path(
             paths.get("interaction_events_path", "./interaction/events.jsonl")
         )
+        self.javascript_events_path = Path(
+            paths.get("javascript_events_path", "./network/javascript_events.jsonl")
+        )
 
         # Ensure parent directories exist
         self.network_events_path.parent.mkdir(parents=True, exist_ok=True)
         self.storage_events_path.parent.mkdir(parents=True, exist_ok=True)
         self.window_properties_path.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_events_path.parent.mkdir(parents=True, exist_ok=True)
+        self.javascript_events_path.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info("📁 FileEventWriter initialized")
         logger.info("   Network events: %s", self.network_events_path)
         logger.info("   Storage events: %s", self.storage_events_path)
         logger.info("   Window properties: %s", self.window_properties_path)
         logger.info("   Interaction events: %s", self.interaction_events_path)
+        logger.info("   JavaScript events: %s", self.javascript_events_path)
 
     async def write_event(self, category: str, event: Any) -> None:
         """
@@ -98,7 +103,15 @@ class FileEventWriter:
 
         # Determine output file based on category
         if category == "AsyncNetworkMonitor":
-            output_path = self.network_events_path
+            # route JavaScript responses to a separate JSONL file
+            content_type = (
+                event_dict.get("mime_type", "") 
+                or (event_dict.get("response_headers") or {}).get("content-type", "")
+            )
+            if "text/javascript" in content_type:
+                output_path = self.javascript_events_path
+            else:
+                output_path = self.network_events_path
         elif category == "AsyncStorageMonitor":
             output_path = self.storage_events_path
         elif category == "AsyncWindowPropertyMonitor":
@@ -127,8 +140,7 @@ class FileEventWriter:
             output_dir/
             ├── network/
             │   ├── events.jsonl
-            │   ├── consolidated_transactions.json
-            │   └── network.har
+            │   └── javascript_events.jsonl
             ├── storage/
             │   └── events.jsonl
             ├── window_properties/
@@ -155,11 +167,8 @@ class FileEventWriter:
             "storage_events_path": str(output_dir / "storage" / "events.jsonl"),
             "window_properties_path": str(output_dir / "window_properties" / "events.jsonl"),
             "interaction_events_path": str(output_dir / "interaction" / "events.jsonl"),
-            # Consolidated output paths (written by finalize())
-            "consolidated_transactions_json_path": str(
-                output_dir / "network" / "consolidated_transactions.json"
-            ),
-            "network_har_path": str(output_dir / "network" / "network.har"),
+            "javascript_events_path": str(output_dir / "network" / "javascript_events.jsonl"),
+            # Other output paths
             "summary_path": str(output_dir / "session_summary.json"),
         }
         return cls(paths=paths)

@@ -41,9 +41,8 @@ class AsyncCDPSession:
             session_start_dtm: Session start datetime in format YYYY-MM-DDTHH-MM-SSZ.
             event_callback_fn: Async callback function that takes (category: str, detail: BaseCDPEvent).
                 Called when CDP events are captured. Caller can use this to store events, stream them, etc.
-            paths: Optional dict of file paths for output. Used by finalize() for consolidation.
-                Expected keys: 'network_events_path', 'consolidated_transactions_json_path',
-                'network_har_path'. If not provided, finalize() will skip file operations.
+            paths: Optional dict of file paths for output.
+                If not provided, finalize() will skip file operations.
         NOTE:
             The CDP sessionId will be obtained automatically in run() after connecting.
             CDP sessionIds are only valid for the specific WebSocket connection where Target.attachToTarget was called.
@@ -477,33 +476,6 @@ class AsyncCDPSession:
             logger.info("✅ Window properties collected")
         except Exception as e:
             logger.warning("⚠️ Could not collect window properties: %s", e)
-
-        # Consolidate network transactions (if paths provided)
-        network_events_path = self.paths.get("network_events_path")
-        if network_events_path:
-            consolidated_path = self.paths.get("consolidated_transactions_json_path")
-            if consolidated_path:
-                try:
-                    AsyncNetworkMonitor.consolidate_transactions(
-                        network_events_path=network_events_path,
-                        output_path=consolidated_path,
-                    )
-                    logger.info("✅ Transactions consolidated")
-                except Exception as e:
-                    logger.error("❌ Failed to consolidate transactions: %s", e)
-
-            # Generate HAR file
-            har_path = self.paths.get("network_har_path")
-            if har_path:
-                try:
-                    AsyncNetworkMonitor.generate_har_from_transactions(
-                        network_events_path=network_events_path,
-                        har_path=har_path,
-                        title="Web Hacker Session",
-                    )
-                    logger.info("✅ HAR file generated")
-                except Exception as e:
-                    logger.error("❌ Failed to generate HAR file: %s", e)
 
         logger.info("✅ Session finalization complete")
 

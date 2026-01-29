@@ -376,6 +376,41 @@ class TestLoadData:
         assert isinstance(result, dict)
         assert result["name"] == "John Doe"
 
+    def test_load_jsonl(self, tmp_path: Path) -> None:
+        """Test loading a JSONL file returns list of dicts."""
+        file_path = tmp_path / "data.jsonl"
+        file_path.write_text(
+            '{"id": 1, "name": "Alice"}\n'
+            '{"id": 2, "name": "Bob"}\n'
+        )
+        result = load_data(file_path)
+
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0]["name"] == "Alice"
+        assert result[1]["id"] == 2
+
+    def test_load_jsonl_empty_file(self, tmp_path: Path) -> None:
+        """Test loading an empty JSONL file returns empty list."""
+        file_path = tmp_path / "empty.jsonl"
+        file_path.write_text("")
+        result = load_data(file_path)
+
+        assert result == []
+
+    def test_load_jsonl_skips_blank_lines(self, tmp_path: Path) -> None:
+        """Test that blank lines in JSONL are skipped."""
+        file_path = tmp_path / "data.jsonl"
+        file_path.write_text('{"a": 1}\n\n\n{"b": 2}\n')
+        result = load_data(file_path)
+
+        assert len(result) == 2
+
+    def test_load_jsonl_nonexistent(self, tmp_path: Path) -> None:
+        """Test that FileNotFoundError is raised for nonexistent JSONL files."""
+        with pytest.raises(FileNotFoundError):
+            load_data(tmp_path / "missing.jsonl")
+
 
 class TestConvertFloatsToDecimals:
     """Test cases for the convert_floats_to_decimals function."""

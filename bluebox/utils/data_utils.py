@@ -23,7 +23,7 @@ import re
 import time
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 from urllib.parse import urlparse
 
 import tldextract
@@ -35,21 +35,29 @@ from bluebox.utils.logger import get_logger
 logger = get_logger(name=__name__)
 
 
-def load_data(file_path: Path) -> Union[dict, list]:
+def load_data(file_path: Path) -> dict | list:
     """
     Load data from a file.
     Raises:
         UnsupportedFileFormat: If the file is of an unsupported type.
     Args:
-        file_path (str): Path to the JSON file.
+        file_path: Path to the JSON or JSONL file.
     Returns:
-        Union[dict, list]: Data contained in file.
+        dict | list: Data contained in file. JSONL files return a list of parsed objects.
     """
     file_path_str = str(file_path)
     if file_path_str.endswith(".json"):
         with open(file_path_str, mode="r", encoding="utf-8") as data_file:
-            json_data = json.load(data_file)
-            return json_data
+            return json.load(data_file)
+
+    if file_path_str.endswith(".jsonl"):
+        records: list[Any] = []
+        with open(file_path_str, mode="r", encoding="utf-8") as data_file:
+            for line in data_file:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+        return records
 
     raise UnsupportedFileFormat(f"No support for provided file type: {file_path_str}.")
 
@@ -108,26 +116,30 @@ def get_text_from_html(html: str) -> str:
     """
     Sanitize the HTML data.
     """
-    
-    # Use the built-in html parser for robustness
+    # use the built-in html parser for robustness
     soup = BeautifulSoup(html, "html.parser")
 
-    # Remove non-visible elements
+    # remove non-visible elements
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
-    # Get visible text
+    # get visible text
     text = soup.get_text(separator="\n")
 
-    # Normalize whitespace
+    # normalize whitespace
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
     clean_text = "\n".join(chunk for chunk in chunks if chunk)
     
-    # Remove ALL consecutive newlines - replace any sequence of 2+ newlines with single newline
-    # Handle both \n and \r\n line endings
-    clean_text = re.sub(r'[\r\n]+', '\n', clean_text)
-    # Remove leading and trailing whitespace
+    # remove ALL consecutive newlines - replace any sequence of 2+ newlines with single newline
+    # handle both \n and \r\n line endings
+    clean_text = re.sub(
+        pattern=r'[\r\n]+',
+        repl='\n',
+        string=clean_text,
+    )
+
+    # remove leading and trailing whitespace
     clean_text = clean_text.strip()
 
     return clean_text

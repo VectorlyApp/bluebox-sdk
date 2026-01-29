@@ -215,11 +215,7 @@ class TestFileEventWriterFactory:
             output_dir / "interaction" / "events.jsonl"
         )
 
-        # check consolidated output paths
-        assert writer.paths["consolidated_transactions_json_path"] == str(
-            output_dir / "network" / "consolidated_transactions.json"
-        )
-        assert writer.paths["network_har_path"] == str(output_dir / "network" / "network.har")
+        # check other output paths
         assert writer.paths["summary_path"] == str(output_dir / "session_summary.json")
 
         # directories should be created
