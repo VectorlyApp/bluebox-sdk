@@ -1425,7 +1425,8 @@ def main() -> None:
             "code_paths": [
                 str(BLUEBOX_PACKAGE_ROOT / "data_models" / "routine"),
                 str(BLUEBOX_PACKAGE_ROOT / "data_models" / "ui_elements.py"),
-                str(BLUEBOX_PACKAGE_ROOT / "routine_discovery"),
+                str(BLUEBOX_PACKAGE_ROOT / "agents" / "routine_discovery_agent.py"),
+                str(BLUEBOX_PACKAGE_ROOT / "llms" / "infra" / "data_store.py"),
                 str(BLUEBOX_PACKAGE_ROOT / "utils" / "js_utils.py"),
                 str(BLUEBOX_PACKAGE_ROOT / "utils" / "data_utils.py"),
                 "!" + str(BLUEBOX_PACKAGE_ROOT / "**" / "__init__.py"),
