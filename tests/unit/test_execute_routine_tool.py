@@ -3,9 +3,21 @@ Unit tests for execute_routine_tool.
 """
 
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from bluebox.llms.tools.execute_routine_tool import execute_routine
+
+
+@pytest.fixture
+def mock_executor():
+    """Mock RoutineExecutor to avoid Chrome dependency."""
+    with patch("bluebox.llms.tools.execute_routine_tool.RoutineExecutor") as mock_class:
+        mock_instance = MagicMock()
+        mock_instance.execute.return_value = {"status": "completed", "data": {}}
+        mock_class.return_value = mock_instance
+        yield mock_instance
 
 
 def test_execute_routine_invalid_json():
@@ -38,7 +50,7 @@ def test_execute_routine_invalid_routine_from_dict():
     assert "Failed to parse routine" in result["error"]
 
 
-def test_execute_routine_valid_json_string():
+def test_execute_routine_valid_json_string(mock_executor):
     """Test that a valid routine JSON string can be parsed and executed."""
     routine = {
         "name": "test_routine",
@@ -64,19 +76,12 @@ def test_execute_routine_valid_json_string():
         parameters={"test_param": "value"},
     )
 
-    # Parsing should always succeed with valid structure
-    assert "Failed to parse routine" not in result.get("error", "")
-
-    # Execution may succeed if Chrome is running, or fail if not
-    # Either way is fine - we're testing the tool works correctly
-    assert "success" in result
-
-    # If it failed, error should be about execution, not parsing
-    if not result.get("success"):
-        assert "Failed to parse routine" not in result.get("error", "")
+    assert result["success"] is True
+    assert "result" in result
+    mock_executor.execute.assert_called_once()
 
 
-def test_execute_routine_valid_dict():
+def test_execute_routine_valid_dict(mock_executor):
     """Test that a valid routine dict can be parsed and executed."""
     routine = {
         "name": "test_routine",
@@ -102,13 +107,6 @@ def test_execute_routine_valid_dict():
         parameters={"test_param": "value"},
     )
 
-    # Parsing should always succeed with valid structure
-    assert "Failed to parse routine" not in result.get("error", "")
-
-    # Execution may succeed if Chrome is running, or fail if not
-    # Either way is fine - we're testing the tool works correctly
-    assert "success" in result
-
-    # If it failed, error should be about execution, not parsing
-    if not result.get("success"):
-        assert "Failed to parse routine" not in result.get("error", "")
+    assert result["success"] is True
+    assert "result" in result
+    mock_executor.execute.assert_called_once()
