@@ -93,7 +93,11 @@ class LLMClient:
         self._client.clear_tools()
         logger.debug("Cleared all registered tools")
 
-    def set_file_search_vectorstores(self, vector_store_ids: list[str] | None) -> None:
+    def set_file_search_vectorstores(
+        self,
+        vector_store_ids: list[str] | None,
+        filters: dict | None = None,
+    ) -> None:
         """
         Set vectorstore IDs for file_search tool.
 
@@ -102,8 +106,9 @@ class LLMClient:
 
         Args:
             vector_store_ids: List of vectorstore IDs to search, or None to disable.
+            filters: Optional filters for file_search (e.g., {"type": "eq", "key": "uuid", "value": ["..."]}).
         """
-        self._client.set_file_search_vectorstores(vector_store_ids)
+        self._client.set_file_search_vectorstores(vector_store_ids, filters)
 
     ## Unified API methods
 
@@ -119,7 +124,8 @@ class LLMClient:
         stateful: bool = False,
         previous_response_id: str | None = None,
         api_type: OpenAIAPIType | None = None,
-    ) -> LLMChatResponse | T:
+        tool_choice: str | dict | None = None,
+    ) -> LLMChatResponse:
         """
         Unified sync call to OpenAI.
 
@@ -134,9 +140,10 @@ class LLMClient:
             stateful: Enable stateful conversation (Responses API only).
             previous_response_id: Previous response ID for chaining (Responses API only).
             api_type: Explicit API type, or None for auto-resolution.
+            tool_choice: Tool choice for the API call (e.g., "auto", "required", or specific tool).
 
         Returns:
-            LLMChatResponse or parsed Pydantic model if response_model is provided.
+            LLMChatResponse. If response_model is provided, the parsed model is in response.parsed.
         """
         return self._client.call_sync(
             messages=messages,
@@ -149,6 +156,7 @@ class LLMClient:
             stateful=stateful,
             previous_response_id=previous_response_id,
             api_type=api_type,
+            tool_choice=tool_choice,
         )
 
     async def call_async(
@@ -163,7 +171,8 @@ class LLMClient:
         stateful: bool = False,
         previous_response_id: str | None = None,
         api_type: OpenAIAPIType | None = None,
-    ) -> LLMChatResponse | T:
+        tool_choice: str | dict | None = None,
+    ) -> LLMChatResponse:
         """
         Unified async call to OpenAI.
 
@@ -178,9 +187,10 @@ class LLMClient:
             stateful: Enable stateful conversation (Responses API only).
             previous_response_id: Previous response ID for chaining (Responses API only).
             api_type: Explicit API type, or None for auto-resolution.
+            tool_choice: Tool choice for the API call (e.g., "auto", "required", or specific tool).
 
         Returns:
-            LLMChatResponse or parsed Pydantic model if response_model is provided.
+            LLMChatResponse. If response_model is provided, the parsed model is in response.parsed.
         """
         return await self._client.call_async(
             messages=messages,
@@ -193,6 +203,7 @@ class LLMClient:
             stateful=stateful,
             previous_response_id=previous_response_id,
             api_type=api_type,
+            tool_choice=tool_choice,
         )
 
     def call_stream_sync(
@@ -206,6 +217,7 @@ class LLMClient:
         stateful: bool = False,
         previous_response_id: str | None = None,
         api_type: OpenAIAPIType | None = None,
+        tool_choice: str | dict | None = None,
     ) -> Generator[str | LLMChatResponse, None, None]:
         """
         Unified streaming call to OpenAI.
@@ -222,6 +234,7 @@ class LLMClient:
             stateful: Enable stateful conversation (Responses API only).
             previous_response_id: Previous response ID for chaining (Responses API only).
             api_type: Explicit API type, or None for auto-resolution.
+            tool_choice: Tool choice for the API call (e.g., "auto", "required", or specific tool).
 
         Yields:
             str: Text chunks as they arrive.
@@ -237,4 +250,5 @@ class LLMClient:
             stateful=stateful,
             previous_response_id=previous_response_id,
             api_type=api_type,
+            tool_choice=tool_choice,
         )

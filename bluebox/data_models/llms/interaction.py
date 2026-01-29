@@ -288,6 +288,10 @@ class LLMChatResponse(BaseModel):
         default=None,
         description="Extended reasoning content",
     )
+    parsed: Any | None = Field(
+        default=None,
+        description="Parsed structured output when response_model is provided",
+    )
 
 
 class Chat(BaseModel):

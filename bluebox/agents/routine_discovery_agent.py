@@ -4,7 +4,7 @@ bluebox/routine_discovery/agent.py
 LLM-powered agent for generating routines from CDP captures.
 
 Contains:
-- RoutineDiscoveryAgent: Uses OpenAI with tools to analyze captures and build routines
+- RoutineDiscoveryAgent: Uses LLMClient with tools to analyze captures and build routines
 - Tools: scan_transaction_responses, get_transaction, scan_storage, etc.
 - Outputs: validated Routine JSON with parameters and operations
 """
@@ -12,14 +12,13 @@ Contains:
 import json
 from uuid import uuid4
 import os
-from typing import Callable
+from typing import Any, Callable
 
-from openai import OpenAI
 from pydantic import BaseModel, Field, ConfigDict
 from toon import encode
 
 from bluebox.llms.infra.data_store import DiscoveryDataStore
-from bluebox.utils.llm_utils import collect_text_from_response, manual_llm_parse_text_to_model
+from bluebox.llms.llm_client import LLMClient
 from bluebox.data_models.routine_discovery.llm_responses import (
     TransactionIdentificationResponse,
     ExtractedVariableResponse,
@@ -35,6 +34,7 @@ from bluebox.data_models.routine_discovery.message import (
 from bluebox.data_models.routine.routine import Routine
 from bluebox.data_models.routine.dev_routine import DevRoutine
 from bluebox.utils.exceptions import TransactionIdentificationFailedError
+from bluebox.utils.llm_utils import manual_llm_parse_text_to_model
 from bluebox.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -44,15 +44,13 @@ class RoutineDiscoveryAgent(BaseModel):
     """
     Agent for discovering routines from the network transactions.
     """
-    client: OpenAI
+    llm_client: LLMClient
     data_store: DiscoveryDataStore
     task: str
     emit_message_callable: Callable[[RoutineDiscoveryMessage], None]
-    llm_model: str = Field(default="gpt-5.1")
     message_history: list[dict] = Field(default_factory=list)
     output_dir: str | None = Field(default=None)
     last_response_id: str | None = Field(default=None)
-    tools: list[dict] = Field(default_factory=list)
     n_transaction_identification_attempts: int = Field(default=3)
     current_transaction_identification_attempt: int = Field(default=1)
     timeout: int = Field(default=600)
@@ -100,38 +98,26 @@ You have access to vectorstore that contains network transactions and storage da
                 system_prompt = f"{system_prompt}\n\n{data_store_prompt}"
         return system_prompt
 
-    def _build_filtered_tools(self, uuid_filter: str) -> list[dict]:
+    def _set_vectorstores(self, uuid_filter: str | None = None) -> None:
         """
-        Build file_search tools with UUID filter for CDP captures and unfiltered for other vectorstores.
+        Configure the LLMClient's file_search vectorstores.
 
         Args:
-            uuid_filter: The UUID to filter CDP captures by.
-
-        Returns:
-            List of file_search tool definitions using all available vectorstores.
+            uuid_filter: Optional UUID to filter CDP captures by. If None, uses all vectorstores unfiltered.
         """
-        tools = []
+        vector_store_ids = self.data_store.get_vectorstore_ids()
 
-        # Add filtered CDP captures vectorstore
-        if self.data_store.cdp_captures_vectorstore_id:
-            tools.append({
-                "type": "file_search",
-                "vector_store_ids": [self.data_store.cdp_captures_vectorstore_id],
-                "filters": {
-                    "type": "eq",
-                    "key": "uuid",
-                    "value": [uuid_filter]
-                }
-            })
-
-        # Add other vectorstores (documentation, etc.) without filters
-        if self.data_store.documentation_vectorstore_id:
-            tools.append({
-                "type": "file_search",
-                "vector_store_ids": [self.data_store.documentation_vectorstore_id],
-            })
-
-        return tools
+        if uuid_filter and self.data_store.cdp_captures_vectorstore_id:
+            # Use filtered search for CDP captures
+            filters = {
+                "type": "eq",
+                "key": "uuid",
+                "value": [uuid_filter]
+            }
+            self.llm_client.set_file_search_vectorstores(vector_store_ids, filters=filters)
+        else:
+            # Use all vectorstores without filters
+            self.llm_client.set_file_search_vectorstores(vector_store_ids)
 
     def _save_to_output_dir(self, relative_path: str, data: dict | list | str) -> None:
         """Save data to output_dir if it is specified."""
@@ -190,15 +176,8 @@ You have access to vectorstore that contains network transactions and storage da
             content=f"Discovery initiated"
         ))
 
-        # construct the tools with all available vectorstores
-        vector_store_ids = self.data_store.get_vectorstore_ids()
-
-        self.tools = [
-            {
-                "type": "file_search",
-                "vector_store_ids": vector_store_ids,
-            }
-        ]
+        # Configure vectorstores on the LLM client (unfiltered initially)
+        self._set_vectorstores()
 
         # add the system prompt to the message history (including data store context)
         self._add_to_message_history("system", self._get_system_prompt())
@@ -399,19 +378,17 @@ You have access to vectorstore that contains network transactions and storage da
         logger.debug(f"\n\nMessage history:\n{self.message_history}\n")
 
         # First attempt: send full history. Retries: send only the last message (uses previous_response_id for context)
-        response = self.client.responses.parse(
-            model=self.llm_model,
-            input=self.message_history if is_first_attempt else [self.message_history[-1]],
+        response = self.llm_client.call_sync(
+            messages=self.message_history if is_first_attempt else [self.message_history[-1]],
             previous_response_id=self.last_response_id,
-            tools=self.tools,
             tool_choice="required",
-            text_format=TransactionIdentificationResponse
+            response_model=TransactionIdentificationResponse
         )
-        transaction_identification_response = response.output_parsed
+        transaction_identification_response = response.parsed
         logger.info(f"\nTransaction identification response:\n{transaction_identification_response.model_dump()}")
 
         # save the response id and add to the message history
-        self.last_response_id = response.id
+        self.last_response_id = response.response_id
         self._add_to_message_history("assistant", encode(transaction_identification_response.model_dump()))
 
         logger.debug(f"\nParsed response:\n{transaction_identification_response.model_dump_json()}")
@@ -434,10 +411,9 @@ You have access to vectorstore that contains network transactions and storage da
             transaction_id=identified_transaction.transaction_id, metadata=metadata
         )
 
-        # temporarily update the tools to specifically search through these transactions
-        # Use filtered CDP captures + all other vectorstores (unfiltered)
-        tools = self._build_filtered_tools(uuid_filter=metadata["uuid"])
-        
+        # Configure filtered vectorstores to search through these specific transactions
+        self._set_vectorstores(uuid_filter=metadata["uuid"])
+
         # update the message history with request to confirm the identified transaction
         message = (
             f"{identified_transaction.transaction_id} have been added to the vectorstore in full (including response bodies).\n"
@@ -446,22 +422,23 @@ You have access to vectorstore that contains network transactions and storage da
             "IMPORTANT: Focus on whether this transaction accomplishes the user's INTENT, not the literal wording. "
         )
         self._add_to_message_history("user", message)
-        
+
         # call to the LLM API for confirmation that the identified transaction is correct
-        response = self.client.responses.parse(
-            model=self.llm_model,
-            input=[self.message_history[-1]],
+        response = self.llm_client.call_sync(
+            messages=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
-            tools=tools,
-            tool_choice="required", # forces the LLM to look at the newly added files to the vectorstore
-            text_format=TransactionConfirmationResponse
+            tool_choice="required",  # forces the LLM to look at the newly added files to the vectorstore
+            response_model=TransactionConfirmationResponse
         )
-        transaction_confirmation_response = response.output_parsed
-        
+        transaction_confirmation_response = response.parsed
+
         # save the response id and add to the message history
-        self.last_response_id = response.id
+        self.last_response_id = response.response_id
         self._add_to_message_history("assistant", encode(transaction_confirmation_response.model_dump()))
-        
+
+        # Reset to unfiltered vectorstores for subsequent calls
+        self._set_vectorstores()
+
         return transaction_confirmation_response
 
     def extract_variables(self, transaction_id: str) -> ExtractedVariableResponse:
@@ -497,18 +474,16 @@ You have access to vectorstore that contains network transactions and storage da
         self._add_to_message_history("user", message)
 
         # call to the LLM API for extraction of the variables
-        response = self.client.responses.parse(
-            model=self.llm_model,
-            input=[self.message_history[-1]],
+        response = self.llm_client.call_sync(
+            messages=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
-            tools=self.tools,
             tool_choice="auto",
-            text_format=ExtractedVariableResponse
+            response_model=ExtractedVariableResponse
         )
-        extracted_variable_response = response.output_parsed
+        extracted_variable_response = response.parsed
 
         # save the response id and add to the message history
-        self.last_response_id = response.id
+        self.last_response_id = response.response_id
         self._add_to_message_history("assistant", encode(extracted_variable_response.model_dump()))
 
         # override the transaction_id with the one passed in, since the LLM may return an incorrect format
@@ -595,23 +570,20 @@ You have access to vectorstore that contains network transactions and storage da
             )
             self._add_to_message_history("user", message)
 
-            # custom tools to force the LLM to look at the newly added transactions to the vectorstore
-            # Use filtered CDP captures + all other vectorstores (unfiltered)
-            tools = self._build_filtered_tools(uuid_filter=uuid)
-            
+            # Configure filtered vectorstores to search through specific transactions
+            self._set_vectorstores(uuid_filter=uuid)
+
             # call to the LLM API for resolution of the variable
-            response = self.client.responses.parse(
-                model=self.llm_model,
-                input=[self.message_history[-1]],
+            response = self.llm_client.call_sync(
+                messages=[self.message_history[-1]],
                 previous_response_id=self.last_response_id,
-                tools=tools,
                 tool_choice="required",
-                text_format=ResolvedVariableResponse
+                response_model=ResolvedVariableResponse
             )
-            resolved_variable_response = response.output_parsed
+            resolved_variable_response = response.parsed
 
             # save the response id
-            self.last_response_id = response.id
+            self.last_response_id = response.response_id
             self._add_to_message_history("assistant", encode(resolved_variable_response.model_dump()))
             
             # parse the response to the pydantic model
@@ -632,7 +604,10 @@ You have access to vectorstore that contains network transactions and storage da
                 logger.info(f"Variable '{variable.name}' resolved from: {type(resolved_sources[0]).__name__}")
             else:
                 logger.info(f"Variable '{variable.name}' resolved from {len(resolved_sources)} sources (prioritizing: transaction > session storage > window property)")
-            
+
+        # Reset to unfiltered vectorstores
+        self._set_vectorstores()
+
         return resolved_variable_responses
 
     def construct_routine(self, routine_transactions: dict, resolved_variables: list[ResolvedVariableResponse] = [], max_attempts: int = 3) -> DevRoutine:
@@ -660,28 +635,26 @@ You have access to vectorstore that contains network transactions and storage da
         current_attempt = 0
         while current_attempt < max_attempts:
             current_attempt += 1
-            
+
             # call to the LLM API for construction of the routine
-            response = self.client.responses.parse(
-                model=self.llm_model,
-                input=[self.message_history[-1]],
+            response = self.llm_client.call_sync(
+                messages=[self.message_history[-1]],
                 previous_response_id=self.last_response_id,
-                tools=self.tools,
                 tool_choice="required",
-                text_format=DevRoutine
+                response_model=DevRoutine
             )
-            routine = response.output_parsed
+            routine = response.parsed
             logger.info(f"\nRoutine:\n{routine.model_dump()}")
-            
+
             # save the response id
-            self.last_response_id = response.id
+            self.last_response_id = response.response_id
             self._add_to_message_history("assistant", encode(routine.model_dump()))
-            
+
             # validate the routine
             successful, errors, exception = routine.validate()
             if successful:
                 return routine
-            
+
             message = (
                 f"Execution failed with error: {exception}\n\n"
                 f"Routine validation failed:\n{encode(errors)}\n\n"
@@ -694,8 +667,12 @@ You have access to vectorstore that contains network transactions and storage da
     def productionize_routine(self, routine: DevRoutine) -> Routine:
         """
         Productionize the routine into a production routine.
+
+        Uses prompt-based parsing instead of structured outputs to avoid
+        OpenAI schema validation issues with complex nested types.
+
         Args:
-            routine (Routine): The routine to productionize.
+            routine (DevRoutine): The routine to productionize.
         Returns:
             Routine: The productionized routine.
         """
@@ -706,28 +683,27 @@ You have access to vectorstore that contains network transactions and storage da
         )
         self._add_to_message_history("user", message)
 
-        # call to the LLM API for productionization of the routine
-        response = self.client.responses.create(
-            model=self.llm_model,
-            input=[self.message_history[-1]],
+        # call to the LLM API for productionization of the routine (without structured output)
+        response = self.llm_client.call_sync(
+            messages=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
         )
-        
+
         # save the response id
-        self.last_response_id = response.id
-        
+        self.last_response_id = response.response_id
+
         # collect the text from the response
-        response_text = collect_text_from_response(response)
+        response_text = response.content or ""
         self._add_to_message_history("assistant", response_text)
-        
-        # parse the response to the pydantic model
+
+        # parse the response to the pydantic model using manual LLM parsing
         # context includes the last 2 messages (user prompt + assistant response) to help with parsing
         production_routine = manual_llm_parse_text_to_model(
             text=response_text,
             pydantic_model=Routine,
-            client=self.client,
+            client=self.llm_client._client._client,  # Access the underlying OpenAI client
             context=encode(self.message_history[-2:]) + f"\n\n{self.PLACEHOLDER_INSTRUCTIONS}",
-            llm_model=self.llm_model,
+            llm_model=self.llm_client.llm_model.value,
             n_tries=5
         )
 
@@ -742,18 +718,17 @@ You have access to vectorstore that contains network transactions and storage da
             f"Ensure all parameters are present and have valid values."
         )
         self._add_to_message_history("user", message)
-        
+
         # call to the LLM API for getting the test parameters
-        response = self.client.responses.parse(
-            model=self.llm_model,
-            input=[self.message_history[-1]],
+        response = self.llm_client.call_sync(
+            messages=[self.message_history[-1]],
             previous_response_id=self.last_response_id,
-            text_format=TestParametersResponse
+            response_model=TestParametersResponse
         )
-        test_parameters_response = response.output_parsed
-        
+        test_parameters_response = response.parsed
+
         # save the response id
-        self.last_response_id = response.id
+        self.last_response_id = response.response_id
         self._add_to_message_history("assistant", encode(test_parameters_response.model_dump()))
 
         # save test parameters as a simple dict {name: value}

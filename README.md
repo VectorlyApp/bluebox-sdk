@@ -279,7 +279,9 @@ The fastest way to get started is using the quickstart script, which automates t
 
 ```bash
 # Make sure bluebox-sdk is installed
-pip install bluebox-sdk # Or install from the latest code
+pip install bluebox-sdk 
+# Or install from the latest code
+# pip install "git+https://github.com/VectorlyApp/bluebox-sdk.git"
 
 # Set your OpenAI API key
 export OPENAI_API_KEY="sk-..."
@@ -297,11 +299,29 @@ The quickstart script will:
 
 **Note:** The quickstart script is included in the repository. If you installed from PyPI, you can download it from the [GitHub repository](https://github.com/VectorlyApp/bluebox/blob/main/quickstart.py).
 
-## Launch Chrome in Debug Mode 🐞
+## Reverse Engineer Web Apps
+
+The reverse engineering process follows a simple three-step workflow:
+
+1. **Monitor** — Capture network traffic, storage events, and interactions while you manually perform the target task in Chrome
+2. **Discover** — Let the AI agent analyze the captured data and generate a reusable Routine
+3. **Execute** — Run the discovered Routine with different parameters to automate the task
+
+### Legal & Privacy Notice
+
+Reverse-engineering and automating a website can violate terms of service. Store captures securely and scrub any sensitive fields before sharing.
+
+### Quick Start (Recommended)
+
+**Easiest way:** Use the [quickstart script](#quickstart-easiest-way-🚀) which automates the entire workflow.
+
+### Manual Workflow (Step-by-Step)
+
+#### 0. Launch Chrome in Debug Mode
 
 > 💡 **Tip:** The [quickstart script](#quickstart-easiest-way-🚀) automatically launches Chrome for you. You only need these manual instructions if you're not using the quickstart script.
 
-### macOS
+##### macOS
 
 ```bash
 # Create temporary Chrome user directory
@@ -320,7 +340,7 @@ mkdir -p $HOME/tmp/chrome
 curl http://127.0.0.1:9222/json/version
 ```
 
-### Windows
+##### Windows
 
 ```powershell
 # Create temporary Chrome user directory
@@ -345,7 +365,7 @@ if (!(Test-Path $chrome)) {
 (Invoke-WebRequest http://127.0.0.1:9222/json/version).Content
 ```
 
-### Linux
+##### Linux
 
 ```bash
 # Create temporary Chrome user directory
@@ -364,27 +384,7 @@ google-chrome \
 curl http://127.0.0.1:9222/json/version
 ```
 
-## HACK (reverse engineer) WEB APPS 👨🏻‍💻
-
-The reverse engineering process follows a simple three-step workflow:
-
-1. **Monitor** — Capture network traffic, storage events, and interactions while you manually perform the target task in Chrome
-2. **Discover** — Let the AI agent analyze the captured data and generate a reusable Routine
-3. **Execute** — Run the discovered Routine with different parameters to automate the task
-
-### Quick Start (Recommended)
-
-**Easiest way:** Use the [quickstart script](#quickstart-easiest-way-🚀) which automates the entire workflow.
-
-### Manual Workflow (Step-by-Step)
-
-Each step is detailed below. Start by ensuring Chrome is running in debug mode (see [Launch Chrome in Debug Mode](#launch-chrome-in-debug-mode-🐞) above).
-
-### 0. Legal & Privacy Notice ⚠️
-
-Reverse-engineering and automating a website can violate terms of service. Store captures securely and scrub any sensitive fields before sharing.
-
-### 1. Monitor Browser While Performing Some Task
+#### 1. Monitor Browser While Performing Some Task
 
 Use the CDP browser monitor to block trackers and capture network, storage, and interaction data while you manually perform the task in Chrome.
 
@@ -415,7 +415,7 @@ cdp_captures/
 
 Tip: Keep Chrome focused while monitoring and perform the target flow (search, checkout, etc.). Press Ctrl+C to stop; the script will consolidate transactions and produce a HTTP Archive (HAR) automatically.
 
-### 2. Run Routine-Discovery Agent (Our Very Smart AI with Very Good Prompts🔮)🤖
+#### 2. Run Routine-Discovery Agent (Our Very Smart AI with Very Good Prompts🔮)🤖
 
 Use the **routine-discovery pipeline** to analyze captured data and synthesize a reusable Routine (`navigate → fetch → return`).
 
@@ -466,7 +466,7 @@ routine_discovery_output/
 └── routine.json                    # Final Routine model (name, parameters, operations)
 ```
 
-### 3. Execute the Discovered Routines 🏃
+#### 3. Execute the Discovered Routines 🏃
 
 ⚠️ **Prerequisite:** Make sure Chrome is still running in debug mode (see [Launch Chrome in Debug Mode](#launch-chrome-in-debug-mode-🐞) above). The routine execution script connects to the same Chrome debug session on `127.0.0.1:9222`.
 
@@ -531,74 +531,6 @@ bluebox-execute \
     - The relevant network requests weren't captured (they may have been blocked or filtered)
     - The task description is too vague or too specific
   - **Fix:** Reword your `--task` parameter to more accurately describe what you did during the monitoring step, or re-run the browser monitor and ensure you perform the exact actions you want to automate.
-
-## Python SDK 🐍
-
-For programmatic control, use the Python SDK instead of CLI commands:
-
-### Basic Usage
-
-```python
-from bluebox.sdk import Bluebox
-from bluebox.data_models.routine.routine import Routine
-
-# Initialize (uses OPENAI_API_KEY from environment)
-client = Bluebox()
-
-# Load and execute an existing routine
-routine = Routine.model_validate_json(open("routine.json").read())
-result = client.execute_routine(
-    routine=routine,
-    parameters={"origin": "NYC", "destination": "LAX", "date": "2026-03-15"}
-)
-
-if result.ok:
-    print(result.data)  # API response data
-```
-
-### Full Workflow
-
-```python
-import json
-from bluebox.sdk import Bluebox, BrowserMonitor
-
-client = Bluebox()
-
-# Step 1: Monitor browser activity
-monitor = BrowserMonitor(output_dir="./captures")
-monitor.start()
-# ... user performs actions in browser ...
-input("Press Enter when done")
-monitor.stop()
-
-# Step 2: Discover routine from captures
-routine = client.discover_routine(
-    task="Search for flights and get prices",
-    cdp_captures_dir="./captures",
-    output_dir="./output"
-)
-
-# Step 3: Test with generated test parameters
-test_params = json.load(open("./output/test_parameters.json"))
-result = client.execute_routine(routine=routine, parameters=test_params)
-
-# Step 4: Execute with new parameters
-result = client.execute_routine(
-    routine=routine,
-    parameters={"origin": "SFO", "destination": "JFK", "date": "2026-04-01"}
-)
-```
-
-### SDK Classes
-
-| Class                | Description                              |
-| -------------------- | ---------------------------------------- |
-| `Bluebox`        | Main client for the full workflow        |
-| `BrowserMonitor`   | Capture browser network/storage activity |
-| `RoutineDiscovery` | Discover routines from captured data     |
-| `RoutineExecutor`  | Execute routines programmatically        |
-
-See `quickstart.py` for a complete interactive example.
 
 ## Coming Soon 🔮
 

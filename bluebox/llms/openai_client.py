@@ -24,6 +24,50 @@ logger = get_logger(name=__name__)
 T = TypeVar("T", bound=BaseModel)
 
 
+def _clean_schema_for_openai(schema: dict[str, Any]) -> dict[str, Any]:
+    """
+    Recursively clean a JSON schema for OpenAI's structured output requirements:
+    1. Add 'additionalProperties': false to all object types
+    2. Remove extra keywords when $ref is present (OpenAI doesn't allow $ref with other keys)
+    3. Ensure all properties are in the 'required' array (OpenAI strict mode requirement)
+    """
+    schema = schema.copy()
+
+    # If $ref is present, remove all other keys except $ref (OpenAI requirement)
+    if "$ref" in schema:
+        return {"$ref": schema["$ref"]}
+
+    # Add to root if it's an object type
+    if schema.get("type") == "object" or "properties" in schema:
+        schema["additionalProperties"] = False
+        # OpenAI strict mode requires all properties to be in 'required'
+        if "properties" in schema:
+            schema["required"] = list(schema["properties"].keys())
+
+    # Process properties
+    if "properties" in schema:
+        schema["properties"] = {
+            k: _clean_schema_for_openai(v) for k, v in schema["properties"].items()
+        }
+
+    # Process $defs (Pydantic uses this for nested models)
+    if "$defs" in schema:
+        schema["$defs"] = {
+            k: _clean_schema_for_openai(v) for k, v in schema["$defs"].items()
+        }
+
+    # Process array items
+    if "items" in schema:
+        schema["items"] = _clean_schema_for_openai(schema["items"])
+
+    # Process anyOf, oneOf, allOf
+    for key in ("anyOf", "oneOf", "allOf"):
+        if key in schema:
+            schema[key] = [_clean_schema_for_openai(s) for s in schema[key]]
+
+    return schema
+
+
 class OpenAIClient(AbstractLLMVendorClient):
     """
     OpenAI-specific LLM client with unified API.
@@ -39,6 +83,7 @@ class OpenAIClient(AbstractLLMVendorClient):
         self._client = OpenAI(api_key=Config.OPENAI_API_KEY)
         self._async_client = AsyncOpenAI(api_key=Config.OPENAI_API_KEY)
         self._file_search_vectorstores: list[str] | None = None
+        self._file_search_filters: dict | None = None
         logger.debug("Initialized OpenAIClient with model: %s", model)
 
     # Private methods ______________________________________________________________________________________________________
@@ -227,6 +272,7 @@ class OpenAIClient(AbstractLLMVendorClient):
         previous_response_id: str | None,
         response_model: type[T] | None,
         stream: bool = False,
+        tool_choice: str | dict | None = None,
     ) -> dict[str, Any]:
         """Build kwargs for Responses API call."""
         kwargs: dict[str, Any] = {
@@ -262,14 +308,18 @@ class OpenAIClient(AbstractLLMVendorClient):
         for tool in self._tools:
             all_tools.append(self._convert_tool_to_responses_api_format(tool))
         if self._file_search_vectorstores:
-            all_tools.append({
+            file_search_tool: dict[str, Any] = {
                 "type": "file_search",
                 "vector_store_ids": self._file_search_vectorstores,
-            })
+            }
+            if self._file_search_filters:
+                file_search_tool["filters"] = self._file_search_filters
+            all_tools.append(file_search_tool)
 
         if all_tools and response_model is None:
             kwargs["tools"] = all_tools
-            tool_names = [t.get("name") or t.get("type") for t in all_tools]
+            if tool_choice:
+                kwargs["tool_choice"] = tool_choice
 
         return kwargs
 
@@ -307,24 +357,13 @@ class OpenAIClient(AbstractLLMVendorClient):
         self,
         response: Any,
         response_model: type[T] | None,
-    ) -> LLMChatResponse | T:
+    ) -> LLMChatResponse:
         """Parse response from Responses API."""
-        # Handle structured response
-        if response_model is not None:
-            # Responses API returns structured output differently
-            output = response.output
-            if output and len(output) > 0:
-                for item in output:
-                    if hasattr(item, "content") and item.content:
-                        for content_block in item.content:
-                            if hasattr(content_block, "parsed") and content_block.parsed:
-                                return content_block.parsed
-            raise ValueError("Failed to parse structured response from OpenAI Responses API")
-
-        # Extract content and tool calls
+        # Extract content, tool calls, and parsed model
         content: str | None = None
         tool_calls: list[LLMToolCall] = []
         reasoning_content: str | None = None
+        parsed = None
 
         output = response.output
         if output:
@@ -339,13 +378,16 @@ class OpenAIClient(AbstractLLMVendorClient):
                         if reasoning_parts:
                             reasoning_content = "".join(reasoning_parts)
 
-                # Handle message content
+                # Handle message content and parsed structured output
                 if item.type == "message":
                     if hasattr(item, "content") and item.content:
                         text_parts = []
                         for content_block in item.content:
                             if content_block.type == "output_text":
                                 text_parts.append(content_block.text)
+                            # Extract parsed model if available
+                            if response_model is not None and hasattr(content_block, "parsed") and content_block.parsed:
+                                parsed = content_block.parsed
                         if text_parts:
                             content = "".join(text_parts)
 
@@ -357,11 +399,24 @@ class OpenAIClient(AbstractLLMVendorClient):
                         call_id=getattr(item, "call_id", None),
                     ))
 
+        # If response_model provided but not auto-parsed, manually parse from JSON content
+        if response_model is not None and parsed is None and content:
+            try:
+                parsed = response_model.model_validate_json(content)
+            except Exception as e:
+                logger.error("Failed to parse JSON content into %s: %s", response_model.__name__, e)
+                raise ValueError(f"Failed to parse structured response from OpenAI Responses API: {e}")
+
+        # Validate parsed model was found if response_model was provided
+        if response_model is not None and parsed is None:
+            raise ValueError("Failed to parse structured response from OpenAI Responses API: no content returned")
+
         return LLMChatResponse(
             content=content,
             tool_calls=tool_calls,
             response_id=response.id,
             reasoning_content=reasoning_content,
+            parsed=parsed,
         )
 
     # Public methods _______________________________________________________________________________________________________
@@ -385,16 +440,22 @@ class OpenAIClient(AbstractLLMVendorClient):
             }
         })
 
-    def set_file_search_vectorstores(self, vector_store_ids: list[str] | None) -> None:
+    def set_file_search_vectorstores(
+        self,
+        vector_store_ids: list[str] | None,
+        filters: dict | None = None,
+    ) -> None:
         """
         Set vectorstore IDs for file_search tool.
 
         Args:
             vector_store_ids: List of vectorstore IDs to search, or None to disable.
+            filters: Optional filters for file_search (e.g., {"type": "eq", "key": "uuid", "value": ["..."]}).
         """
         self._file_search_vectorstores = vector_store_ids
+        self._file_search_filters = filters
         if vector_store_ids:
-            logger.info("Set file_search vectorstores: %s", vector_store_ids)
+            logger.info("Set file_search vectorstores: %s (filters: %s)", vector_store_ids, filters)
         else:
             logger.info("Cleared file_search vectorstores")
 
@@ -412,7 +473,8 @@ class OpenAIClient(AbstractLLMVendorClient):
         stateful: bool = False,  # noqa: ARG002 - reserved for future use
         previous_response_id: str | None = None,
         api_type: OpenAIAPIType | None = None,
-    ) -> LLMChatResponse | T:
+        tool_choice: str | dict | None = None,
+    ) -> LLMChatResponse:
         """
         Unified sync call to OpenAI.
 
@@ -427,9 +489,10 @@ class OpenAIClient(AbstractLLMVendorClient):
             stateful: Enable stateful conversation (Responses API only).
             previous_response_id: Previous response ID for chaining (Responses API only).
             api_type: Explicit API type, or None for auto-resolution.
+            tool_choice: Tool choice for the API call (e.g., "auto", "required", or specific tool).
 
         Returns:
-            LLMChatResponse or parsed Pydantic model if response_model is provided.
+            LLMChatResponse. If response_model is provided, the parsed model is in response.parsed.
 
         Raises:
             ValueError: If incompatible parameters are combined.
@@ -463,13 +526,18 @@ class OpenAIClient(AbstractLLMVendorClient):
             kwargs = self._build_responses_api_kwargs(
                 messages, input, system_prompt, max_tokens,
                 extended_reasoning, previous_response_id, response_model,
+                tool_choice=tool_choice,
             )
 
             if response_model is not None:
-                # Add structured output format
-                kwargs["text"] = {"format": {"type": "json_schema", "schema": response_model.model_json_schema()}}
+                # Use responses.parse() with text_format for automatic schema handling
+                response = self._client.responses.parse(
+                    **kwargs,
+                    text_format=response_model,
+                )
+            else:
+                response = self._client.responses.create(**kwargs)
 
-            response = self._client.responses.create(**kwargs)
             return self._parse_responses_api_response(response, response_model)
 
     async def call_async(
@@ -484,7 +552,8 @@ class OpenAIClient(AbstractLLMVendorClient):
         stateful: bool = False,  # noqa: ARG002 - reserved for future use
         previous_response_id: str | None = None,
         api_type: OpenAIAPIType | None = None,
-    ) -> LLMChatResponse | T:
+        tool_choice: str | dict | None = None,
+    ) -> LLMChatResponse:
         """
         Unified async call to OpenAI.
 
@@ -499,9 +568,10 @@ class OpenAIClient(AbstractLLMVendorClient):
             stateful: Enable stateful conversation (Responses API only).
             previous_response_id: Previous response ID for chaining (Responses API only).
             api_type: Explicit API type, or None for auto-resolution.
+            tool_choice: Tool choice for the API call (e.g., "auto", "required", or specific tool).
 
         Returns:
-            LLMChatResponse or parsed Pydantic model if response_model is provided.
+            LLMChatResponse. If response_model is provided, the parsed model is in response.parsed.
 
         Raises:
             ValueError: If incompatible parameters are combined.
@@ -534,12 +604,18 @@ class OpenAIClient(AbstractLLMVendorClient):
             kwargs = self._build_responses_api_kwargs(
                 messages, input, system_prompt, max_tokens,
                 extended_reasoning, previous_response_id, response_model,
+                tool_choice=tool_choice,
             )
 
             if response_model is not None:
-                kwargs["text"] = {"format": {"type": "json_schema", "schema": response_model.model_json_schema()}}
+                # Use responses.parse() with text_format for automatic schema handling
+                response = await self._async_client.responses.parse(
+                    **kwargs,
+                    text_format=response_model,
+                )
+            else:
+                response = await self._async_client.responses.create(**kwargs)
 
-            response = await self._async_client.responses.create(**kwargs)
             return self._parse_responses_api_response(response, response_model)
 
     def call_stream_sync(
@@ -553,6 +629,7 @@ class OpenAIClient(AbstractLLMVendorClient):
         stateful: bool = False,  # noqa: ARG002 - reserved for future use
         previous_response_id: str | None = None,
         api_type: OpenAIAPIType | None = None,
+        tool_choice: str | dict | None = None,
     ) -> Generator[str | LLMChatResponse, None, None]:
         """
         Unified streaming call to OpenAI.
@@ -569,6 +646,7 @@ class OpenAIClient(AbstractLLMVendorClient):
             stateful: Enable stateful conversation (Responses API only).
             previous_response_id: Previous response ID for chaining (Responses API only).
             api_type: Explicit API type, or None for auto-resolution.
+            tool_choice: Tool choice for the API call (e.g., "auto", "required", or specific tool).
 
         Yields:
             str: Text chunks as they arrive.
@@ -637,6 +715,7 @@ class OpenAIClient(AbstractLLMVendorClient):
             kwargs = self._build_responses_api_kwargs(
                 messages, input, system_prompt, max_tokens,
                 extended_reasoning, previous_response_id, response_model=None, stream=True,
+                tool_choice=tool_choice,
             )
 
             stream = self._client.responses.create(**kwargs)
