@@ -14,8 +14,8 @@ from bluebox.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def execute_routine_from_json(
-    routine_json_str: str,
+def execute_routine(
+    routine: str | dict[str, Any],
     parameters: dict[str, Any],
     remote_debugging_address: str = "http://127.0.0.1:9222",
     timeout: float = 180.0,
@@ -23,10 +23,10 @@ def execute_routine_from_json(
     tab_id: str | None = None,
 ) -> dict[str, Any]:
     """
-    Execute a routine from JSON string.
+    Execute a routine from JSON string or dictionary.
 
     Args:
-        routine_json_str: JSON string representation of the routine
+        routine: JSON string or dictionary representation of the routine
         parameters: Parameters for the routine
         remote_debugging_address: Chrome debugging address
         timeout: Execution timeout in seconds
@@ -37,8 +37,11 @@ def execute_routine_from_json(
         dict with 'success', 'result' or 'error'
     """
     try:
-        routine_dict = json.loads(routine_json_str)
-        routine = Routine(**routine_dict)
+        if isinstance(routine, str):
+            routine_dict = json.loads(routine)
+        else:
+            routine_dict = routine
+        routine_obj = Routine(**routine_dict)
     except json.JSONDecodeError as e:
         return {"success": False, "error": f"Invalid routine JSON: {e}"}
     except Exception as e:
@@ -47,56 +50,7 @@ def execute_routine_from_json(
     try:
         executor = RoutineExecutor(remote_debugging_address=remote_debugging_address)
         result = executor.execute(
-            routine=routine,
-            parameters=parameters,
-            timeout=timeout,
-            close_tab_when_done=close_tab_when_done,
-            tab_id=tab_id,
-        )
-
-        return {
-            "success": True,
-            "result": result,
-        }
-    except Exception as e:
-        logger.exception("Routine execution failed")
-        return {
-            "success": False,
-            "error": str(e),
-        }
-
-
-def execute_routine_from_dict(
-    routine_dict: dict[str, Any],
-    parameters: dict[str, Any],
-    remote_debugging_address: str = "http://127.0.0.1:9222",
-    timeout: float = 180.0,
-    close_tab_when_done: bool = True,
-    tab_id: str | None = None,
-) -> dict[str, Any]:
-    """
-    Execute a routine from dictionary.
-
-    Args:
-        routine_dict: Dictionary representation of the routine
-        parameters: Parameters for the routine
-        remote_debugging_address: Chrome debugging address
-        timeout: Execution timeout in seconds
-        close_tab_when_done: Whether to close tab after execution
-        tab_id: Optional existing tab ID to use
-
-    Returns:
-        dict with 'success', 'result' or 'error'
-    """
-    try:
-        routine = Routine(**routine_dict)
-    except Exception as e:
-        return {"success": False, "error": f"Failed to parse routine: {e}"}
-
-    try:
-        executor = RoutineExecutor(remote_debugging_address=remote_debugging_address)
-        result = executor.execute(
-            routine=routine,
+            routine=routine_obj,
             parameters=parameters,
             timeout=timeout,
             close_tab_when_done=close_tab_when_done,
