@@ -1,12 +1,12 @@
 """
 bluebox/agents/network_spy.py
 
-Agent specialized in searching through network HAR files.
+Agent specialized in searching through network traffic data.
 
 Contains:
-- NetworkSpyAgent: Conversational interface for HAR file analysis
+- NetworkSpyAgent: Conversational interface for network traffic analysis
 - EndpointDiscoveryResult: Result model for autonomous endpoint discovery
-- Uses: LLMClient with tools for HAR searching
+- Uses: LLMClient with tools for network data searching
 - Maintains: ChatThread for multi-turn conversation
 """
 
@@ -31,7 +31,7 @@ from bluebox.data_models.llms.interaction import (
 )
 from bluebox.data_models.llms.vendors import OpenAIModel
 from bluebox.llms.llm_client import LLMClient
-from bluebox.llms.infra.har_data_store import HarDataStore
+from bluebox.llms.infra.network_data_store import NetworkDataStore
 from bluebox.utils.logger import get_logger
 
 
@@ -73,16 +73,16 @@ class NetworkSpyAgent:
     Network spy agent that helps analyze HAR (HTTP Archive) files.
 
     The agent maintains a ChatThread with Chat messages and uses LLM with tools
-    to search and analyze network traffic captured in HAR format.
+    to search and analyze network traffic.
 
     Usage:
         def handle_message(message: EmittedMessage) -> None:
             print(f"[{message.type}] {message.content}")
 
-        har_store = HarDataStore(open("network.har").read())
+        network_store = NetworkDataStore.from_jsonl("events.jsonl")
         agent = NetworkSpyAgent(
             emit_message_callable=handle_message,
-            har_data_store=har_store,
+            network_data_store=network_store,
         )
         agent.process_new_message("Find entries related to train prices", ChatRole.USER)
     """
@@ -167,7 +167,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
     def __init__(
         self,
         emit_message_callable: Callable[[EmittedMessage], None],
-        har_data_store: HarDataStore,
+        network_data_store: NetworkDataStore,
         persist_chat_callable: Callable[[Chat], Chat] | None = None,
         persist_chat_thread_callable: Callable[[ChatThread], ChatThread] | None = None,
         stream_chunk_callable: Callable[[str], None] | None = None,
@@ -180,7 +180,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
 
         Args:
             emit_message_callable: Callback function to emit messages to the host.
-            har_data_store: The HarDataStore containing parsed HAR data.
+            network_data_store: The NetworkDataStore containing parsed HAR data.
             persist_chat_callable: Optional callback to persist Chat objects.
             persist_chat_thread_callable: Optional callback to persist ChatThread.
             stream_chunk_callable: Optional callback for streaming text chunks.
@@ -192,7 +192,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         self._persist_chat_callable = persist_chat_callable
         self._persist_chat_thread_callable = persist_chat_thread_callable
         self._stream_chunk_callable = stream_chunk_callable
-        self._har_data_store = har_data_store
+        self._network_data_store = network_data_store
         self._previous_response_id: str | None = None
         self._response_id_to_chat_index: dict[str, int] = {}
 
@@ -223,7 +223,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
             "Instantiated NetworkSpyAgent with model: %s, chat_thread_id: %s, entries: %d",
             llm_model,
             self._thread.id,
-            len(har_data_store.entries),
+            len(network_data_store.entries),
         )
 
     def _register_tools(self) -> None:
@@ -416,9 +416,14 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         """Return the current thread ID."""
         return self._thread.id
 
+    @property
+    def autonomous_iteration(self) -> int:
+        """Return the current/final autonomous iteration count."""
+        return self._autonomous_iteration
+
     def _get_system_prompt(self) -> str:
         """Get system prompt with HAR stats context, host stats, and likely API URLs."""
-        stats = self._har_data_store.stats
+        stats = self._network_data_store.stats
         stats_context = (
             f"\n\n## HAR File Context\n"
             f"- Total Requests: {stats.total_requests}\n"
@@ -427,7 +432,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         )
 
         # Add likely API URLs
-        likely_urls = self._har_data_store.likely_api_urls()
+        likely_urls = self._network_data_store.likely_api_urls()
         if likely_urls:
             urls_list = "\n".join(f"- {url}" for url in likely_urls[:50])  # Limit to 50
             urls_context = (
@@ -443,7 +448,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
             )
 
         # Add per-host stats
-        host_stats = self._har_data_store.get_host_stats()
+        host_stats = self._network_data_store.get_host_stats()
         if host_stats:
             host_lines = []
             for hs in host_stats[:15]:  # Top 15 hosts
@@ -548,7 +553,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         if not terms:
             return {"error": "No search terms provided"}
 
-        results = self._har_data_store.search_entries_by_terms(terms, top_n=10)
+        results = self._network_data_store.search_entries_by_terms(terms, top_n=10)
 
         if not results:
             return {
@@ -568,7 +573,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         if entry_id is None:
             return {"error": "entry_id is required"}
 
-        entry = self._har_data_store.get_entry(entry_id)
+        entry = self._network_data_store.get_entry(entry_id)
         if entry is None:
             return {"error": f"Entry {entry_id} not found"}
 
@@ -578,7 +583,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
             response_content = response_content[:5000] + f"\n... (truncated, {len(entry.response_content)} total chars)"
 
         # Get key structure for JSON responses
-        key_structure = self._har_data_store.get_entry_key_structure(entry_id)
+        key_structure = self._network_data_store.get_entry_key_structure(entry_id)
 
         return {
             "id": entry.id,
@@ -601,9 +606,9 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         if entry_id is None:
             return {"error": "entry_id is required"}
 
-        key_structure = self._har_data_store.get_entry_key_structure(entry_id)
+        key_structure = self._network_data_store.get_entry_key_structure(entry_id)
         if key_structure is None:
-            entry = self._har_data_store.get_entry(entry_id)
+            entry = self._network_data_store.get_entry(entry_id)
             if entry is None:
                 return {"error": f"Entry {entry_id} not found"}
             return {"error": f"Entry {entry_id} does not have valid JSON response content"}
@@ -615,14 +620,14 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
 
     def _tool_get_unique_urls(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute get_unique_urls tool."""
-        url_counts = self._har_data_store.get_url_counts()
+        url_counts = self._network_data_store.get_url_counts()
         return {
             "total_unique_urls": len(url_counts),
             "url_counts": url_counts,
         }
 
     def _tool_execute_python(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
-        """Execute Python code with har_dict pre-loaded from HarDataStore."""
+        """Execute Python code with har_dict pre-loaded from NetworkDataStore."""
         import io
         import sys
 
@@ -636,7 +641,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
 
         try:
             # Load har_dict from the data store (already parsed and in memory)
-            har_dict = self._har_data_store.raw_data
+            har_dict = self._network_data_store.raw_data
 
             # Execute with har_dict and json available in scope
             exec_globals = {
@@ -672,7 +677,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         terms_lower = [t.lower() for t in terms]
         results: list[dict[str, Any]] = []
 
-        for entry in self._har_data_store.entries:
+        for entry in self._network_data_store.entries:
             unique_terms_found = 0
             total_hits = 0
             matched_in: list[str] = []
@@ -963,7 +968,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         self,
         task: str,
         min_iterations: int = 3,
-        max_iterations: int = 5,
+        max_iterations: int = 10,
     ) -> EndpointDiscoveryResult | None:
         """
         Run the agent autonomously to discover the main API endpoint for a task.
@@ -977,7 +982,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         Args:
             task: User task description (e.g., "train prices and schedules from NYC to Boston")
             min_iterations: Minimum iterations before allowing finalize (default 3)
-            max_iterations: Maximum iterations before stopping (default 5)
+            max_iterations: Maximum iterations before stopping (default 10)
 
         Returns:
             EndpointDiscoveryResult if finalize_result was called, None otherwise.
@@ -1115,7 +1120,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
 
     def _get_autonomous_system_prompt(self) -> str:
         """Get system prompt for autonomous mode with HAR context."""
-        stats = self._har_data_store.stats
+        stats = self._network_data_store.stats
         stats_context = (
             f"\n\n## HAR File Context\n"
             f"- Total Requests: {stats.total_requests}\n"
@@ -1124,7 +1129,7 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
         )
 
         # Add likely API URLs
-        likely_urls = self._har_data_store.likely_api_urls()
+        likely_urls = self._network_data_store.likely_api_urls()
         if likely_urls:
             urls_list = "\n".join(f"- {url}" for url in likely_urls[:30])
             urls_context = (
@@ -1136,11 +1141,28 @@ Be concise with inputs/outputs - just the key fields and types, not full schema.
 
         # Add finalize tool availability notice
         if self._finalize_tool_registered:
-            finalize_notice = (
-                "\n\n## IMPORTANT: finalize_result is now available!\n"
-                "You can now call `finalize_result` to complete the discovery. "
-                "Do this when you have confidently identified the main API endpoint."
-            )
+            # Get urgency based on iteration count
+            remaining_iterations = 10 - self._autonomous_iteration
+            if remaining_iterations <= 2:
+                finalize_notice = (
+                    f"\n\n## CRITICAL: YOU MUST CALL finalize_result NOW!\n"
+                    f"Only {remaining_iterations} iterations remaining. "
+                    f"You MUST call `finalize_result` with your best findings immediately. "
+                    f"Do NOT call any other tool - call finalize_result right now!"
+                )
+            elif remaining_iterations <= 4:
+                finalize_notice = (
+                    f"\n\n## URGENT: Call finalize_result soon!\n"
+                    f"Only {remaining_iterations} iterations remaining. "
+                    f"You should call `finalize_result` to complete the discovery. "
+                    f"If you have identified the endpoint, finalize now."
+                )
+            else:
+                finalize_notice = (
+                    "\n\n## IMPORTANT: finalize_result is now available!\n"
+                    "You can now call `finalize_result` to complete the discovery. "
+                    "Do this when you have confidently identified the main API endpoint."
+                )
         else:
             finalize_notice = (
                 f"\n\n## Note: Continue exploring\n"

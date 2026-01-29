@@ -1,18 +1,21 @@
 """
-bluebox/llms/infra/har_data_store.py
+bluebox/llms/infra/network_data_store.py
 
-Data store for HAR (HTTP Archive) file analysis.
+Data store for network traffic analysis.
 
-Parses HAR files and provides structured access to network traffic data.
+Parses JSONL files with NetworkTransactionEvent entries and provides
+structured access to network traffic data.
 """
 
 import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from bluebox.data_models.cdp import NetworkTransactionEvent
 from bluebox.utils.logger import get_logger
 
 
@@ -20,7 +23,7 @@ logger = get_logger(name=__name__)
 
 
 @dataclass
-class HarEntry:
+class NetworkEntry:
     """Represents a single HAR entry (request/response pair)."""
 
     id: int  # Same as index, used as unique identifier
@@ -44,7 +47,7 @@ class HarEntry:
 
 
 @dataclass
-class HarStats:
+class NetworkStats:
     """Summary statistics for a HAR file."""
 
     total_requests: int = 0
@@ -119,7 +122,7 @@ class HarStats:
         return f"{num_bytes:.1f} TB"
 
 
-class HarDataStore:
+class NetworkDataStore:
     """
     Data store for HAR file analysis.
 
@@ -128,7 +131,7 @@ class HarDataStore:
 
     Usage:
         har_content = open("network.har").read()
-        store = HarDataStore(har_content)
+        store = NetworkDataStore(har_content)
 
         print(store.stats.to_summary())
         api_calls = store.search_entries(path_contains="/api/")
@@ -328,7 +331,7 @@ class HarDataStore:
     )
 
     @staticmethod
-    def _is_relevant_entry(entry: "HarEntry") -> bool:
+    def _is_relevant_entry(entry: "NetworkEntry") -> bool:
         """
         Check if an entry should be included in analysis.
 
@@ -337,12 +340,12 @@ class HarDataStore:
         mime = entry.mime_type.lower()
 
         # Exclude known non-relevant types
-        for prefix in HarDataStore.EXCLUDED_MIME_PREFIXES:
+        for prefix in NetworkDataStore.EXCLUDED_MIME_PREFIXES:
             if mime.startswith(prefix):
                 return False
 
         # Include known relevant types
-        for prefix in HarDataStore.INCLUDED_MIME_PREFIXES:
+        for prefix in NetworkDataStore.INCLUDED_MIME_PREFIXES:
             if mime.startswith(prefix):
                 return True
 
@@ -365,24 +368,119 @@ class HarDataStore:
         """
         self._raw_content = har_content
         self._har_data: dict[str, Any] = {}
-        self._entries: list[HarEntry] = []
-        self._stats: HarStats = HarStats()
+        self._entries: list[NetworkEntry] = []
+        self._stats: NetworkStats = NetworkStats()
 
         self._parse()
         self._compute_stats()
 
         logger.info(
-            "HarDataStore initialized with %d entries",
+            "NetworkDataStore initialized with %d entries",
             len(self._entries),
         )
 
+    @classmethod
+    def from_jsonl(cls, jsonl_path: str) -> "NetworkDataStore":
+        """
+        Create a NetworkDataStore from a JSONL file containing NetworkTransactionEvent entries.
+
+        Each line in the JSONL file should be a valid NetworkTransactionEvent JSON object.
+
+        Args:
+            jsonl_path: Path to the JSONL file.
+
+        Returns:
+            A NetworkDataStore instance populated with entries from the JSONL file.
+
+        Example:
+            store = NetworkDataStore.from_jsonl("cdp_captures/network/events.jsonl")
+        """
+        path = Path(jsonl_path)
+        if not path.exists():
+            raise ValueError(f"JSONL file does not exist: {jsonl_path}")
+
+        # Create instance with empty content (will bypass normal parsing)
+        instance = object.__new__(cls)
+        instance._raw_content = ""
+        instance._har_data = {}
+        instance._entries = []
+        instance._stats = NetworkStats()
+
+        # Load entries from JSONL
+        with open(path, mode="r", encoding="utf-8") as f:
+            for line_num, line in enumerate(f):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                    event = NetworkTransactionEvent.model_validate(data)
+                    entry = cls._network_event_to_har_entry(line_num, event)
+                    instance._entries.append(entry)
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning("Failed to parse line %d: %s", line_num + 1, e)
+                    continue
+
+        # Compute stats from loaded entries
+        instance._compute_stats()
+
+        logger.info(
+            "NetworkDataStore initialized from JSONL with %d entries",
+            len(instance._entries),
+        )
+
+        return instance
+
+    @staticmethod
+    def _network_event_to_har_entry(index: int, event: NetworkTransactionEvent) -> "NetworkEntry":
+        """
+        Convert a NetworkTransactionEvent to a NetworkEntry.
+
+        Args:
+            index: Index/ID for the entry.
+            event: The NetworkTransactionEvent to convert.
+
+        Returns:
+            A NetworkEntry populated from the event data.
+        """
+        parsed_url = urlparse(event.url)
+
+        # Parse post_data to string
+        post_data: str | None = None
+        if event.post_data is not None:
+            if isinstance(event.post_data, (dict, list)):
+                post_data = json.dumps(event.post_data)
+            else:
+                post_data = str(event.post_data)
+
+        return NetworkEntry(
+            id=index,
+            method=event.method,
+            url=event.url,
+            host=parsed_url.netloc,
+            path=parsed_url.path,
+            status=event.status or 0,
+            status_text=event.status_text or "",
+            mime_type=event.mime_type,
+            request_size=0,  # Not available in NetworkTransactionEvent
+            response_size=len(event.response_body) if event.response_body else 0,
+            time_ms=0.0,  # Not available in NetworkTransactionEvent
+            request_headers=event.request_headers or {},
+            response_headers=event.response_headers or {},
+            request_cookies=[],  # Would need to parse from headers
+            response_cookies=[],  # Would need to parse from headers
+            query_params={},  # Would need to parse from URL
+            post_data=post_data,
+            response_content=event.response_body if event.response_body else None,
+        )
+
     @property
-    def entries(self) -> list[HarEntry]:
+    def entries(self) -> list[NetworkEntry]:
         """Return all parsed HAR entries."""
         return self._entries
 
     @property
-    def stats(self) -> HarStats:
+    def stats(self) -> NetworkStats:
         """Return computed statistics."""
         return self._stats
 
@@ -409,7 +507,7 @@ class HarDataStore:
             except Exception as e:
                 logger.warning("Failed to parse entry %d: %s", i, e)
 
-    def _parse_entry(self, index: int, entry: dict[str, Any]) -> HarEntry:
+    def _parse_entry(self, index: int, entry: dict[str, Any]) -> NetworkEntry:
         """Parse a single HAR entry."""
         request = entry.get("request", {})
         response = entry.get("response", {})
@@ -441,7 +539,7 @@ class HarDataStore:
         content_obj = response.get("content", {})
         response_content = content_obj.get("text") if content_obj else None
 
-        return HarEntry(
+        return NetworkEntry(
             id=index,
             method=request.get("method", "GET"),
             url=url,
@@ -512,7 +610,7 @@ class HarDataStore:
                 if "form" in content_type:
                     has_form = True
 
-        self._stats = HarStats(
+        self._stats = NetworkStats(
             total_requests=len(self._entries),
             total_request_bytes=total_req_bytes,
             total_response_bytes=total_resp_bytes,
@@ -538,7 +636,7 @@ class HarDataStore:
         status_code: int | None = None,
         content_type_contains: str | None = None,
         has_post_data: bool | None = None,
-    ) -> list[HarEntry]:
+    ) -> list[NetworkEntry]:
         """
         Search entries with filters.
 
@@ -551,7 +649,7 @@ class HarDataStore:
             has_post_data: Filter by presence of POST data
 
         Returns:
-            List of matching HarEntry objects.
+            List of matching NetworkEntry objects.
         """
         results = []
 
@@ -576,7 +674,7 @@ class HarDataStore:
 
         return results
 
-    def get_entry(self, index: int) -> HarEntry | None:
+    def get_entry(self, index: int) -> NetworkEntry | None:
         """Get entry by index."""
         if 0 <= index < len(self._entries):
             return self._entries[index]
@@ -923,7 +1021,7 @@ class HarDataStore:
 
         return auth_headers
 
-    def format_entry_summary(self, entry: HarEntry) -> str:
+    def format_entry_summary(self, entry: NetworkEntry) -> str:
         """Format a single entry as a summary string."""
         return (
             f"[{entry.id}] {entry.method} {entry.url}\n"
@@ -956,11 +1054,11 @@ class HarDataStore:
 
         Example:
             >>> data = [{"id": 1, "name": "a"}, {"id": 2}, {"id": 3, "extra": "x"}]
-            >>> HarDataStore.extract_key_structure(data)
+            >>> NetworkDataStore.extract_key_structure(data)
             [{"_total": 3, "id": 3, "name": 1, "extra": 1}]
         """
         if isinstance(data, dict):
-            return {k: HarDataStore.extract_key_structure(v) for k, v in data.items()}
+            return {k: NetworkDataStore.extract_key_structure(v) for k, v in data.items()}
         elif isinstance(data, list):
             if len(data) == 0:
                 return []
@@ -989,13 +1087,13 @@ class HarDataStore:
 
                 # Check if all values are dicts - merge recursively
                 if all(isinstance(v, dict) for v in values):
-                    result[k] = HarDataStore.extract_key_structure(values)
+                    result[k] = NetworkDataStore.extract_key_structure(values)
                 # Check if all values are lists - flatten and recurse
                 elif all(isinstance(v, list) for v in values):
                     flattened = []
                     for v in values:
                         flattened.extend(v)
-                    result[k] = HarDataStore.extract_key_structure(flattened)
+                    result[k] = NetworkDataStore.extract_key_structure(flattened)
                 else:
                     # Leaf value - use count
                     result[k] = count
@@ -1025,7 +1123,7 @@ class HarDataStore:
         except json.JSONDecodeError:
             return None
 
-    def format_entry_detail(self, entry: HarEntry) -> str:
+    def format_entry_detail(self, entry: NetworkEntry) -> str:
         """Format a single entry with full details."""
         lines = [
             f"=== Entry {entry.id} ===",

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-bluebox/scripts/run_network_spy.py
+scripts/run_network_spy.py
 
 Interactive CLI for the Network Spy agent.
 
 Usage:
-    python bluebox/scripts/run_network_spy.py --har-path ./cdp_captures/network/network.har
+    python scripts/run_network_spy.py --jsonl-path ./cdp_captures/network/events.jsonl
 """
 
 import argparse
@@ -24,7 +24,7 @@ from rich.table import Table
 from rich.text import Text
 
 from bluebox.agents.network_spy import NetworkSpyAgent, EndpointDiscoveryResult, DiscoveredEndpoint
-from bluebox.llms.infra.har_data_store import HarDataStore
+from bluebox.llms.infra.network_data_store import NetworkDataStore
 from bluebox.data_models.llms.interaction import (
     ChatRole,
     EmittedMessage,
@@ -58,12 +58,12 @@ BANNER = """\
 """
 
 
-def print_welcome(model: str, har_path: str, har_store: HarDataStore) -> None:
-    """Print welcome message with HAR stats."""
+def print_welcome(model: str, data_path: str, network_store: NetworkDataStore) -> None:
+    """Print welcome message with network stats."""
     console.print(BANNER)
     console.print()
 
-    stats = har_store.stats
+    stats = network_store.stats
 
     # Build stats table
     stats_table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
@@ -103,14 +103,14 @@ def print_welcome(model: str, har_path: str, har_store: HarDataStore) -> None:
 
     console.print(Panel(
         stats_table,
-        title=f"[bold cyan]HAR Stats[/bold cyan] [dim]({har_path})[/dim]",
+        title=f"[bold cyan]Network Stats[/bold cyan] [dim]({data_path})[/dim]",
         border_style="cyan",
         box=box.ROUNDED,
     ))
     console.print()
 
     # Show host stats
-    host_stats = har_store.get_host_stats()
+    host_stats = network_store.get_host_stats()
     if host_stats:
         host_table = Table(box=box.SIMPLE, show_header=True, padding=(0, 1))
         host_table.add_column("Host", style="white")
@@ -137,7 +137,7 @@ def print_welcome(model: str, har_path: str, har_store: HarDataStore) -> None:
         console.print()
 
     # Show likely API endpoints
-    likely_urls = har_store.likely_api_urls()
+    likely_urls = network_store.likely_api_urls()
     if likely_urls:
         urls_table = Table(box=None, show_header=False, padding=(0, 1))
         urls_table.add_column("URL", style="white")
@@ -240,14 +240,14 @@ class TerminalNetworkSpyChat:
 
     def __init__(
         self,
-        har_store: HarDataStore,
+        network_store: NetworkDataStore,
         llm_model: OpenAIModel = OpenAIModel.GPT_5_1,
     ) -> None:
         """Initialize the terminal chat interface."""
         self._streaming_started: bool = False
         self._agent = NetworkSpyAgent(
             emit_message_callable=self._handle_message,
-            har_data_store=har_store,
+            network_data_store=network_store,
             stream_chunk_callable=self._handle_stream_chunk,
             llm_model=llm_model,
         )
@@ -298,13 +298,13 @@ class TerminalNetworkSpyChat:
         start_time = time.perf_counter()
         result = self._agent.run_autonomous(task)
         elapsed_time = time.perf_counter() - start_time
+        iterations = self._agent.autonomous_iteration
 
         console.print()
 
         if result:
             # Build result tables for each endpoint
             endpoint_count = len(result.endpoints)
-            tables = []
 
             for i, ep in enumerate(result.endpoints, 1):
                 ep_table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
@@ -326,18 +326,18 @@ class TerminalNetworkSpyChat:
                 else:
                     console.print(Panel(
                         ep_table,
-                        title=f"[bold green]✓ Endpoint Discovery Complete[/bold green] [dim]({elapsed_time:.1f}s)[/dim]",
+                        title=f"[bold green]✓ Endpoint Discovery Complete[/bold green] [dim]({iterations} iterations, {elapsed_time:.1f}s)[/dim]",
                         border_style="green",
                         box=box.ROUNDED,
                     ))
 
             if endpoint_count > 1:
-                console.print(f"[bold green]✓ Found {endpoint_count} endpoints[/bold green] [dim]({elapsed_time:.1f}s)[/dim]")
+                console.print(f"[bold green]✓ Found {endpoint_count} endpoints[/bold green] [dim]({iterations} iterations, {elapsed_time:.1f}s)[/dim]")
         else:
             console.print(Panel(
                 "[yellow]Could not finalize endpoint discovery. "
                 "The agent reached max iterations without calling finalize_result.[/yellow]",
-                title=f"[bold yellow]⚠ Discovery Incomplete[/bold yellow] [dim]({elapsed_time:.1f}s)[/dim]",
+                title=f"[bold yellow]⚠ Discovery Incomplete[/bold yellow] [dim]({iterations} iterations, {elapsed_time:.1f}s)[/dim]",
                 border_style="yellow",
                 box=box.ROUNDED,
             ))
@@ -420,13 +420,13 @@ class TerminalNetworkSpyChat:
 def main() -> None:
     """Run the Network Spy agent interactively."""
     parser = argparse.ArgumentParser(
-        description="Network Spy - Interactive HAR file analyzer"
+        description="Network Spy - Interactive network traffic analyzer"
     )
     parser.add_argument(
-        "--har-path",
+        "--jsonl-path",
         type=str,
         required=True,
-        help="Path to the HAR file to analyze",
+        help="Path to the JSONL file containing NetworkTransactionEvent entries",
     )
     parser.add_argument(
         "--model",
@@ -436,20 +436,19 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Load HAR file
-    har_path = Path(args.har_path)
-    if not har_path.exists():
-        console.print(f"[bold red]Error: HAR file not found: {har_path}[/bold red]")
+    # Load JSONL file
+    jsonl_path = Path(args.jsonl_path)
+    if not jsonl_path.exists():
+        console.print(f"[bold red]Error: JSONL file not found: {jsonl_path}[/bold red]")
         sys.exit(1)
 
-    console.print(f"[dim]Loading HAR file: {har_path}[/dim]")
-    har_content = har_path.read_text()
+    console.print(f"[dim]Loading JSONL file: {jsonl_path}[/dim]")
 
-    # Parse HAR into data store
+    # Parse JSONL into data store
     try:
-        har_store = HarDataStore(har_content)
+        network_store = NetworkDataStore.from_jsonl(str(jsonl_path))
     except ValueError as e:
-        console.print(f"[bold red]Error parsing HAR file: {e}[/bold red]")
+        console.print(f"[bold red]Error parsing JSONL file: {e}[/bold red]")
         sys.exit(1)
 
     # Map model string to enum
@@ -458,10 +457,10 @@ def main() -> None:
     }
     llm_model = model_map.get(args.model, OpenAIModel.GPT_5_1)
 
-    print_welcome(args.model, str(har_path), har_store)
+    print_welcome(args.model, str(jsonl_path), network_store)
 
     chat = TerminalNetworkSpyChat(
-        har_store=har_store,
+        network_store=network_store,
         llm_model=llm_model,
     )
     chat.run()
