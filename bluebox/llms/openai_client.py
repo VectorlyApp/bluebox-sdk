@@ -327,9 +327,16 @@ class OpenAIClient(AbstractLLMVendorClient):
         self,
         response: Any,
         response_model: type[T] | None,
-    ) -> LLMChatResponse:
+    ) -> LLMChatResponse | T:
         """Parse response from Chat Completions API."""
         message = response.choices[0].message
+
+        # Handle structured response
+        if response_model is not None:
+            parsed = getattr(message, "parsed", None)
+            if parsed is None:
+                raise ValueError("Failed to parse structured response from OpenAI")
+            return parsed
 
         # Extract all tool calls
         tool_calls: list[LLMToolCall] = []
@@ -341,17 +348,9 @@ class OpenAIClient(AbstractLLMVendorClient):
                     call_id=tc.id,
                 ))
 
-        # Handle structured response - extract parsed model if available
-        parsed = None
-        if response_model is not None:
-            parsed = getattr(message, "parsed", None)
-            if parsed is None:
-                raise ValueError("Failed to parse structured response from OpenAI")
-
         return LLMChatResponse(
             content=message.content,
             tool_calls=tool_calls,
-            parsed=parsed,
         )
 
     def _parse_responses_api_response(
