@@ -109,7 +109,7 @@ for op in result.operations_metadata:
 **User parameters ARE interpolated:**
 ```json
 {
-  "js": "(function() { return document.querySelector('\"{{selector}}\"').textContent; })()"
+  "js": "(function() { return document.querySelector('{{selector}}').textContent; })()"
 }
 ```
 

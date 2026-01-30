@@ -845,12 +845,10 @@ class TestPremierLeagueRoutineValidation:
 
 
 class TestParameterTypeQuoteValidation:
-    """Test quote validation rules based on parameter types.
-    
-    Rules:
-    - STRING types: MUST use escape-quoted format {{param}}
-    - INTEGER/NUMBER/BOOLEAN types: Can use either "{{param}}" or {{param}}
-    - Storage/builtins: Can use either "{{param}}" or {{param}}
+    """Test validation rules based on parameter types.
+
+    All parameter types use uniform {{param}} syntax.
+    Type resolution is determined by the Parameter's type field at runtime.
     """
 
     def test_integer_param_in_body_quoted_format_valid(self) -> None:
@@ -988,8 +986,8 @@ class TestParameterTypeQuoteValidation:
         )
         routine.validate_parameter_usage()
 
-    def test_string_param_escape_quoted_in_body_valid(self) -> None:
-        """Test STRING param using escape-quoted format in body is valid."""
+    def test_string_param_in_body_valid(self) -> None:
+        """Test STRING param using {{param}} format in body is valid."""
         routine = Routine(
             name="API with String Body Param",
             description="Routine with string param in body field.",
@@ -1020,11 +1018,11 @@ class TestParameterTypeQuoteValidation:
         # Should not raise - STRING using {{...}} is valid
         routine.validate_parameter_usage()
 
-    def test_integer_param_escape_quoted_also_valid(self) -> None:
-        """Test INTEGER param using escape-quoted format is also valid."""
+    def test_integer_param_in_url_valid(self) -> None:
+        """Test INTEGER param using {{param}} format in URL is valid."""
         routine = Routine(
-            name="API with Integer Escape Quoted",
-            description="Routine with integer param using escape quotes.",
+            name="API with Integer URL Param",
+            description="Routine with integer param in URL.",
             operations=[
                 RoutineFetchOperation(
                     endpoint=Endpoint(
@@ -1063,13 +1061,9 @@ class TestParameterTypeQuoteValidation:
                         method=HTTPMethod.POST,
                         headers={},
                         body={
-                            # STRING must use escape-quoted
                             "name": "{{user_name}}",
-                            # INTEGER can use regular quoted
                             "count": "{{count}}",
-                            # BOOLEAN can use regular quoted
                             "active": "{{is_active}}",
-                            # NUMBER can use regular quoted
                             "rate": "{{rate}}"
                         }
                     ),

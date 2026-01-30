@@ -15,8 +15,7 @@
           "Content-Type": "application/json",
           "X-User-Name": "{{user_name}}",
           "X-User-Age": "{{user_age}}",
-          "X-Session-ID": "{{sessionStorage:session.id}}",
-          "X-Existing-Quote": "\"{{user_name}}\""
+          "X-Session-ID": "{{sessionStorage:session.id}}"
         },
         "body": {
           "user": {
@@ -25,9 +24,9 @@
             "role": "{{user_role}}",
             "meta": "{{sessionStorage:meta.data}}"
           },
-          "query": "{{search_term}}",
-          "quoted_already": "\"{{search_term}}\""
-        }
+          "query": "{{search_term}}"
+        },
+        "credentials": "same-origin"
       },
       "session_storage_key": "result"
     },
@@ -65,4 +64,3 @@
     }
   ]
 }
-

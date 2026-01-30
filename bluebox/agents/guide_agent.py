@@ -207,8 +207,9 @@ NO numbered lists of what you'll do next. Just ask the question.
 "Let me use X tool" - just invoke the tool directly. The user can always decline the request."""
 
     _NOTES_SECTION: str = """## NOTES:
-- Quotes or escaped quotes are ESSENTIAL AROUND {{{{parameter_name}}}} ALL parameters in routines!
-- Before saying ANYTHING ABOUT QUOTES OR ESCAPED QUOTES, you MUST look through the docs!"""
+- All parameters use {{{{parameter_name}}}} syntax (no escaped quotes needed).
+- Type resolution is automatic based on the parameter's type field.
+- Before making claims about placeholder syntax, check the docs!"""
 
     _SYSTEM_ACTION_SECTION: str = """## System Action Messages
 When you receive a system message with the prefix "[ACTION REQUIRED]", you MUST immediately \

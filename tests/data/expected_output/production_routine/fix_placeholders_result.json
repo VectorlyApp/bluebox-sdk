@@ -4,30 +4,28 @@
   "operations": [
     {
       "type": "navigate",
-      "url": "https://example.com/users/\"{{user_id}}\"/profile"
+      "url": "https://example.com/users/{{user_id}}/profile"
     },
     {
       "type": "fetch",
       "endpoint": {
-        "url": "https://api.example.com/data?q=\"{{search_term}}\"",
+        "url": "https://api.example.com/data?q={{search_term}}",
         "description": null,
         "method": "POST",
         "headers": {
           "Content-Type": "application/json",
-          "X-User-Name": "\"{{user_name}}\"",
+          "X-User-Name": "{{user_name}}",
           "X-User-Age": "{{user_age}}",
-          "X-Session-ID": "\"{{sessionStorage:session.id}}\"",
-          "X-Existing-Quote": "\"{{user_name}}\""
+          "X-Session-ID": "{{sessionStorage:session.id}}"
         },
         "body": {
           "user": {
-            "name": "\"{{user_name}}\"",
+            "name": "{{user_name}}",
             "age": "{{user_age}}",
-            "role": "\"{{user_role}}\"",
-            "meta": "\"{{sessionStorage:meta.data}}\""
+            "role": "{{user_role}}",
+            "meta": "{{sessionStorage:meta.data}}"
           },
-          "query": "\"{{search_term}}\"",
-          "quoted_already": "\"{{search_term}}\""
+          "query": "{{search_term}}"
         },
         "credentials": "same-origin"
       },
@@ -67,4 +65,3 @@
     }
   ]
 }
-
