@@ -10,6 +10,7 @@ from typing import Any, Awaitable, Callable
 
 from websockets.asyncio.client import connect, ClientConnection
 
+from bluebox.cdp.monitors.async_dom_monitor import AsyncDOMMonitor
 from bluebox.cdp.monitors.async_interaction_monitor import AsyncInteractionMonitor
 from bluebox.cdp.monitors.async_network_monitor import AsyncNetworkMonitor
 from bluebox.cdp.monitors.async_storage_monitor import AsyncStorageMonitor
@@ -73,6 +74,7 @@ class AsyncCDPSession:
         self.storage_monitor = AsyncStorageMonitor(event_callback_fn=self.event_callback_fn)
         self.window_property_monitor = AsyncWindowPropertyMonitor(event_callback_fn=self.event_callback_fn)
         self.interaction_monitor = AsyncInteractionMonitor(event_callback_fn=self.event_callback_fn)
+        self.dom_monitor = AsyncDOMMonitor(event_callback_fn=self.event_callback_fn)
 
 
     # Private methods ______________________________________________________________________________________________________
@@ -132,6 +134,11 @@ class AsyncCDPSession:
 
         # try interaction monitor
         handled = await self.interaction_monitor.handle_interaction_command_reply(msg)
+        if handled:
+            return
+
+        # try DOM monitor
+        handled = await self.dom_monitor.handle_dom_command_reply(msg, self)
         if handled:
             return
 
@@ -306,6 +313,7 @@ class AsyncCDPSession:
         await self.storage_monitor.setup_storage_monitoring(self)
         await self.window_property_monitor.setup_window_property_monitoring(self)
         await self.interaction_monitor.setup_interaction_monitoring(self)
+        await self.dom_monitor.setup_dom_monitoring(self)
         logger.info("✅ CDP domain setup complete")
 
     async def get_current_url(self, timeout: float = 3.0) -> str | None:
@@ -381,6 +389,11 @@ class AsyncCDPSession:
         # handle interaction events via AsyncInteractionMonitor
         handled_interaction = await self.interaction_monitor.handle_interaction_message(msg, self)
         if handled_interaction:
+            return
+
+        # handle DOM events via AsyncDOMMonitor
+        handled_dom = await self.dom_monitor.handle_dom_message(msg, self)
+        if handled_dom:
             return
 
         # handle command replies
@@ -490,4 +503,5 @@ class AsyncCDPSession:
             "storage": self.storage_monitor.get_storage_summary(),
             "window_properties": self.window_property_monitor.get_window_property_summary(),
             "interactions": self.interaction_monitor.get_interaction_summary(),
+            "dom": self.dom_monitor.get_dom_summary(),
         }

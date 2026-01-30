@@ -238,4 +238,5 @@ class TestFileEventWriterCategoryMapping:
         assert mapping["AsyncStorageMonitor"] == "storage_events_path"
         assert mapping["AsyncWindowPropertyMonitor"] == "window_properties_path"
         assert mapping["AsyncInteractionMonitor"] == "interaction_events_path"
-        assert len(mapping) == 4
+        assert mapping["AsyncDOMMonitor"] == "dom_events_path"
+        assert len(mapping) == 5

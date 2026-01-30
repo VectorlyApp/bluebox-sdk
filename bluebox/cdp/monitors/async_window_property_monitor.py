@@ -603,7 +603,7 @@ class AsyncWindowPropertyMonitor(AbstractAsyncMonitor):
             else:
                 # collection is running, mark navigation as pending
                 self.pending_navigation = True
-            return True
+            return False  # allow other handlers (e.g., DOM monitor) to process this event
 
         elif method == "Page.domContentEventFired":
             self.page_ready = True
@@ -614,7 +614,7 @@ class AsyncWindowPropertyMonitor(AbstractAsyncMonitor):
             else:
                 # collection is running, mark navigation as pending
                 self.pending_navigation = True
-            return True
+            return False  # allow other handlers to process this event
 
         elif method == "Page.loadEventFired":
             self.page_ready = True
@@ -625,7 +625,7 @@ class AsyncWindowPropertyMonitor(AbstractAsyncMonitor):
             else:
                 # collection is running, mark navigation as pending
                 self.pending_navigation = True
-            return True
+            return False  # allow other handlers (e.g., DOM monitor) to process this event
 
         return False
 

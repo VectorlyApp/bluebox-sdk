@@ -1436,7 +1436,7 @@ class TestAsyncWindowPropertyMonitorMessageHandling:
 
         result = await monitor.handle_window_property_message(msg, mock_cdp_session)
 
-        assert result is True
+        assert result is False  # Allow other monitors to process Page events
         assert monitor.page_ready is True
         assert monitor.navigation_detected is True
 
@@ -1452,7 +1452,7 @@ class TestAsyncWindowPropertyMonitorMessageHandling:
 
         result = await monitor.handle_window_property_message(msg, mock_cdp_session)
 
-        assert result is True
+        assert result is False  # Allow other monitors to process Page events
         assert monitor.page_ready is True
         assert monitor.navigation_detected is True
 
@@ -1468,7 +1468,7 @@ class TestAsyncWindowPropertyMonitorMessageHandling:
 
         result = await monitor.handle_window_property_message(msg, mock_cdp_session)
 
-        assert result is True
+        assert result is False  # Allow other monitors to process Page events
         assert monitor.page_ready is True
         assert monitor.navigation_detected is True
 

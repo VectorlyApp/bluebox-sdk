@@ -38,6 +38,7 @@ class FileEventWriter:
         "AsyncStorageMonitor": "storage_events_path",
         "AsyncWindowPropertyMonitor": "window_properties_path",
         "AsyncInteractionMonitor": "interaction_events_path",
+        "AsyncDOMMonitor": "dom_events_path",
     }
 
     def __init__(self, paths: dict[str, str]) -> None:
@@ -70,6 +71,9 @@ class FileEventWriter:
         self.javascript_events_path = Path(
             paths.get("javascript_events_path", "./network/javascript_events.jsonl")
         )
+        self.dom_events_path = Path(
+            paths.get("dom_events_path", "./dom/events.jsonl")
+        )
 
         # Ensure parent directories exist
         self.network_events_path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,6 +81,7 @@ class FileEventWriter:
         self.window_properties_path.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_events_path.parent.mkdir(parents=True, exist_ok=True)
         self.javascript_events_path.parent.mkdir(parents=True, exist_ok=True)
+        self.dom_events_path.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info("📁 FileEventWriter initialized")
         logger.info("   Network events: %s", self.network_events_path)
@@ -84,6 +89,7 @@ class FileEventWriter:
         logger.info("   Window properties: %s", self.window_properties_path)
         logger.info("   Interaction events: %s", self.interaction_events_path)
         logger.info("   JavaScript events: %s", self.javascript_events_path)
+        logger.info("   DOM events: %s", self.dom_events_path)
 
     async def write_event(self, category: str, event: Any) -> None:
         """
@@ -118,6 +124,8 @@ class FileEventWriter:
             output_path = self.window_properties_path
         elif category == "AsyncInteractionMonitor":
             output_path = self.interaction_events_path
+        elif category == "AsyncDOMMonitor":
+            output_path = self.dom_events_path
         else:
             # Unknown category - log warning but don't fail
             logger.warning("⚠️ Unknown event category: %s", category)
@@ -162,12 +170,14 @@ class FileEventWriter:
             "storage_dir": str(output_dir / "storage"),
             "window_properties_dir": str(output_dir / "window_properties"),
             "interaction_dir": str(output_dir / "interaction"),
+            "dom_dir": str(output_dir / "dom"),
             # Event JSONL paths (written by this writer)
             "network_events_path": str(output_dir / "network" / "events.jsonl"),
             "storage_events_path": str(output_dir / "storage" / "events.jsonl"),
             "window_properties_path": str(output_dir / "window_properties" / "events.jsonl"),
             "interaction_events_path": str(output_dir / "interaction" / "events.jsonl"),
             "javascript_events_path": str(output_dir / "network" / "javascript_events.jsonl"),
+            "dom_events_path": str(output_dir / "dom" / "events.jsonl"),
             # Other output paths
             "summary_path": str(output_dir / "session_summary.json"),
         }
