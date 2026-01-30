@@ -10,10 +10,9 @@ Contains:
 - Uses: LocalDiscoveryDataStore, RoutineDiscoveryAgent
 """
 
-from pathlib import Path
-from typing import Optional, Callable
 import os
-import json
+from pathlib import Path
+from typing import Callable
 from openai import OpenAI
 from pydantic import BaseModel
 
@@ -27,6 +26,7 @@ from ..data_models.llms.vendors import OpenAIModel
 from ..data_models.routine.routine import Routine
 from ..data_models.routine_discovery.message import RoutineDiscoveryMessage
 from ..data_models.routine_discovery.llm_responses import TestParametersResponse
+from ..data_models.routine_discovery.message import RoutineDiscoveryMessageType
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -60,7 +60,7 @@ class RoutineDiscovery:
         cdp_captures_dir: str = "./cdp_captures",
         output_dir: str = "./routine_discovery_output",
         llm_model: str = "gpt-5.1",
-        message_callback: Optional[Callable[[RoutineDiscoveryMessage], None]] = None,
+        message_callback: Callable[[RoutineDiscoveryMessage], None] | None = None,
     ):
         """
         Initialize the RoutineDiscovery SDK.
@@ -80,12 +80,11 @@ class RoutineDiscovery:
         self.llm_model = llm_model
         self.message_callback = message_callback or self._default_message_handler
 
-        self.agent: Optional[RoutineDiscoveryAgent] = None
-        self.data_store: Optional[LocalDiscoveryDataStore] = None
+        self.agent: RoutineDiscoveryAgent | None = None
+        self.data_store: LocalDiscoveryDataStore | None = None
 
     def _default_message_handler(self, message: RoutineDiscoveryMessage) -> None:
         """Default message handler that logs to console."""
-        from ..data_models.routine_discovery.message import RoutineDiscoveryMessageType
 
         if message.type == RoutineDiscoveryMessageType.INITIATED:
             logger.info(f"🚀 {message.content}")
@@ -112,11 +111,8 @@ class RoutineDiscovery:
             # Initialize data store
             self.data_store = LocalDiscoveryDataStore(
                 client=self.client,
+                cdp_captures_dir=self.cdp_captures_dir,
                 tmp_dir=str(Path(self.output_dir) / "tmp"),
-                transactions_dir=str(Path(self.cdp_captures_dir) / "network" / "transactions"),
-                consolidated_transactions_path=str(Path(self.cdp_captures_dir) / "network" / "consolidated_transactions.json"),
-                storage_jsonl_path=str(Path(self.cdp_captures_dir) / "storage" / "events.jsonl"),
-                window_properties_path=str(Path(self.cdp_captures_dir) / "window_properties" / "window_properties.json"),
                 documentation_paths=[str(PACKAGE_ROOT / "agent_docs")],
                 code_paths=[
                     str(PACKAGE_ROOT / "data_models" / "routine"),

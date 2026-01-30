@@ -9,10 +9,11 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal, Union
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from bluebox.data_models.resource_base import ResourceBase
 from bluebox.data_models.routine import Routine
+
 
 class ChatRole(StrEnum):
     """
@@ -146,8 +147,8 @@ class BaseEmittedMessage(BaseModel):
         ...,
         description="The type of message being emitted",
     )
-    timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(tz=timezone.utc),
+    timestamp: float = Field(
+        default_factory=lambda: datetime.now(tz=timezone.utc).timestamp(),
         description="When the message was created",
     )
     chat_thread_id: str | None = Field(
@@ -182,7 +183,7 @@ class ToolInvocationResultEmittedMessage(BaseEmittedMessage):
         ...,
         description="Tool invocation that was executed",
     )
-    tool_result: dict[str, Any] = Field(
+    tool_result: str | dict[str, Any] = Field(
         ...,
         description="Result data from tool execution",
     )
