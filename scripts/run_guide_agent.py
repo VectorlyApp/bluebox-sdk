@@ -1001,7 +1001,7 @@ class TerminalGuideChat:
 
         console.print()
         console.print("[bold green]✓ Monitoring complete![/bold green]")
-        transaction_count = summary.get('network_transactions', 0) if summary else 0
+        transaction_count = summary.get('network', {}).get('completed_transactions', 0) if summary else 0
         if summary:
             console.print(f"[dim]Duration: {summary.get('duration', 0):.1f}s[/dim]")
             console.print(f"[dim]Transactions captured: {transaction_count}[/dim]")
