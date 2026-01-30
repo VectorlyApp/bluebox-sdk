@@ -6,7 +6,7 @@ Data models for DOM snapshot events.
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from bluebox.data_models.cdp import BaseCDPEvent
 
