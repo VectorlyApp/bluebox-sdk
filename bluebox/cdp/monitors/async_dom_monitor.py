@@ -172,7 +172,7 @@ class AsyncDOMMonitor(AbstractAsyncMonitor):
     async def handle_dom_message(self, msg: dict, cdp_session: AsyncCDPSession) -> bool:
         """
         Handle CDP messages for DOM monitoring.
-        Triggers snapshot capture on Page.loadEventFired.
+        Triggers snapshot capture on Page.loadEventFired and Page.frameNavigated.
         Args:
             msg: The CDP message dict.
             cdp_session: The CDP session for sending commands.
@@ -190,6 +190,19 @@ class AsyncDOMMonitor(AbstractAsyncMonitor):
             else:
                 logger.warning("⚠️ Page.loadEventFired but could not get URL")
             return False  # allow other handlers to process this event too
+
+        # Capture snapshot on navigation (including SPA navigations)
+        if method == "Page.frameNavigated":
+            params = msg.get("params", {})
+            frame = params.get("frame", {})
+            # Only capture for main frame navigations, not iframes
+            if not frame.get("parentId"):
+                url = frame.get("url")
+                if url:
+                    await self._capture_snapshot(cdp_session, url)
+                else:
+                    logger.warning("⚠️ Page.frameNavigated but no URL in frame")
+            return False
 
         return False
 
