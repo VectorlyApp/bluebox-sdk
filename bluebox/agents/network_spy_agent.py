@@ -636,8 +636,8 @@ class NetworkSpyAgent:
             if chat.tool_calls:
                 msg["tool_calls"] = [
                     {
-                        # id is required by OpenAI API; generate fallback if None
-                        "id": tc.call_id if tc.call_id else f"call_{idx}_{chat_id[:8]}",
+                        # call_id is required by OpenAI API; generate fallback if None
+                        "call_id": tc.call_id if tc.call_id else f"call_{idx}_{chat_id[:8]}",
                         "name": tc.tool_name,
                         "arguments": tc.tool_arguments,
                     }
