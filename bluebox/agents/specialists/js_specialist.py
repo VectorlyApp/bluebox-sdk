@@ -354,7 +354,8 @@ class JSSpecialist(AbstractSpecialist):
                 description=(
                     "Test JavaScript code against the live website. "
                     "Navigates to the URL and executes your IIFE, returning the result and any console output. "
-                    "Use this to verify your code works before submitting."
+                    "Use this to verify your code works before submitting. "
+                    "Set keep_open=true to keep the browser tab open after execution (useful for visual changes)."
                 ),
                 parameters={
                     "type": "object",
@@ -370,6 +371,10 @@ class JSSpecialist(AbstractSpecialist):
                         "timeout_seconds": {
                             "type": "number",
                             "description": "Max execution time in seconds (default 5.0).",
+                        },
+                        "keep_open": {
+                            "type": "boolean",
+                            "description": "If true, keep the browser tab open after execution instead of closing it. Useful for visual changes. Default false.",
                         },
                     },
                     "required": ["url", "js_code"],
@@ -664,6 +669,7 @@ class JSSpecialist(AbstractSpecialist):
         url = tool_arguments.get("url", "")
         js_code = tool_arguments.get("js_code", "")
         timeout_seconds = tool_arguments.get("timeout_seconds", 5.0)
+        keep_open = tool_arguments.get("keep_open", False)
 
         # Validate JS first
         errors = validate_js(js_code)
@@ -760,20 +766,27 @@ class JSSpecialist(AbstractSpecialist):
             logger.error("execute_js_in_browser failed: %s", e)
             return {"error": f"Browser execution failed: {e}"}
         finally:
-            # Cleanup: close target and dispose context
-            if browser_ws:
-                try:
-                    if target_id:
-                        send_cmd_cleanup, _, _ = create_cdp_helpers(browser_ws)
-                        send_cmd_cleanup("Target.closeTarget", {"targetId": target_id})
-                except Exception:
-                    pass
-                try:
-                    browser_ws.close()
-                except Exception:
-                    pass
-            if browser_context_id and self._remote_debugging_address:
-                try:
-                    dispose_context(self._remote_debugging_address, browser_context_id)
-                except Exception:
-                    pass
+            # Cleanup: close target and dispose context (skip if keep_open)
+            if keep_open:
+                if browser_ws:
+                    try:
+                        browser_ws.close()
+                    except Exception:
+                        pass
+            else:
+                if browser_ws:
+                    try:
+                        if target_id:
+                            send_cmd_cleanup, _, _ = create_cdp_helpers(browser_ws)
+                            send_cmd_cleanup("Target.closeTarget", {"targetId": target_id})
+                    except Exception:
+                        pass
+                    try:
+                        browser_ws.close()
+                    except Exception:
+                        pass
+                if browser_context_id and self._remote_debugging_address:
+                    try:
+                        dispose_context(self._remote_debugging_address, browser_context_id)
+                    except Exception:
+                        pass
