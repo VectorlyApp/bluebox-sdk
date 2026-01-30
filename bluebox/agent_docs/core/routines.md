@@ -50,20 +50,19 @@ The `Routine` model validates:
 
 1. **All defined parameters must be used** in operations
 2. **No undefined parameters** can appear in placeholders
-3. **String parameters must use escape-quoted format** (`\"{{param}}\"`), while int/number/bool can use either format
 
 See [routine.py](bluebox/data_models/routine/routine.py) for full validation logic.
 
 ## Placeholders
 
-Placeholders use `"{{name}}" or \"{{name}}\"` syntax and are resolved at execution time. **See `core/placeholders.md` for complete details.**
+Placeholders use `{{name}}` syntax and are resolved at execution time. The parameter's `type` field determines the output type for standalone values. **See `core/placeholders.md` for complete details.**
 
 ### User Parameters
 
 Parameters defined in the routine's `parameters` array:
 
 ```json
-"query": "\"{{search_term}}\""
+"query": "{{search_term}}",
 "page": "{{page_number}}"
 ```
 
@@ -90,31 +89,13 @@ Resolved at runtime from browser context (**only in fetch `headers` and `body`**
 
 **Limitation:** Storage placeholders are NOT interpolated in URLs yet - only in fetch headers and body.
 
-### Escape-Quoted Format (PLACEHOLDERS ONLY!)
-
-**String placeholders MUST use escape-quoted format:**
-
-```json
-"name": "\"{{username}}\""
-"body": {"query": "\"{{search_term}}\""}
-```
-
-**Why?** When the placeholder resolves, the outer quotes become part of the JSON string value.
-
-**Non-string types** (int, number, bool) can use either format:
-
-```json
-"count": "{{limit}}"
-"count": "\"{{limit}}\""
-```
-
 ### HARDCODED VALUES: COPY AS-IS
 
-**The `\"` syntax is ONLY for placeholder resolution!** Hardcoded values should be copied exactly from network traffic:
+Hardcoded values should be copied exactly from network traffic:
 
 ```json
 {
-  "code": "\"{{origin}}\"",
+  "code": "{{origin}}",
   "type": "OW",
   "active": true
 }
@@ -125,7 +106,6 @@ Resolved at runtime from browser context (**only in fetch `headers` and `body`**
 - All defined parameters MUST be used in operations
 - No undefined parameters can appear in placeholders
 - Builtin parameters (`uuid`, `epoch_milliseconds`) don't need definition
-- String parameters MUST use escape-quoted format: `"\"{{param}}\""`
 
 ## Available Operations
 
@@ -197,7 +177,7 @@ Operations execute sequentially. **See `operations/overview.md` for details.**
     {
       "type": "fetch",
       "endpoint": {
-        "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm=\"{{origin}}\"",
+        "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm={{origin}}",
         "method": "GET",
         "headers": {"Accept": "application/json"},
         "credentials": "same-origin"
@@ -207,7 +187,7 @@ Operations execute sequentially. **See `operations/overview.md` for details.**
     {
       "type": "fetch",
       "endpoint": {
-        "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm=\"{{destination}}\"",
+        "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm={{destination}}",
         "method": "GET",
         "headers": {"Accept": "application/json"},
         "credentials": "same-origin"
@@ -229,7 +209,7 @@ Operations execute sequentially. **See `operations/overview.md` for details.**
             "journeyLegRequests": [{
               "origin": {
                 "code": "{{sessionStorage:origin_stations.autoCompleterResponse.autoCompleteList.0.stationCode}}",
-                "schedule": {"departureDateTime": "\"{{departureDate}}\"T00:00:00"}
+                "schedule": {"departureDateTime": "{{departureDate}}T00:00:00"}
               },
               "destination": {
                 "code": "{{sessionStorage:dest_stations.autoCompleterResponse.autoCompleteList.0.stationCode}}"

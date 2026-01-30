@@ -70,21 +70,22 @@ You have access to vectorstore that contains network transactions and storage da
     PLACEHOLDER_INSTRUCTIONS: str = (
         "PLACEHOLDER SYNTAX:\n"
         "- PARAMS: {{param_name}} (NO prefix, name matches parameter definition)\n"
-        "- SOURCES (use dot paths): {{cookie:name}}, {{sessionStorage:path.to.value}}, {{localStorage:key}}, {{windowProperty:obj.key}}\n\n"
-        "JSON VALUE RULES (TWO sets of quotes needed for strings!):\n"
-        '- String: "key": \\"{{x}}\\"  (OUTER quotes = JSON string, INNER \\" = escaped quotes around placeholder)\n'
-        '- Number/bool/null: "key": "{{x}}"  (only outer quotes, they get stripped)\n'
-        '- Inside larger string: "prefix\\"{{x}}\\"suffix"  (escaped quotes wrap placeholder)\n\n'
+        "- SOURCES (use dot paths): {{cookie:name}}, {{sessionStorage:path.to.value}}, "
+        "{{localStorage:key}}, {{windowProperty:obj.key}}\n\n"
+        "JSON VALUE RULES:\n"
+        "- Always use {{param_name}} as a JSON string value: \"key\": \"{{param_name}}\"\n"
+        "- The parameter's type field determines the output type at runtime.\n"
+        "- CRITICAL: Choose type based on the ACTUAL CDP data. If the raw request has \"adults\": \"5\" (string), use type=string, NOT integer. integer would produce 5 (unquoted) and may break the API.\n"
+        "- For substring interpolation: \"prefix {{param_name}} suffix\"\n"
+        "- No escaped quotes needed. Just use {{param_name}} inside a JSON string.\n\n"
         "EXAMPLES:\n"
-        '1. String param:     "name": \\"{{username}}\\"           -> "name": "john"\n'
+        '1. String param:     "name": "{{username}}"              -> "name": "john"\n'
         '2. Number param:     "count": "{{limit}}"                -> "count": 50\n'
         '3. Bool param:       "active": "{{is_active}}"           -> "active": true\n'
-        '4. String in string: "msg_\\"{{id}}\\""                  -> "msg_abc"\n'
-        '5. Number in string: "page\\"{{num}}\\""                 -> "page5"\n'
-        '6. URL with param:   "/api/\\"{{user_id}}\\"/data"       -> "/api/123/data"\n'
-        '7. Session storage:  "token": \\"{{sessionStorage:auth.access_token}}\\"\n'
-        '8. Cookie:           "sid": \\"{{cookie:session_id}}\\"'
-        'IMPORTANT: YOU MUST ENSURE THAT EACH PLACEHOLDER IS SURROUNDED BY QUOTES OR ESCAPED QUOTES!'
+        '4. Substring:        "msg_{{id}}"                        -> "msg_abc"\n'
+        '5. URL with param:   "/api/{{user_id}}/data"             -> "/api/123/data"\n'
+        '6. Session storage:  "token": "{{sessionStorage:auth.access_token}}"\n'
+        '7. Cookie:           "sid": "{{cookie:session_id}}"'
     )
 
     def _get_system_prompt(self) -> str:

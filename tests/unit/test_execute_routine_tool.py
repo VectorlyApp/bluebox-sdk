@@ -66,7 +66,7 @@ def test_execute_routine_valid_json_string(mock_executor):
         "operations": [
             {
                 "type": "navigate",
-                "url": "https://example.com/\"{{test_param}}\"",
+                "url": "https://example.com/{{test_param}}",
             }
         ],
     }
@@ -97,7 +97,7 @@ def test_execute_routine_valid_dict(mock_executor):
         "operations": [
             {
                 "type": "navigate",
-                "url": "https://example.com/\"{{test_param}}\"",
+                "url": "https://example.com/{{test_param}}",
             }
         ],
     }

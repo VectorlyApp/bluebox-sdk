@@ -19,119 +19,60 @@ from bluebox.data_models.routine.operation import (
 from bluebox.data_models.routine.routine import Routine
 from bluebox.data_models.routine.parameter import Parameter, ParameterType
 from bluebox.data_models.routine.endpoint import Endpoint, HTTPMethod
-from bluebox.data_models.routine.placeholder import (
-    extract_placeholders_from_json_str,
-    PlaceholderQuoteType,
-    ExtractedPlaceholder,
-)
+from bluebox.data_models.routine.placeholder import extract_placeholders_from_json_str
 from bluebox.utils.data_utils import extract_base_url_from_url
 
 
 class TestExtractPlaceholdersFromJson:
     """Test the standalone extract_placeholders_from_json_str function."""
 
-    def test_extract_escape_quoted_placeholder(self) -> None:
-        """Test extracting escape-quoted placeholder: \\"{{param}}\\" """
-        json_string = r'{"url": "https://example.com/\"{{user_id}}\"}'
-        placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 1
-        assert placeholders[0].content == "user_id"
-        assert placeholders[0].quote_type == PlaceholderQuoteType.ESCAPE_QUOTED
-
-    def test_extract_quoted_placeholder(self) -> None:
-        """Test extracting regular quoted placeholder: "{{param}}" """
+    def test_extract_placeholder(self) -> None:
+        """Test extracting a simple placeholder."""
         json_string = '{"body": {"n_trials": "{{n_trials}}"}}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 1
-        assert placeholders[0].content == "n_trials"
-        assert placeholders[0].quote_type == PlaceholderQuoteType.QUOTED
+        assert placeholders == ["n_trials"]
 
-    def test_extract_mixed_placeholders(self) -> None:
-        """Test extracting both escape-quoted and regular quoted placeholders."""
-        json_string = r'{"url": "https://example.com/\"{{user_id}}\"", "body": {"count": "{{count}}"}}'
+    def test_extract_multiple_placeholders(self) -> None:
+        """Test extracting multiple placeholders."""
+        json_string = '{"url": "https://example.com/{{user_id}}", "body": {"count": "{{count}}"}}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 2
-        
-        # Find each by content
-        user_id_ph = next(p for p in placeholders if p.content == "user_id")
-        count_ph = next(p for p in placeholders if p.content == "count")
-        
-        assert user_id_ph.quote_type == PlaceholderQuoteType.ESCAPE_QUOTED
-        assert count_ph.quote_type == PlaceholderQuoteType.QUOTED
+        assert set(placeholders) == {"user_id", "count"}
 
-    def test_extract_storage_placeholder_quoted(self) -> None:
-        """Test extracting storage placeholder with regular quotes."""
+    def test_extract_storage_placeholder(self) -> None:
+        """Test extracting storage placeholder."""
         json_string = '{"header": "{{sessionStorage:api_key}}"}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 1
-        assert placeholders[0].content == "sessionStorage:api_key"
-        assert placeholders[0].quote_type == PlaceholderQuoteType.QUOTED
-
-    def test_extract_storage_placeholder_escape_quoted(self) -> None:
-        """Test extracting storage placeholder with escape quotes."""
-        json_string = r'{"url": "Bearer \"{{sessionStorage:token}}\"}'
-        placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 1
-        assert placeholders[0].content == "sessionStorage:token"
-        assert placeholders[0].quote_type == PlaceholderQuoteType.ESCAPE_QUOTED
-
-    def test_extract_multiple_same_type(self) -> None:
-        """Test extracting multiple placeholders of the same type."""
-        json_string = r'{"url": "https://example.com/\"{{param1}}\"/\"{{param2}}\"}'
-        placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 2
-        contents = {p.content for p in placeholders}
-        assert contents == {"param1", "param2"}
-        assert all(p.quote_type == PlaceholderQuoteType.ESCAPE_QUOTED for p in placeholders)
+        assert placeholders == ["sessionStorage:api_key"]
 
     def test_extract_builtin_placeholder(self) -> None:
         """Test extracting builtin placeholders."""
         json_string = '{"id": "{{uuid}}", "ts": "{{epoch_milliseconds}}"}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 2
-        contents = {p.content for p in placeholders}
-        assert contents == {"uuid", "epoch_milliseconds"}
+        assert set(placeholders) == {"uuid", "epoch_milliseconds"}
 
     def test_extract_no_placeholders(self) -> None:
         """Test with no placeholders."""
         json_string = '{"url": "https://example.com/static"}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
         assert len(placeholders) == 0
 
     def test_extract_whitespace_in_placeholder(self) -> None:
         """Test that whitespace inside placeholder is stripped."""
-        json_string = r'{"url": "\"{{ user_id }}\"}'
+        json_string = '{"url": "{{ user_id }}"}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
-        assert len(placeholders) == 1
-        assert placeholders[0].content == "user_id"  # whitespace stripped
+        assert placeholders == ["user_id"]
 
-    def test_unquoted_placeholder_is_ignored(self) -> None:
-        """Test that unquoted placeholder {{param}} is ignored (not detected)."""
-        # Unquoted placeholders are simply not detected - they're ignored
-        json_string = r'{"url": "https://example.com?id={{user_id}}&other=value"}'
+    def test_deduplication(self) -> None:
+        """Test that duplicate placeholders are deduplicated."""
+        json_string = '{"a": "{{x}}", "b": "{{x}}"}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
-        # No placeholders detected - unquoted ones are ignored
-        assert len(placeholders) == 0
+        assert placeholders == ["x"]
 
-    def test_mixed_quoted_and_unquoted_only_detects_quoted(self) -> None:
-        """Test that only properly quoted placeholders are detected."""
-        json_string = r'{"url": "https://example.com/\"{{valid_param}}\"?bad={{bad_param}}"}'
+    def test_substring_placeholder(self) -> None:
+        """Test extracting placeholder from substring context."""
+        json_string = '{"date": "{{dep_date}}T00:00:00"}'
         placeholders = extract_placeholders_from_json_str(json_string)
-        
-        # Only the escape-quoted placeholder is detected
-        assert len(placeholders) == 1
-        assert placeholders[0].content == "valid_param"
-        assert placeholders[0].quote_type == PlaceholderQuoteType.ESCAPE_QUOTED
+        assert placeholders == ["dep_date"]
 
 
 class TestRoutineParameterValidation:
@@ -144,7 +85,7 @@ class TestRoutineParameterValidation:
             Parameter(name="page", type=ParameterType.STRING, description="Page name")
         ]
         routine = make_routine(
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{user_id}}\"/\"{{page}}\"")],
+            operations=[RoutineNavigateOperation(url="https://example.com/{{user_id}}/{{page}}")],
             parameters=parameters
         )
         routine.validate_parameter_usage()
@@ -153,14 +94,14 @@ class TestRoutineParameterValidation:
         """Test that using undefined parameters raises validation error."""
         with pytest.raises(ValueError, match="Undefined parameters found in routine"):
             make_routine(
-                operations=[RoutineNavigateOperation(url="https://example.com/\"{{undefined_param}}\"")]
+                operations=[RoutineNavigateOperation(url="https://example.com/{{undefined_param}}")]
             )
 
     def test_validate_parameter_usage_storage_prefixes(self, make_routine) -> None:
         """Test validation of storage parameter prefixes."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{sessionStorage:user.name}}\""),
+                RoutineNavigateOperation(url="https://example.com/{{sessionStorage:user.name}}"),
                 RoutineSleepOperation(timeout_seconds=1.0),
                 RoutineReturnOperation(session_storage_key="selectors.button")
             ]
@@ -171,13 +112,13 @@ class TestRoutineParameterValidation:
         """Test that invalid storage prefixes raise validation error."""
         with pytest.raises(ValueError, match="Invalid prefix in placeholder: invalidStorage"):
             make_routine(
-                operations=[RoutineNavigateOperation(url="https://example.com/\"{{invalidStorage:user.name}}\"")]
+                operations=[RoutineNavigateOperation(url="https://example.com/{{invalidStorage:user.name}}")]
             )
 
     def test_validate_parameter_usage_meta_prefix(self, make_routine) -> None:
         """Test validation of meta parameter prefix."""
         routine = make_routine(
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{meta:timestamp}}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{meta:timestamp}}")]
         )
         routine.validate_parameter_usage()
 
@@ -185,7 +126,7 @@ class TestRoutineParameterValidation:
         """Test validation with mixed parameter types."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{user_id}}\""),
+                RoutineNavigateOperation(url="https://example.com/{{user_id}}"),
                 RoutineSleepOperation(timeout_seconds=2.0),
                 RoutineReturnOperation(session_storage_key="selectors.button"),
                 RoutineReturnOperation(session_storage_key="default_text")
@@ -197,7 +138,7 @@ class TestRoutineParameterValidation:
     def test_validate_parameter_usage_fetch_operation(self, make_routine) -> None:
         """Test parameter validation in fetch operations."""
         endpoint = Endpoint(
-            url="https://api.example.com/\"{{user_id}}\"/data",
+            url="https://api.example.com/{{user_id}}/data",
             method=HTTPMethod.GET,
             headers={"Authorization": "Bearer {{sessionStorage:auth.token}}"},
             body={"filter": "{{localStorage:user.preferences.filter}}"}
@@ -212,7 +153,7 @@ class TestRoutineParameterValidation:
         """Test parameter validation in nested JSON structures."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{user_id}}\""),
+                RoutineNavigateOperation(url="https://example.com/{{user_id}}"),
                 RoutineSleepOperation(timeout_seconds=1.0),
                 RoutineReturnOperation(session_storage_key="ui.selectors.submit_button")
             ],
@@ -224,7 +165,7 @@ class TestRoutineParameterValidation:
         """Test that whitespace in parameter patterns is handled correctly."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{ user_id }}\""),
+                RoutineNavigateOperation(url="https://example.com/{{ user_id }}"),
                 RoutineSleepOperation(timeout_seconds=1.0),
                 RoutineReturnOperation(session_storage_key="user.name")
             ],
@@ -269,10 +210,10 @@ class TestRoutineParameterValidation:
         """Test validation with complex nested operation structures."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{user_id}}\"/\"{{page}}\""),
+                RoutineNavigateOperation(url="https://example.com/{{user_id}}/{{page}}"),
                 RoutineSleepOperation(timeout_seconds=1.0),
                 RoutineReturnOperation(session_storage_key="ui.selectors.menu"),
-                RoutineReturnOperation(session_storage_key="\"{{user_email}}\"")
+                RoutineReturnOperation(session_storage_key="{{user_email}}")
             ],
             parameters=[
                 Parameter(name="user_id", type=ParameterType.STRING, description="User ID"),
@@ -290,7 +231,7 @@ class TestRoutineValidationErrorMessages:
         """Test that undefined parameter error message is clear."""
         with pytest.raises(ValueError) as exc_info:
             make_routine(
-                operations=[RoutineNavigateOperation(url="https://example.com/\"{{undefined_param}}\"")]
+                operations=[RoutineNavigateOperation(url="https://example.com/{{undefined_param}}")]
             )
         assert "Undefined parameters found in routine" in str(exc_info.value)
 
@@ -298,7 +239,7 @@ class TestRoutineValidationErrorMessages:
         """Test that invalid storage prefix error message is clear."""
         with pytest.raises(ValueError) as exc_info:
             make_routine(
-                operations=[RoutineNavigateOperation(url="https://example.com/\"{{invalidStorage:user.name}}\"")]
+                operations=[RoutineNavigateOperation(url="https://example.com/{{invalidStorage:user.name}}")]
             )
         assert "Invalid prefix in placeholder: invalidStorage" in str(exc_info.value)
 
@@ -435,7 +376,7 @@ class TestParameterUsageValidation:
         """Test that builtin parameters (uuid, epoch_milliseconds) are skipped and not tracked."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{uuid}}\""),
+                RoutineNavigateOperation(url="https://example.com/{{uuid}}"),
                 RoutineSleepOperation(timeout_seconds=1.0),
             ]
         )
@@ -444,14 +385,14 @@ class TestParameterUsageValidation:
     def test_builtin_parameters_uuid_not_tracked(self, make_routine) -> None:
         """Test that uuid builtin parameter is not tracked as used_parameters."""
         routine = make_routine(
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{uuid}}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{uuid}}")]
         )
         routine.validate_parameter_usage()
 
     def test_builtin_parameters_epoch_milliseconds_not_tracked(self, make_routine) -> None:
         """Test that epoch_milliseconds builtin parameter is not tracked as used_parameters."""
         routine = make_routine(
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{epoch_milliseconds}}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{epoch_milliseconds}}")]
         )
         routine.validate_parameter_usage()
 
@@ -459,7 +400,7 @@ class TestParameterUsageValidation:
         """Test that placeholder params with ':' (sessionStorage, localStorage, etc.) are not tracked."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{sessionStorage:user.id}}\""),
+                RoutineNavigateOperation(url="https://example.com/{{sessionStorage:user.id}}"),
                 RoutineSleepOperation(timeout_seconds=1.0),
             ]
         )
@@ -469,35 +410,35 @@ class TestParameterUsageValidation:
         """Test that all valid placeholder prefixes are not tracked as used_parameters."""
         make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://example.com/\"{{sessionStorage:token}}\""),
+                RoutineNavigateOperation(url="https://example.com/{{sessionStorage:token}}"),
                 RoutineSleepOperation(timeout_seconds=1.0),
             ]
         ).validate_parameter_usage()
         
         make_routine(
             name="test_routine2",
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{localStorage:pref}}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{localStorage:pref}}")]
         ).validate_parameter_usage()
         
         make_routine(
             name="test_routine3",
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{cookie:session}}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{cookie:session}}")]
         ).validate_parameter_usage()
         
         make_routine(
             name="test_routine4",
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{meta:csrf}}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{meta:csrf}}")]
         ).validate_parameter_usage()
         
         make_routine(
             name="test_routine5",
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{windowProperty:app.config}}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{windowProperty:app.config}}")]
         ).validate_parameter_usage()
 
     def test_regular_parameters_are_tracked(self, make_routine) -> None:
         """Test that regular parameters (without ':') are tracked as used_parameters."""
         routine = make_routine(
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{user_id}}\"")],
+            operations=[RoutineNavigateOperation(url="https://example.com/{{user_id}}")],
             parameters=[Parameter(name="user_id", type=ParameterType.STRING, description="User ID")]
         )
         routine.validate_parameter_usage()
@@ -505,7 +446,7 @@ class TestParameterUsageValidation:
     def test_mixed_builtin_and_regular_parameters(self, make_routine) -> None:
         """Test that builtin parameters don't interfere with regular parameter tracking."""
         routine = make_routine(
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{uuid}}\"/\"{{user_id}}\"")],
+            operations=[RoutineNavigateOperation(url="https://example.com/{{uuid}}/{{user_id}}")],
             parameters=[Parameter(name="user_id", type=ParameterType.STRING, description="User ID")]
         )
         routine.validate_parameter_usage()
@@ -516,7 +457,7 @@ class TestParameterUsageValidation:
             url="https://api.example.com/data",
             method=HTTPMethod.POST,
             headers={"Authorization": "Bearer {{sessionStorage:token}}"},
-            body={"user_id": "\"{{user_id}}\""}
+            body={"user_id": "{{user_id}}"}
         )
         routine = make_routine(
             name="test_routine2",
@@ -529,7 +470,7 @@ class TestParameterUsageValidation:
         """Test that placeholder params with empty path after ':' raise an error."""
         with pytest.raises(ValueError) as exc_info:
             make_routine(
-                operations=[RoutineNavigateOperation(url="https://example.com/\"{{sessionStorage:}}\"")]
+                operations=[RoutineNavigateOperation(url="https://example.com/{{sessionStorage:}}")]
             )
         assert "Path is required" in str(exc_info.value)
 
@@ -537,7 +478,7 @@ class TestParameterUsageValidation:
         """Test that placeholder params with whitespace-only path raise an error."""
         with pytest.raises(ValueError) as exc_info:
             make_routine(
-                operations=[RoutineNavigateOperation(url="https://example.com/\"{{sessionStorage:   }}\"")]
+                operations=[RoutineNavigateOperation(url="https://example.com/{{sessionStorage:   }}")]
             )
         assert "Path is required" in str(exc_info.value)
 
@@ -545,14 +486,14 @@ class TestParameterUsageValidation:
         """Test that invalid placeholder prefixes raise an error."""
         with pytest.raises(ValueError) as exc_info:
             make_routine(
-                operations=[RoutineNavigateOperation(url="https://example.com/\"{{invalidPrefix:value}}\"")]
+                operations=[RoutineNavigateOperation(url="https://example.com/{{invalidPrefix:value}}")]
             )
         assert "Invalid prefix in placeholder: invalidPrefix" in str(exc_info.value)
 
     def test_placeholder_param_path_with_whitespace_is_valid(self, make_routine) -> None:
         """Test that placeholder params with whitespace in path (but not empty) are valid."""
         routine = make_routine(
-            operations=[RoutineNavigateOperation(url="https://example.com/\"{{sessionStorage: user . token }}\"")]
+            operations=[RoutineNavigateOperation(url="https://example.com/{{sessionStorage: user . token }}")]
         )
         routine.validate_parameter_usage()
 
@@ -652,9 +593,9 @@ class TestBaseUrlExtraction:
         """Test that compute_base_urls_from_operations works with URLs containing placeholders."""
         routine = make_routine(
             operations=[
-                RoutineNavigateOperation(url="https://www.example.com/\"{{user_id}}\""),
+                RoutineNavigateOperation(url="https://www.example.com/{{user_id}}"),
                 RoutineFetchOperation(
-                    endpoint=Endpoint(url="https://api.example.com/\"{{param}}\"/data", method=HTTPMethod.GET, headers={}, body={})
+                    endpoint=Endpoint(url="https://api.example.com/{{param}}/data", method=HTTPMethod.GET, headers={}, body={})
                 ),
             ],
             parameters=[
@@ -719,7 +660,7 @@ class TestPremierLeagueRoutineValidation:
             operations=[
                 RoutineFetchOperation(
                     endpoint=Endpoint(
-                        url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season=\"{{season_year}}\"&matchweek=\"{{matchweek}}\"&_limit=100",
+                        url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season={{season_year}}&matchweek={{matchweek}}&_limit=100",
                         method=HTTPMethod.GET,
                         headers={},
                         body={},
@@ -765,7 +706,7 @@ class TestPremierLeagueRoutineValidation:
             operations=[
                 RoutineFetchOperation(
                     endpoint=Endpoint(
-                        url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season=\"{{season_year}}\"&matchweek=\"{{matchweek}}\"&_limit=100",
+                        url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season={{season_year}}&matchweek={{matchweek}}&_limit=100",
                         method=HTTPMethod.GET,
                         headers={},
                         body={},
@@ -810,7 +751,7 @@ class TestPremierLeagueRoutineValidation:
                 operations=[
                     RoutineFetchOperation(
                         endpoint=Endpoint(
-                            url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season=\"{{season_year}}\"&matchweek=\"{{matchweek}}\"&_limit=100",
+                            url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season={{season_year}}&matchweek={{matchweek}}&_limit=100",
                             method=HTTPMethod.GET,
                             headers={},
                             body={},
@@ -833,45 +774,43 @@ class TestPremierLeagueRoutineValidation:
                 project_id="test_project"
             )
 
-    def test_premier_league_routine_unquoted_placeholder_is_ignored(self) -> None:
-        """Test that unquoted placeholders are ignored - results in 'Unused parameters' error."""
-        # Unquoted placeholders like {{matchweek}} are simply not detected.
-        # This means 'matchweek' parameter won't be found as used, causing "Unused parameters" error.
-        with pytest.raises(ValueError, match="Unused parameters"):
-            Routine(
-                name="Premier League Get Matchweek Games",
-                description="Get all matchweek games for the EPL.",
-                operations=[
-                    RoutineFetchOperation(
-                        endpoint=Endpoint(
-                            # matchweek has NO quotes - it will be IGNORED (not detected)
-                            url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season=\"{{season_year}}\"&matchweek={{matchweek}}&_limit=100",
-                            method=HTTPMethod.GET,
-                            headers={},
-                            body={},
-                            credentials="omit"
-                        ),
-                        session_storage_key="result"
+    def test_premier_league_routine_unquoted_placeholder_is_valid(self) -> None:
+        """Test that placeholders in URLs are detected and valid."""
+        # All {{...}} patterns are now detected regardless of quoting
+        routine = Routine(
+            name="Premier League Get Matchweek Games",
+            description="Get all matchweek games for the EPL.",
+            operations=[
+                RoutineFetchOperation(
+                    endpoint=Endpoint(
+                        url="https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v2/matches?competition=8&season={{season_year}}&matchweek={{matchweek}}&_limit=100",
+                        method=HTTPMethod.GET,
+                        headers={},
+                        body={},
+                        credentials="omit"
                     ),
-                    RoutineReturnOperation(session_storage_key="result")
-                ],
-                parameters=[
-                    Parameter(
-                        name="season_year",
-                        type=ParameterType.INTEGER,
-                        description="Start year of the EPL season",
-                        required=True
-                    ),
-                    Parameter(
-                        name="matchweek",
-                        type=ParameterType.INTEGER,
-                        description="EPL matchweek",
-                        required=True
-                    )
-                ],
-                created_by="test_user",
-                project_id="test_project"
-            )
+                    session_storage_key="result"
+                ),
+                RoutineReturnOperation(session_storage_key="result")
+            ],
+            parameters=[
+                Parameter(
+                    name="season_year",
+                    type=ParameterType.INTEGER,
+                    description="Start year of the EPL season",
+                    required=True
+                ),
+                Parameter(
+                    name="matchweek",
+                    type=ParameterType.INTEGER,
+                    description="EPL matchweek",
+                    required=True
+                )
+            ],
+            created_by="test_user",
+            project_id="test_project"
+        )
+        routine.validate_parameter_usage()
 
     def test_premier_league_routine_integer_parameter_types(self) -> None:
         """Test that integer parameters with min/max values are valid."""
@@ -906,12 +845,10 @@ class TestPremierLeagueRoutineValidation:
 
 
 class TestParameterTypeQuoteValidation:
-    """Test quote validation rules based on parameter types.
-    
-    Rules:
-    - STRING types: MUST use escape-quoted format \"{{param}}\"
-    - INTEGER/NUMBER/BOOLEAN types: Can use either "{{param}}" or \"{{param}}\"
-    - Storage/builtins: Can use either "{{param}}" or \"{{param}}\"
+    """Test validation rules based on parameter types.
+
+    All parameter types use uniform {{param}} syntax.
+    Type resolution is determined by the Parameter's type field at runtime.
     """
 
     def test_integer_param_in_body_quoted_format_valid(self) -> None:
@@ -1019,39 +956,8 @@ class TestParameterTypeQuoteValidation:
         # Should not raise - BOOLEAN can use "{{...}}" format
         routine.validate_parameter_usage()
 
-    def test_string_param_in_body_quoted_format_raises_error(self) -> None:
-        """Test STRING param using quoted format "{{param}}" in body raises error."""
-        with pytest.raises(ValueError, match="must use escape-quoted format"):
-            Routine(
-                name="API with String Body Param",
-                description="Routine with string param in body field.",
-                operations=[
-                    RoutineFetchOperation(
-                        endpoint=Endpoint(
-                            url="https://api.example.com/data",
-                            method=HTTPMethod.POST,
-                            headers={},
-                            # STRING param using "{{...}}" is NOT allowed!
-                            body={"name": "{{user_name}}"}
-                        ),
-                        session_storage_key="result"
-                    ),
-                    RoutineReturnOperation(session_storage_key="result")
-                ],
-                parameters=[
-                    Parameter(
-                        name="user_name",
-                        type=ParameterType.STRING,
-                        description="User name",
-                        required=True
-                    )
-                ],
-                created_by="test_user",
-                project_id="test_project"
-            )
-
-    def test_string_param_escape_quoted_in_body_valid(self) -> None:
-        """Test STRING param using escape-quoted format in body is valid."""
+    def test_string_param_in_body_quoted_format_is_valid(self) -> None:
+        """Test STRING param using {{param}} in body is valid (type resolution is schema-driven)."""
         routine = Routine(
             name="API with String Body Param",
             description="Routine with string param in body field.",
@@ -1061,8 +967,7 @@ class TestParameterTypeQuoteValidation:
                         url="https://api.example.com/data",
                         method=HTTPMethod.POST,
                         headers={},
-                        # STRING param using \"{{...}}\" IS allowed
-                        body={"name": "\"{{user_name}}\""}
+                        body={"name": "{{user_name}}"}
                     ),
                     session_storage_key="result"
                 ),
@@ -1079,18 +984,49 @@ class TestParameterTypeQuoteValidation:
             created_by="test_user",
             project_id="test_project"
         )
-        # Should not raise - STRING using \"{{...}}\" is valid
         routine.validate_parameter_usage()
 
-    def test_integer_param_escape_quoted_also_valid(self) -> None:
-        """Test INTEGER param using escape-quoted format is also valid."""
+    def test_string_param_in_body_valid(self) -> None:
+        """Test STRING param using {{param}} format in body is valid."""
         routine = Routine(
-            name="API with Integer Escape Quoted",
-            description="Routine with integer param using escape quotes.",
+            name="API with String Body Param",
+            description="Routine with string param in body field.",
             operations=[
                 RoutineFetchOperation(
                     endpoint=Endpoint(
-                        url="https://api.example.com/data/\"{{item_id}}\"",
+                        url="https://api.example.com/data",
+                        method=HTTPMethod.POST,
+                        headers={},
+                        # STRING param using {{...}} IS allowed
+                        body={"name": "{{user_name}}"}
+                    ),
+                    session_storage_key="result"
+                ),
+                RoutineReturnOperation(session_storage_key="result")
+            ],
+            parameters=[
+                Parameter(
+                    name="user_name",
+                    type=ParameterType.STRING,
+                    description="User name",
+                    required=True
+                )
+            ],
+            created_by="test_user",
+            project_id="test_project"
+        )
+        # Should not raise - STRING using {{...}} is valid
+        routine.validate_parameter_usage()
+
+    def test_integer_param_in_url_valid(self) -> None:
+        """Test INTEGER param using {{param}} format in URL is valid."""
+        routine = Routine(
+            name="API with Integer URL Param",
+            description="Routine with integer param in URL.",
+            operations=[
+                RoutineFetchOperation(
+                    endpoint=Endpoint(
+                        url="https://api.example.com/data/{{item_id}}",
                         method=HTTPMethod.GET,
                         headers={},
                         body={}
@@ -1110,7 +1046,7 @@ class TestParameterTypeQuoteValidation:
             created_by="test_user",
             project_id="test_project"
         )
-        # Should not raise - INTEGER can use \"{{...}}\" too
+        # Should not raise - INTEGER can use {{...}} too
         routine.validate_parameter_usage()
 
     def test_mixed_param_types_in_body(self) -> None:
@@ -1125,13 +1061,9 @@ class TestParameterTypeQuoteValidation:
                         method=HTTPMethod.POST,
                         headers={},
                         body={
-                            # STRING must use escape-quoted
-                            "name": "\"{{user_name}}\"",
-                            # INTEGER can use regular quoted
+                            "name": "{{user_name}}",
                             "count": "{{count}}",
-                            # BOOLEAN can use regular quoted
                             "active": "{{is_active}}",
-                            # NUMBER can use regular quoted
                             "rate": "{{rate}}"
                         }
                     ),
@@ -1201,8 +1133,8 @@ class TestParameterTypeQuoteValidation:
         )
         # Update headers after creation
         routine.operations[0].endpoint.headers = {
-            "X-API-Key": "\"{{sessionStorage:api_key}}\"",
-            "Authorization": "Bearer \"{{sessionStorage:auth.token}}\""
+            "X-API-Key": "{{sessionStorage:api_key}}",
+            "Authorization": "Bearer {{sessionStorage:auth.token}}"
         }
         
         # Should not raise any validation errors
@@ -1268,7 +1200,7 @@ class TestParameterTypeQuoteValidation:
         # Update headers and body after creation
         routine.operations[0].endpoint.headers = {
             # Quoted string value
-            "Authorization": "Bearer \"{{sessionStorage:auth.token}}\"",
+            "Authorization": "Bearer {{sessionStorage:auth.token}}",
             # Unquoted int value
             "X-User-ID": "{{sessionStorage:user.id}}"
         }
@@ -1280,4 +1212,3 @@ class TestParameterTypeQuoteValidation:
         
         # Should not raise any validation errors
         routine.validate_parameter_usage()
-

@@ -18,7 +18,8 @@ import json
 
 
 def _get_body_resolution_js() -> list[str]:
-    """Generate JavaScript code for resolving body placeholders.
+    """
+    Generate JavaScript code for resolving body placeholders.
 
     This handles body resolution consistently for both fetch and download operations,
     including form-urlencoded encoding when appropriate.
@@ -66,10 +67,10 @@ def _get_placeholder_resolution_js_helpers() -> list[str]:
         "  // Simple tokens (computed locally, no source lookup)",
         "  function replaceSimpleTokens(str){",
         "    if (typeof str !== 'string') return str;",
-        "    // Handle quoted and unquoted: \"{{epoch_milliseconds}}\" or {{epoch_milliseconds}}",
-        "    str = str.replace(/\\\"?\\{\\{\\s*epoch_milliseconds\\s*\\}\\}\\\"?/g, () => String(Date.now()));",
+        "    // Handle {{epoch_milliseconds}}",
+        "    str = str.replace(/\\{\\{\\s*epoch_milliseconds\\s*\\}\\}/g, () => String(Date.now()));",
         "    // Handle {{uuid}} - generate UUID using crypto.randomUUID() if available",
-        "    str = str.replace(/\\\"?\\{\\{\\s*uuid\\s*\\}\\}\\\"?/g, () => {",
+        "    str = str.replace(/\\{\\{\\s*uuid\\s*\\}\\}/g, () => {",
         "      if ('randomUUID' in crypto) {",
         "        return crypto.randomUUID();",
         "      }",
@@ -118,7 +119,7 @@ def _get_placeholder_resolution_js_helpers() -> list[str]:
         "    }",
         "  }",
         "",
-        "  const PLACEHOLDER = /\\\"?\\{\\{\\s*(sessionStorage|localStorage|cookie|meta|windowProperty)\\s*:\\s*([^}]+?)\\s*\\}\\}\\\"?/g;",
+        "  const PLACEHOLDER = /\\{\\{\\s*(sessionStorage|localStorage|cookie|meta|windowProperty)\\s*:\\s*([^}]+?)\\s*\\}\\}/g;",
         "  function getWindowProperty(path){",
         "    const parts = path.trim().split('.');",
         "    let obj = window;",
@@ -173,23 +174,11 @@ def _get_placeholder_resolution_js_helpers() -> list[str]:
         "  function resolvePlaceholders(str){",
         "    if (typeof str !== 'string') return str;",
         "    str = replaceSimpleTokens(str);",
-        "    // Follow test.py pattern: for quoted placeholders, strings use raw value, objects use JSON.stringify",
         "    return str.replace(PLACEHOLDER, (m, _k, inner) => {",
         "      const v = resolveOne(`${_k}:${inner}`);",
         "      resolvedValues[`${_k}:${inner}`] = (v === undefined) ? null : (typeof v === 'object' ? JSON.stringify(v) : String(v));",
         "      if (v === undefined || v === null) return m;",
-        "      // Check if match was quoted - could be \"{{...}}\" or \\\"{{...}}\\\"",
-        "      // Check for escaped quote \\\" at start/end, or simple quote \"",
-        "      const startsWithEscaped = m.startsWith('\\\\\"') || m.startsWith('\"');",
-        "      const endsWithEscaped = m.endsWith('\\\\\"') || (m.endsWith('\"') && m.length > 2);",
-        "      const isQuoted = startsWithEscaped && endsWithEscaped;",
-        "      if (isQuoted) {",
-        "        // Quoted: strings use raw value (no quotes), objects use JSON.stringify",
-        "        return (typeof v === 'string') ? v : JSON.stringify(v);",
-        "      } else {",
-        "        // Unquoted: always stringify",
-        "        return (typeof v === 'object') ? JSON.stringify(v) : String(v);",
-        "      }",
+        "      return (typeof v === 'object') ? JSON.stringify(v) : String(v);",
         "    });",
         "  }",
         "",
@@ -232,9 +221,9 @@ def _get_fetch_setup_js(
     Returns:
         List of JavaScript code lines for the fetch setup.
     """
-    hdrs_json = json.dumps(
-        {str(k): (str(v) if not isinstance(v, str) else v) for k, v in headers.items()}
-    )
+    hdrs_json = json.dumps({
+        str(k): (str(v) if not isinstance(v, str) else v) for k, v in headers.items()
+    })
 
     return [
         "(async () => {",
@@ -836,5 +825,3 @@ def generate_js_evaluate_wrapper_js(
         execution_error: __executionError
     }};
 }})()"""
-
-

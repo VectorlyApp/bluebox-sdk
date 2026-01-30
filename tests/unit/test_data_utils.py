@@ -19,7 +19,8 @@ from bluebox.utils.data_utils import (
     serialize_datetime,
     resolve_dotted_path,
     get_text_from_html,
-    apply_params,
+    apply_params_to_str,
+    apply_params_to_json,
 )
 from bluebox.utils.exceptions import UnsupportedFileFormat
 
@@ -884,394 +885,258 @@ class TestAssertBalancedJsDelimiters:
             )
 
 
-class TestApplyParamsBasicReplacement:
-    """Test basic parameter replacement with different value types."""
+class TestApplyParamsToDictStandalone:
+    """Test apply_params_to_json with standalone placeholder replacement."""
 
-    def test_replace_string_value_simple_quoted(self) -> None:
-        """Test replacing a string value in simple quoted placeholder."""
-        d = {
-            "name": "\"{{user_name}}\""
-        }
-        text = json.dumps(d)
+    def test_string_param(self) -> None:
+        d = {"name": "{{user_name}}"}
         params = {"user_name": "John Doe"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "John Doe"}
+        type_map = {"user_name": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"name": "John Doe"}
 
-    def test_replace_string_value_escaped_quoted(self) -> None:
-        """Test replacing a string value in escaped quoted placeholder."""
-        text = '{\\"name\\": \\"{{user_name}}\\"}'
-        params = {"user_name": "Jane Smith"}
-        result = apply_params(text, params)
-        assert result == '{\\"name\\": Jane Smith}'
-
-    def test_replace_integer_value(self) -> None:
-        """Test replacing an integer value."""
-        text = '{"age": "{{user_age}}"}'
+    def test_integer_param(self) -> None:
+        d = {"age": "{{user_age}}"}
         params = {"user_age": 25}
-        result = apply_params(text, params)
-        assert result == '{"age": 25}'
+        type_map = {"user_age": "integer"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"age": 25}
 
-    def test_replace_float_value(self) -> None:
-        """Test replacing a float value."""
+    def test_number_param(self) -> None:
         d = {"price": "{{item_price}}"}
-        text = json.dumps(d)
         params = {"item_price": 19.99}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"price": 19.99}
+        type_map = {"item_price": "number"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"price": 19.99}
 
-    def test_replace_boolean_true_value(self) -> None:
-        """Test replacing a boolean True value."""
+    def test_boolean_true(self) -> None:
         d = {"active": "{{is_active}}"}
-        text = json.dumps(d)
         params = {"is_active": True}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"active": True}
+        type_map = {"is_active": "boolean"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"active": True}
 
-    def test_replace_boolean_false_value(self) -> None:
-        """Test replacing a boolean False value."""
+    def test_boolean_false(self) -> None:
         d = {"enabled": "{{is_enabled}}"}
-        text = json.dumps(d)
         params = {"is_enabled": False}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"enabled": False}
+        type_map = {"is_enabled": "boolean"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"enabled": False}
 
-    def test_replace_null_value(self) -> None:
-        """Test replacing a None/null value."""
-        d = {"data": "{{optional_data}}"}
-        text = json.dumps(d)
-        params = {"optional_data": None}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"data": None}
+    def test_string_typed_integer_value(self) -> None:
+        """Zip code: value is 2101 but type is string, should produce '2101'."""
+        d = {"zip": "{{zip_code}}"}
+        params = {"zip_code": 2101}
+        type_map = {"zip_code": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"zip": "2101"}
 
-    def test_replace_zero_value(self) -> None:
-        """Test replacing a zero value."""
+    def test_integer_from_string_value(self) -> None:
+        """Value is '25' string but type is integer, should produce int 25."""
+        d = {"age": "{{age}}"}
+        params = {"age": "25"}
+        type_map = {"age": "integer"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"age": 25}
+
+    def test_zero_value(self) -> None:
         d = {"count": "{{item_count}}"}
-        text = json.dumps(d)
         params = {"item_count": 0}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"count": 0}
+        type_map = {"item_count": "integer"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"count": 0}
 
-    def test_replace_empty_string(self) -> None:
-        """Test replacing with an empty string value."""
-        d = {"name": "\"{{user_name}}\""}
-        text = json.dumps(d)
+    def test_empty_string(self) -> None:
+        d = {"name": "{{user_name}}"}
         params = {"user_name": ""}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": ""}
+        type_map = {"user_name": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"name": ""}
 
 
-class TestApplyParamsWhitespace:
-    """Test parameter replacement with whitespace variations."""
+class TestApplyParamsToDictSubstring:
+    """Test apply_params_to_json with substring interpolation."""
 
-    def test_replace_with_leading_whitespace(self) -> None:
-        """Test replacing placeholder with leading whitespace."""
-        d = {"name": "\"{{ user_name}}\""}
-        text = json.dumps(d)
-        params = {"user_name": "Alice"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "Alice"}
+    def test_substring_interpolation(self) -> None:
+        d = {"label": "Price: {{direction}}"}
+        params = {"direction": "Low to High"}
+        type_map = {"direction": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"label": "Price: Low to High"}
 
-    def test_replace_with_trailing_whitespace(self) -> None:
-        """Test replacing placeholder with trailing whitespace."""
-        d = {"name": "\"{{user_name }}\""}
-        text = json.dumps(d)
-        params = {"user_name": "Bob"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "Bob"}
+    def test_substring_with_number(self) -> None:
+        d = {"msg": "Page {{num}} of results"}
+        params = {"num": 5}
+        type_map = {"num": "integer"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"msg": "Page 5 of results"}
 
-    def test_replace_with_surrounding_whitespace(self) -> None:
-        """Test replacing placeholder with surrounding whitespace."""
-        d = {"name": "\"{{ user_name }}\""}
-        text = json.dumps(d)
-        params = {"user_name": "Charlie"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "Charlie"}
+    def test_date_suffix(self) -> None:
+        d = {"datetime": "{{date}}T00:00:00"}
+        params = {"date": "2026-01-30"}
+        type_map = {"date": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"datetime": "2026-01-30T00:00:00"}
 
-    def test_replace_with_multiple_spaces(self) -> None:
-        """Test replacing placeholder with multiple spaces."""
-        d = {"name": "\"{{  user_name  }}\""}
-        text = json.dumps(d)
-        params = {"user_name": "David"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "David"}
+    def test_multiple_substrings(self) -> None:
+        d = {"greeting": "Hello {{first}} {{last}}!"}
+        params = {"first": "John", "last": "Doe"}
+        type_map = {"first": "string", "last": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"greeting": "Hello John Doe!"}
 
 
-class TestApplyParamsMultipleParameters:
-    """Test replacing multiple parameters in the same text."""
+class TestApplyParamsToDictNonMatching:
+    """Test that non-parameter placeholders are left untouched."""
 
-    def test_replace_multiple_different_params(self) -> None:
-        """Test replacing multiple different parameters."""
-        d = {"name": "\"{{user_name}}\"", "age": "{{user_age}}"}
-        text = json.dumps(d)
-        params = {"user_name": "Emma", "user_age": 30}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "Emma", "age": 30}
-
-    def test_replace_same_param_multiple_times(self) -> None:
-        """Test replacing the same parameter multiple times."""
-        d = {"first": "\"{{value}}\"", "second": "\"{{value}}\""}
-        text = json.dumps(d)
-        params = {"value": "repeated"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"first": "repeated", "second": "repeated"}
-
-    def test_replace_mixed_types(self) -> None:
-        """Test replacing parameters with mixed value types."""
-        d = {"name": "\"{{name}}\"", "age": "{{age}}", "active": "{{active}}"}
-        text = json.dumps(d)
-        params = {"name": "Frank", "age": 35, "active": True}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "Frank", "age": 35, "active": True}
-
-
-class TestApplyParamsNonMatchingPlaceholders:
-    """Test that non-matching placeholders are left untouched."""
-
-    def test_leave_sessionStorage_placeholder_untouched(self) -> None:
-        """Test that sessionStorage placeholders are not replaced."""
-        d = {"token": "\"{{sessionStorage:auth.token}}\""}
-        text = json.dumps(d)
+    def test_leave_sessionStorage_untouched(self) -> None:
+        d = {"token": "{{sessionStorage:auth.token}}"}
         params = {"user_id": "123"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"token": "\"{{sessionStorage:auth.token}}\""}
+        type_map = {"user_id": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"token": "{{sessionStorage:auth.token}}"}
 
-    def test_leave_localStorage_placeholder_untouched(self) -> None:
-        """Test that localStorage placeholders are not replaced."""
-        d = {"prefs": "\"{{localStorage:user.preferences}}\""}
-        text = json.dumps(d)
+    def test_leave_cookie_untouched(self) -> None:
+        d = {"session": "{{cookie:session_id}}"}
         params = {"user_id": "123"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"prefs": "\"{{localStorage:user.preferences}}\""}
-
-    def test_leave_cookie_placeholder_untouched(self) -> None:
-        """Test that cookie placeholders are not replaced."""
-        d = {"session": "\"{{cookie:session_id}}\""}
-        text = json.dumps(d)
-        params = {"user_id": "123"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"session": "\"{{cookie:session_id}}\""}
-
-    def test_leave_meta_placeholder_untouched(self) -> None:
-        """Test that meta placeholders are not replaced."""
-        d = {"csrf": "\"{{meta:csrf-token}}\""}
-        text = json.dumps(d)
-        params = {"user_id": "123"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"csrf": "\"{{meta:csrf-token}}\""}
+        type_map = {"user_id": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"session": "{{cookie:session_id}}"}
 
     def test_leave_missing_param_untouched(self) -> None:
-        """Test that placeholders for missing parameters are not replaced."""
-        d = {"name": "\"{{user_name}}\"", "age": "\"{{user_age}}\""}
-        text = json.dumps(d)
+        d = {"name": "{{user_name}}", "age": "{{user_age}}"}
         params = {"user_name": "George"}
-        result = apply_params(text, params)
-        assert json.loads(result) == {"name": "George", "age": "\"{{user_age}}\""}
-
-    def test_leave_unquoted_placeholder_untouched(self) -> None:
-        """Test that unquoted placeholders are not replaced."""
-        text = '{"name": {{user_name}}}'
-        params = {"user_name": "Henry"}
-        result = apply_params(text, params)
-        # unquoted placeholders should not be replaced
-        assert result == '{"name": {{user_name}}}'
+        type_map = {"user_name": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"name": "George", "age": "{{user_age}}"}
 
 
-class TestApplyParamsEdgeCases:
-    """Test edge cases and special scenarios."""
+class TestApplyParamsToDictNested:
+    """Test apply_params_to_json with nested structures."""
 
-    def test_empty_text_returns_empty(self) -> None:
-        """Test that empty text returns empty."""
-        text = ""
-        params = {"user_name": "Ivy"}
-        result = apply_params(text, params)
-        assert result == ""
-
-    def test_none_text_returns_none(self) -> None:
-        """Test that None text returns None."""
-        text = None
-        params = {"user_name": "Jack"}
-        result = apply_params(text, params)
-        assert result is None
-
-    def test_none_params_returns_original_text(self) -> None:
-        """Test that None parameters return original text."""
-        text = '{"name": "{{user_name}}"}'
-        params = None
-        result = apply_params(text, params)
-        assert result == '{"name": "{{user_name}}"}'
-
-    def test_empty_params_returns_original_text(self) -> None:
-        """Test that empty parameters return original text."""
-        text = '{"name": "{{user_name}}"}'
-        params = {}
-        result = apply_params(text, params)
-        assert result == '{"name": "{{user_name}}"}'
-
-    def test_text_without_placeholders(self) -> None:
-        """Test text without any placeholders."""
-        text = '{"name": "static_value"}'
-        params = {"user_name": "Kate"}
-        result = apply_params(text, params)
-        assert result == '{"name": "static_value"}'
-
-    def test_replace_with_special_characters_in_value(self) -> None:
-        """Test replacing with value containing special characters."""
-        text = '{"email": "{{user_email}}"}'
-        params = {"user_email": "user@example.com"}
-        result = apply_params(text, params)
-        assert result == '{"email": user@example.com}'
-
-    def test_replace_with_quotes_in_string_value(self) -> None:
-        """Test replacing with value containing quotes."""
-        text = '{"message": "{{user_message}}"}'
-        params = {"user_message": 'He said "hello"'}
-        result = apply_params(text, params)
-        assert result == '{"message": He said "hello"}'
-
-
-class TestApplyParamsComplexStructures:
-    """Test parameter replacement in complex JSON structures."""
-
-    def test_replace_in_nested_json(self) -> None:
-        """Test replacing parameters in nested JSON structure."""
-        text = '{"user": {"name": "{{name}}", "profile": {"age": "{{age}}"}}}'
+    def test_nested_dict(self) -> None:
+        d = {"user": {"name": "{{name}}", "profile": {"age": "{{age}}"}}}
         params = {"name": "Laura", "age": 28}
-        result = apply_params(text, params)
-        assert result == '{"user": {"name": Laura, "profile": {"age": 28}}}'
+        type_map = {"name": "string", "age": "integer"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"user": {"name": "Laura", "profile": {"age": 28}}}
 
-    def test_replace_in_json_array(self) -> None:
-        """Test replacing parameters in JSON array context."""
-        text = '{"items": ["{{item1}}", "{{item2}}", "{{item3}}"]}'
-        params = {"item1": "first", "item2": "second", "item3": "third"}
-        result = apply_params(text, params)
-        assert result == '{"items": [first, second, third]}'
+    def test_list_values(self) -> None:
+        d = {"items": ["{{item1}}", "{{item2}}"]}
+        params = {"item1": "first", "item2": "second"}
+        type_map = {"item1": "string", "item2": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"items": ["first", "second"]}
 
-    def test_replace_url_with_params(self) -> None:
-        """Test replacing parameters in URL."""
+    def test_mixed_types(self) -> None:
+        d = {"name": "{{name}}", "age": "{{age}}", "active": "{{active}}"}
+        params = {"name": "Frank", "age": 35, "active": True}
+        type_map = {"name": "string", "age": "integer", "active": "boolean"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"name": "Frank", "age": 35, "active": True}
+
+    def test_preserves_non_string_values(self) -> None:
+        """Non-string values in the dict (ints, bools) should pass through unchanged."""
+        d = {"name": "{{name}}", "hardcoded_int": 42, "hardcoded_bool": True}
+        params = {"name": "test"}
+        type_map = {"name": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"name": "test", "hardcoded_int": 42, "hardcoded_bool": True}
+
+    def test_empty_params(self) -> None:
+        d = {"name": "{{user}}"}
+        result = apply_params_to_json(d, {}, {})
+        assert result == {"name": "{{user}}"}
+
+    def test_same_param_multiple_times(self) -> None:
+        d = {"first": "{{value}}", "second": "{{value}}"}
+        params = {"value": "repeated"}
+        type_map = {"value": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"first": "repeated", "second": "repeated"}
+
+
+class TestApplyParamsToDictRealWorld:
+    """Test real-world scenarios with apply_params_to_json."""
+
+    def test_http_headers_with_bearer_token(self) -> None:
+        d = {
+            "Authorization": "Bearer {{token}}",
+            "X-Request-ID": "{{uuid}}",
+            "Content-Type": "application/json"
+        }
+        params = {"token": "abc123xyz"}
+        type_map = {"token": "string"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {
+            "Authorization": "Bearer abc123xyz",
+            "X-Request-ID": "{{uuid}}",  # builtin, left untouched
+            "Content-Type": "application/json"
+        }
+
+    def test_request_body_mixed(self) -> None:
+        d = {
+            "username": "{{username}}",
+            "limit": "{{limit}}",
+            "active": "{{active}}",
+            "type": "OW"  # hardcoded
+        }
+        params = {"username": "testuser", "limit": 50, "active": True}
+        type_map = {"username": "string", "limit": "integer", "active": "boolean"}
+        result = apply_params_to_json(d, params, type_map)
+        assert result == {"username": "testuser", "limit": 50, "active": True, "type": "OW"}
+
+
+class TestApplyParamsToStr:
+    """Test apply_params_to_str for plain string interpolation."""
+
+    def test_url_with_params(self) -> None:
         text = "https://api.example.com/users/{{user_id}}/posts/{{post_id}}"
         params = {"user_id": "12345", "post_id": "67890"}
-        result = apply_params(text, params)
-        # note: unquoted placeholders are not replaced by this function
-        assert result == "https://api.example.com/users/{{user_id}}/posts/{{post_id}}"
+        result = apply_params_to_str(text, params)
+        assert result == "https://api.example.com/users/12345/posts/67890"
 
-    def test_replace_mixed_placeholders(self) -> None:
-        """Test replacing only matching parameters while leaving others."""
-        text = '{"id": "{{user_id}}", "token": "{{sessionStorage:token}}", "age": "{{age}}"}'
-        params = {"user_id": "999", "age": 45}
-        result = apply_params(text, params)
-        assert result == '{"id": 999, "token": "{{sessionStorage:token}}", "age": 45}'
+    def test_url_with_numeric_param(self) -> None:
+        text = "https://example.com/api?limit={{limit}}&offset={{offset}}"
+        params = {"limit": 20, "offset": 0}
+        result = apply_params_to_str(text, params)
+        assert result == "https://example.com/api?limit=20&offset=0"
 
+    def test_selector_with_param(self) -> None:
+        text = "input[name='{{field_name}}']"
+        params = {"field_name": "email"}
+        result = apply_params_to_str(text, params)
+        assert result == "input[name='email']"
 
-class TestApplyParamsRealWorldScenarios:
-    """Test real-world usage scenarios."""
+    def test_leave_storage_untouched(self) -> None:
+        text = "Bearer {{sessionStorage:auth.token}}"
+        params = {"user_id": "123"}
+        result = apply_params_to_str(text, params)
+        assert result == "Bearer {{sessionStorage:auth.token}}"
 
-    def test_replace_in_http_headers(self) -> None:
-        """Test replacing parameters in HTTP headers JSON."""
-        dict = {
-            "Authorization": "Bearer \"{{token}}\"",
-            "X-User-Id": "{{user_id}}"
-        }
-        text = json.dumps(dict)
-        params = {"token": "abc123xyz", "user_id": "42"}
-        result = apply_params(text, params)
-        expected_dict = {
-            "Authorization": "Bearer abc123xyz",
-            "X-User-Id": 42
-        }
-        assert json.loads(result) == expected_dict
+    def test_empty_text(self) -> None:
+        assert apply_params_to_str("", {"x": "y"}) == ""
 
-    def test_replace_in_request_body(self) -> None:
-        """Test replacing parameters in request body."""
-        text = '{"username": "{{username}}", "password": "{{password}}", "remember": "{{remember}}"}'
-        params = {"username": "testuser", "password": "secret123", "remember": True}
-        result = apply_params(text, params)
-        assert result == '{"username": testuser, "password": secret123, "remember": true}'
+    def test_none_text(self) -> None:
+        assert apply_params_to_str(None, {"x": "y"}) is None
 
-    def test_replace_preserves_json_structure(self) -> None:
-        """Test that replacement preserves JSON structure."""
-        text = '{"string": "{{str_val}}", "number": "{{num_val}}", "bool": "{{bool_val}}", "null": "{{null_val}}"}'
-        params = {
-            "str_val": "text",
-            "num_val": 100,
-            "bool_val": False,
-            "null_val": None
-        }
-        result = apply_params(text, params)
-        assert result == '{"string": text, "number": 100, "bool": false, "null": null}'
+    def test_none_params(self) -> None:
+        assert apply_params_to_str("{{x}}", None) == "{{x}}"
 
-    def test_no_replacement_for_storage_references(self) -> None:
-        """Test that storage/cookie/meta references are never replaced."""
-        text = '{"auth": "{{sessionStorage:user.auth}}", "prefs": "{{localStorage:settings}}", "session": "{{cookie:sid}}", "csrf": "{{meta:token}}"}'
-        params = {"sessionStorage": "should_not_match", "localStorage": "no_match", "cookie": "nope", "meta": "neither"}
-        result = apply_params(text, params)
-        # none of these should be replaced because they contain colons
-        assert result == text
+    def test_empty_params(self) -> None:
+        assert apply_params_to_str("{{x}}", {}) == "{{x}}"
 
+    def test_no_placeholders(self) -> None:
+        assert apply_params_to_str("static text", {"x": "y"}) == "static text"
 
-class TestApplyParamsURLScenarios:
-    """Test parameter replacement in URL contexts (real-world examples from logs)."""
+    def test_whitespace_in_placeholder(self) -> None:
+        text = "hello {{ name }}"
+        params = {"name": "world"}
+        result = apply_params_to_str(text, params)
+        assert result == "hello world"
 
-    def test_url_with_quoted_query_params(self) -> None:
-        """Test replacing quoted placeholders in URL query string."""
-        text = 'https://www.courtlistener.com/?type=o&q="{{search_query}}"&filed_after="{{filed_after}}"&filed_before="{{filed_before}}"'
-        params = {
-            "search_query": "Jack Smith",
-            "filed_after": "09/09/2022",
-            "filed_before": "02/11/2025"
-        }
-        result = apply_params(text, params)
-        # quotes are removed because function replaces "{{key}}" with raw value
-        assert result == 'https://www.courtlistener.com/?type=o&q=Jack Smith&filed_after=09/09/2022&filed_before=02/11/2025'
-
-    def test_url_with_spaces_in_replacement(self) -> None:
-        """Test that spaces in replacement values are preserved (not URL-encoded)."""
-        text = 'https://example.com/search?q="{{query}}"'
-        params = {"query": "Boston Properties"}
-        result = apply_params(text, params)
-        # spaces are preserved as-is (URL encoding is handled elsewhere)
-        assert result == 'https://example.com/search?q=Boston Properties'
-
-    def test_url_without_placeholders(self) -> None:
-        """Test that URL without placeholders remains unchanged."""
-        text = 'https://corp.sec.state.ma.us/corpweb/CorpSearch/CorpSearch.aspx'
-        params = {"entity_name": "Boston Properties"}
-        result = apply_params(text, params)
-        assert result == 'https://corp.sec.state.ma.us/corpweb/CorpSearch/CorpSearch.aspx'
-
-    def test_url_with_multiple_query_params_mixed(self) -> None:
-        """Test URL with some quoted placeholders and some regular params."""
-        text = "https://api.example.com/search?name=\"{{name}}\"&limit=10&offset=\"{{offset}}\""
-        params = {"name": "test user", "offset": "20"}
-        result = apply_params(text, params)
-        assert result == 'https://api.example.com/search?name=test user&limit=10&offset=20'
-
-    def test_url_with_special_chars_in_value(self) -> None:
-        """Test URL replacement with special characters that might need encoding."""
-        text = 'https://example.com/api?filter="{{filter}}"'
+    def test_special_chars_in_value(self) -> None:
+        text = "https://example.com/api?filter={{filter}}"
         params = {"filter": "name=John&age>25"}
-        result = apply_params(text, params)
-        # special chars are preserved as-is (URL encoding is caller's responsibility)
-        assert result == 'https://example.com/api?filter=name=John&age>25'
-
-    def test_url_with_date_slashes(self) -> None:
-        """Test URL replacement with date values containing slashes."""
-        text = 'https://example.com/records?from="{{start_date}}"&to="{{end_date}}"'
-        params = {"start_date": "01/15/2023", "end_date": "12/31/2023"}
-        result = apply_params(text, params)
-        assert result == 'https://example.com/records?from=01/15/2023&to=12/31/2023'
-
-    def test_url_with_single_quoted_placeholder(self) -> None:
-        """Test URL with single-quoted placeholder (should not be replaced)."""
-        text = "https://example.com/api?name='{{name}}'"
-        params = {"name": "test"}
-        result = apply_params(text, params)
-        # single quotes don't match the pattern, only double quotes
-        assert result == "https://example.com/api?name='{{name}}'"
-
-    def test_url_with_numeric_query_param(self) -> None:
-        """Test URL with numeric value in query parameter."""
-        text = 'https://example.com/api?user_id="{{user_id}}"&page="{{page}}"'
-        params = {"user_id": "12345", "page": 2}
-        result = apply_params(text, params)
-        assert result == 'https://example.com/api?user_id=12345&page=2'
-
+        result = apply_params_to_str(text, params)
+        assert result == "https://example.com/api?filter=name=John&age>25"

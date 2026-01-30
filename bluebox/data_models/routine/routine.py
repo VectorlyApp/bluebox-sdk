@@ -25,15 +25,11 @@ from bluebox.data_models.routine.operation import (
 )
 from bluebox.data_models.routine.parameter import (
     Parameter,
-    ParameterType,
     BUILTIN_PARAMETERS,
     VALID_PLACEHOLDER_PREFIXES,
 )
 from bluebox.cdp.connection import cdp_new_tab, cdp_attach_to_existing_tab, dispose_context
-from bluebox.data_models.routine.placeholder import (
-    PlaceholderQuoteType,
-    extract_placeholders_from_json_str,
-)
+from bluebox.data_models.routine.placeholder import extract_placeholders_from_json_str
 from bluebox.utils.data_utils import extract_base_url_from_url
 from bluebox.utils.logger import get_logger
 from bluebox.utils.web_socket_utils import send_cmd, recv_until
@@ -71,74 +67,41 @@ class Routine(BaseModel):
         # Convert the entire routine to JSON string for searching
         routine_json = self.model_dump_json()
 
-        # Build lookup maps for parameters
+        # Build lookup sets
         defined_parameters = {param.name for param in self.parameters}
-        param_type_map = {param.name: param.type for param in self.parameters}
         builtin_parameter_names = {bp.name for bp in BUILTIN_PARAMETERS}
 
-        # Types that allow both quoted "{{...}}" and escape-quoted \"{{...}}\"
-        non_string_types = {
-            ParameterType.INTEGER,
-            ParameterType.NUMBER, 
-            ParameterType.BOOLEAN
-        }
-
-        # Extract all placeholders with their quote types
+        # Extract all {{...}} placeholders
         placeholders = extract_placeholders_from_json_str(routine_json)
 
         # Track used parameters
         used_parameters: set[str] = set()
 
         # Validate each placeholder
-        for placeholder in placeholders:
-            content = placeholder.content
-            quote_type = placeholder.quote_type
-
-            # Check if it's a storage/meta/window placeholder (has colon prefix)
+        for content in placeholders:
+            # Storage/meta/window placeholder (has colon prefix)
             if ":" in content:
                 prefix, path = [p.strip() for p in content.split(":", 1)]
                 if prefix not in VALID_PLACEHOLDER_PREFIXES:
                     raise ValueError(f"Invalid prefix in placeholder: {prefix}")
                 if not path:
                     raise ValueError(f"Path is required for {prefix}: placeholder")
-                # Storage/meta/window placeholders can use either QUOTED or ESCAPE_QUOTED - valid
                 continue
 
-            # Check if it's a builtin parameter
+            # Builtin parameter
             if content in builtin_parameter_names:
-                # Builtins can use either QUOTED or ESCAPE_QUOTED - valid
                 continue
 
-            # It's a regular user-defined parameter
+            # Regular user-defined parameter
             used_parameters.add(content)
-
-            # Get the parameter type (if defined)
-            param_type = param_type_map.get(content)
-
-            if param_type is not None:
-                # Validate quote type based on parameter type
-                if param_type in non_string_types:
-                    # int, number, bool: can use either "{{...}}" or \"{{...}}\"
-                    pass  # Both QUOTED and ESCAPE_QUOTED are valid
-                else:
-                    # string types: MUST use escape-quoted \"{{...}}\"
-                    if quote_type != PlaceholderQuoteType.ESCAPE_QUOTED:
-                        raise ValueError(
-                            f"String parameter '{{{{{content}}}}}' in routine '{self.name}' must use escape-quoted format. "
-                            f"Use '\\\"{{{{content}}}}\\\"' instead of '\"{{{{content}}}}\"'."
-                        )
 
         # Check 1: All defined parameters must be used
         unused_parameters = defined_parameters - used_parameters
         if unused_parameters:
-            
-            error_message = f"Unused parameters found in routine '{self.name}': {list(unused_parameters)}. "
-            for unused_parameter in unused_parameters:
-                # scan for unquoted placeholders in the routine...
-                if f"{{{{{unused_parameter}}}}}" in routine_json:
-                    error_message += f"Unquoted placeholder '{{{{{unused_parameter}}}}}' found in routine '{self.name}'"
-                    error_message += "Ensure that all placeholders are surrounded by quotes or escaped quotes."     
-            raise ValueError(error_message)
+            raise ValueError(
+                f"Unused parameters found in routine '{self.name}': {list(unused_parameters)}. "
+                f"All defined parameters must appear as {{{{param}}}} in the routine."
+            )
 
         # Check 2: No undefined parameters should be used
         undefined_parameters = used_parameters - defined_parameters
@@ -245,12 +208,14 @@ class Routine(BaseModel):
             send_cmd(browser_ws, "DOM.enable", session_id=session_id)
 
             # Create execution context
+            param_type_map = {param.name: param.type for param in self.parameters}
             routine_execution_context = RoutineExecutionContext(
                 session_id=session_id,
                 ws=browser_ws,
                 send_cmd=lambda method, params=None, **kwargs: send_cmd(browser_ws, method, params, **kwargs),
                 recv_until=lambda predicate, deadline: recv_until(browser_ws, predicate, deadline),
                 parameters_dict=parameters_dict,
+                param_type_map=param_type_map,
                 timeout=timeout,
             )
 
@@ -295,5 +260,3 @@ class Routine(BaseModel):
                 browser_ws.close()
             except Exception:
                 pass
-
-

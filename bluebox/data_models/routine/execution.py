@@ -67,6 +67,7 @@ class RoutineExecutionContext(BaseModel):
 
     # Optional inputs with defaults
     parameters_dict: dict = Field(default_factory=dict)
+    param_type_map: dict[str, str] = Field(default_factory=dict)  # parameter name -> ParameterType value
     timeout: float = 180.0
 
     # Current page URL (updated by navigate operations, used by fetch to detect blank page)

@@ -91,7 +91,7 @@ This file provides context and guidelines for working with the bluebox-sdk codeb
 3. Run `bluebox-discover` with task description
 4. Review generated `routine.json`
 5. Test with `bluebox-execute`
-6. Fix any placeholder escaping issues (string params need `\"{{param}}\"`)
+6. Verify placeholder syntax (all params use `{{param}}`, types resolved from Parameter definitions)
 
 ## Core Files and Utilities
 
@@ -126,13 +126,12 @@ from bluebox.llms.infra.data_store import DiscoveryDataStore, LocalDiscoveryData
 ### Important Patterns
 
 - **Routine Execution**: Operations execute sequentially, maintaining state via `RoutineExecutionContext`
-- **Placeholder Resolution**: String parameters MUST use escape-quoted format: `\"{{paramName}}\"` in JSON bodies
+- **Placeholder Resolution**: All parameters use `{{paramName}}` format. The parameter's `type` field determines the output type at runtime.
 - **Session Storage**: Use `session_storage_key` to store and retrieve data between operations
 - **CDP Sessions**: Use flattened sessions for multiplexing via `session_id`
 
 ### Common Gotchas
 
-- String parameters in JSON bodies need double escaping: `"field": "\"{{param}}\""` not `"field": "{{param}}"`
 - Chrome must be running in debug mode on `127.0.0.1:9222` before executing routines
 - Placeholder resolution for `sessionStorage`, `localStorage`, `cookie`, `meta` only works in fetch `headers` and `body` (not in URLs yet)
 - All parameters must be used in the routine (validation enforces this)

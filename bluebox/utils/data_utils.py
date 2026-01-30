@@ -8,7 +8,8 @@ Contains:
 - write_json_file(), write_jsonl(): Save data to files
 - get_text_from_html(): Extract text from HTML
 - resolve_dotted_path(): Access nested dict values by dot notation
-- apply_params(): Substitute {{placeholders}} in text
+- apply_params_to_str(): Substitute {{placeholders}} in strings
+- apply_params_to_json(): Substitute {{placeholders}} in dicts with type-aware replacement
 - assert_balanced_js_delimiters(): Validate JS code structure
 - sanitize_filename(): Clean filenames for filesystem
 """
@@ -29,10 +30,21 @@ from urllib.parse import urlparse
 import tldextract
 from bs4 import BeautifulSoup
 
+from bluebox.data_models.routine.parameter import ParameterType
 from bluebox.utils.exceptions import UnsupportedFileFormat
 from bluebox.utils.logger import get_logger
 
 logger = get_logger(name=__name__)
+
+# regex matching a standalone placeholder: the entire string is "{{key}}" with optional whitespace
+_STANDALONE_PLACEHOLDER_RE = re.compile(
+    pattern=r"^\{\{\s*([^}]+?)\s*\}\}$"
+)
+
+# regex matching any {{key}} pattern (for substring replacement)
+_PLACEHOLDER_RE = re.compile(
+    pattern=r"\{\{\s*([^}]+?)\s*\}\}"
+)
 
 
 def load_data(file_path: Path) -> Union[dict, list]:
@@ -108,8 +120,7 @@ def get_text_from_html(html: str) -> str:
     """
     Sanitize the HTML data.
     """
-    
-    # Use the built-in html parser for robustness
+    # use built-in html parser for robustness
     soup = BeautifulSoup(html, "html.parser")
 
     # Remove non-visible elements
@@ -123,7 +134,7 @@ def get_text_from_html(html: str) -> str:
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
     clean_text = "\n".join(chunk for chunk in chunks if chunk)
-    
+
     # Remove ALL consecutive newlines - replace any sequence of 2+ newlines with single newline
     # Handle both \n and \r\n line endings
     clean_text = re.sub(r'[\r\n]+', '\n', clean_text)
@@ -162,18 +173,18 @@ def save_data_to_file(
 ) -> None:
     """
     Save data to file, creating directories as needed.
-    
+
     Args:
         data: The data to save (dict, list, str, or base64-encoded string).
         file_path: Path to save the file to.
         is_base64: If True, decode data as base64 and write as binary.
     """
     os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
-    
+
     if data is None:
         logger.warning("Data is None. Skipping file save.")
         return
-    
+
     if is_base64 and isinstance(data, str):
         raw_data = base64.b64decode(data)
         with open(file_path, mode="wb") as f:
@@ -246,7 +257,11 @@ def blocked_by_regex(url: str, block_regexes: list) -> bool:
     """
     u = url or ""
     for rx in block_regexes:
-        if re.search(rx, u, flags=re.IGNORECASE):
+        if re.search(
+            pattern=rx,
+            string=u,
+            flags=re.IGNORECASE,
+        ):
             return True
     return False
 
@@ -309,52 +324,118 @@ def resolve_dotted_path(
         return None
 
 
-def apply_params(text: str, parameters_dict: dict | None) -> str:
+def _coerce_value(value: Any, param_type: str) -> Any:
     """
-    Replace parameter placeholders in text with actual values.
+    Coerce a parameter value to the correct Python type based on the parameter schema type.
+    Args:
+        value: The value to coerce.
+        param_type: The parameter type to coerce to.
+    Returns:
+        The coerced value.
+    """
+    if param_type in (ParameterType.INTEGER,):
+        return int(value)
+    elif param_type in (ParameterType.NUMBER,):
+        return float(value)
+    elif param_type in (ParameterType.BOOLEAN,):
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes")
+        return bool(value)
+    else:
+        # string, date, datetime, email, url, enum; all string types
+        return str(value)
 
-    Only replaces {{param}} where 'param' is in parameters_dict.
-    Leaves other placeholders like {{sessionStorage:...}} untouched.
-    
-    Follows the pattern from test.py:
-    - For string values in quoted placeholders: insert raw string (no quotes)
-    - For non-string values in quoted placeholders: use json.dumps(value)
-    - All placeholders must be quoted: "{{param}}" or \"{{param}}\"
+
+def apply_params_to_json(
+    d: dict | list,
+    parameters_dict: dict,
+    param_type_map: dict[str, str],
+) -> dict | list:
+    """
+    Walk a dict/list and replace {{param}} placeholders with typed values.
+
+    For standalone placeholders (the entire string value is "{{key}}"):
+      - Uses param_type_map to determine the output Python type
+      - e.g., integer → int, number → float, boolean → bool, string → str
+
+    For substring placeholders ("prefix {{key}} suffix"):
+      - Always str(value) substitution; result stays a string
+
+    Non-parameter placeholders ({{sessionStorage:...}}, {{uuid}}, etc.) are left untouched.
+
+    Args:
+        d: The dict or list to process (not mutated; returns a new copy).
+        parameters_dict: Mapping of parameter names to their values.
+        param_type_map: Mapping of parameter names to their ParameterType string.
+
+    Returns:
+        A new dict/list with placeholders replaced.
+    """
+    if not parameters_dict:
+        return d
+
+    def _resolve_value(v: Any) -> Any:
+        if isinstance(v, str):
+            # check for standalone placeholder
+            m = _STANDALONE_PLACEHOLDER_RE.match(v)
+            if m:
+                key = m.group(1)
+                if key in parameters_dict:
+                    param_type = param_type_map.get(key, "string")
+                    return _coerce_value(parameters_dict[key], param_type)
+                # not a user param (e.g. sessionStorage:...), leave as-is
+                return v
+
+            # substring replacement: replace all {{key}} occurrences within the string
+            def _sub(match: re.Match) -> str:
+                key = match.group(1)
+                if key in parameters_dict:
+                    return str(parameters_dict[key])
+                return match.group(0)  # leave non-parameter placeholders untouched
+
+            return _PLACEHOLDER_RE.sub(
+                repl=_sub,
+                string=v,
+            )
+        elif isinstance(v, dict):
+            return {k: _resolve_value(val) for k, val in v.items()}
+        elif isinstance(v, list):
+            return [_resolve_value(item) for item in v]
+        return v
+
+    return _resolve_value(d)
+
+
+def apply_params_to_str(text: str, parameters_dict: dict | None) -> str:
+    """
+    Replace {{param}} placeholders in a plain string with str(value).
+
+    Use this for URLs, CSS selectors, text fields, JS code, filenames — contexts
+    where the result is always a string.
+
+    Non-parameter placeholders ({{sessionStorage:...}}, etc.) are left untouched.
 
     Args:
         text: Text containing parameter placeholders.
         parameters_dict: Dictionary of parameter values.
 
     Returns:
-        str: Text with parameters replaced.
+        Text with parameter placeholders replaced.
     """
-    
-    logger.info(f"Applying params to text: {text} with parameters_dict: {parameters_dict}")
-    
     if not text or not parameters_dict:
         return text
 
-    for key, value in parameters_dict.items():
-        # Compute replacement based on value type (following test.py pattern)
-        if isinstance(value, str):
-            literal = value  # For strings, insert raw string (no quotes)
-        else:
-            literal = json.dumps(value)  # For numbers/bools/null, use JSON encoding
-        
-        escaped_key = re.escape(key)
-        
-        # Pattern 1: Simple quoted placeholder "{{key}}" in JSON string
-        # Matches: "{{key}}" (when the JSON value itself is the string "{{key}}")
-        simple_quoted = '"' + r'\{\{' + r'\s*' + escaped_key + r'\s*' + r'\}\}' + '"'
-        text = re.sub(simple_quoted, literal, text)
-        
-        # Pattern 2: Escaped quote variant \"{{key}}\"
-        # In JSON string this appears as: \\"{{key}}\\" 
-        double_escaped = r'\\"' + r'\{\{' + r'\s*' + escaped_key + r'\s*' + r'\}\}' + r'\\"'
-        text = re.sub(double_escaped, literal, text)
-    
-    logger.info(f"Applied params to text: {text}")
-    return text
+    def _sub(match: re.Match) -> str:
+        key = match.group(1)
+        if key in parameters_dict:
+            return str(parameters_dict[key])
+        return match.group(0)
+
+    result = _PLACEHOLDER_RE.sub(
+        repl=_sub,
+        string=text,
+    )
+    return result
 
 
 def extract_base_url_from_url(url: str) -> str | None:
@@ -371,34 +452,37 @@ def extract_base_url_from_url(url: str) -> str | None:
         The root domain (without protocol, subdomains, or port) or None if invalid.
     """
     try:
-        # Try to parse the URL to extract the hostname
+        # try to parse the URL to extract the hostname
         parsed_url = urlparse(url)
         hostname = parsed_url.hostname
         
         if not hostname:
             return None
         
-        # Use tldextract to properly extract the root domain, handling special TLDs
+        # use tldextract to properly extract the root domain, handling special TLDs
         extracted = tldextract.extract(hostname)
         if extracted.domain and extracted.suffix:
             return f"{extracted.domain}.{extracted.suffix}"
-        # Fallback: if domain extraction fails, return the hostname as-is
+        # fallback: if domain extraction fails, return the hostname as-is
         return hostname
         
     except Exception:
-        # If URL parsing fails (e.g., contains placeholders), try to extract hostname manually
-        # Match protocol://hostname pattern
-        match = re.match(r'^[^:]+://([^/\?\:]+)', url)
+        # if URL parsing fails (e.g., contains placeholders), try to extract hostname manually
+        # match protocol://hostname pattern
+        match = re.match(
+            pattern=r'^[^:]+://([^/\?\:]+)',
+            string=url
+        )
         if match and match.group(1):
             hostname = match.group(1)
-            # Remove port if present
+            # remove port if present
             hostname = hostname.split(':')[0]
             
-            # Use tldextract to parse the hostname even if URL parsing failed
+            # use tldextract to parse the hostname even if URL parsing failed
             extracted = tldextract.extract(hostname)
             if extracted.domain and extracted.suffix:
                 return f"{extracted.domain}.{extracted.suffix}"
-            # Fallback: return hostname as-is if parsing fails
+            # fallback: return hostname as-is if parsing fails
             return hostname
     
     return None
@@ -472,7 +556,10 @@ def build_transaction_dir(url: str, ts_ms: int, output_dir: str) -> str:
     Returns:
         str: The path to the directory.
     """
-    date_str = time.strftime("%Y%m%d", time.localtime(ts_ms / 1000))
+    date_str = time.strftime(
+        format="%Y%m%d",
+        time_tuple=time.localtime(ts_ms / 1000)
+    )
     url_core = (url or "").split("://", 1)[-1].split("?", 1)[0].strip("/")
     url_core = url_core.replace("/", "_")
     safe_url = sanitize_filename(url_core)[:120] or "url"

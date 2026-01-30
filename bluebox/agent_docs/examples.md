@@ -20,7 +20,7 @@ Searches for train schedules on Amtrak. Demonstrates chaining fetch operations v
             "type": "fetch",
             "endpoint": {
                 "description": "Amtrak station/location autocomplete. GET with query parameter searchTerm; returns JSON with autoCompleterResponse.autoCompleteList.",
-                "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm=\"{{origin}}\"",
+                "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm={{origin}}",
                 "method": "GET",
                 "headers": {"Accept": "application/json, text/plain, */*"},
                 "body": {},
@@ -32,7 +32,7 @@ Searches for train schedules on Amtrak. Demonstrates chaining fetch operations v
             "type": "fetch",
             "endpoint": {
                 "description": "Amtrak station/location autocomplete. GET with query parameter searchTerm; returns JSON with autoCompleterResponse.autoCompleteList.",
-                "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm=\"{{destination}}\"",
+                "url": "https://www.amtrak.com/services/MapDataService/AutoCompleterArcgis/getResponseList?searchTerm={{destination}}",
                 "method": "GET",
                 "headers": {"Accept": "application/json, text/plain, */*"},
                 "body": {},
@@ -66,7 +66,7 @@ Searches for train schedules on Amtrak. Demonstrates chaining fetch operations v
                             {
                                 "origin": {
                                     "code": "{{sessionStorage:amtrak_autocomplete_stations_origin.autoCompleterResponse.autoCompleteList.0.stationCode}}",
-                                    "schedule": {"departureDateTime": "\"{{departureDate}}\"T00:00:00"}
+                                    "schedule": {"departureDateTime": "{{departureDate}}T00:00:00"}
                                 },
                                 "destination": {
                                     "code": "{{sessionStorage:amtrak_autocomplete_stations_destination.autoCompleterResponse.autoCompleteList.0.stationCode}}"
@@ -135,9 +135,9 @@ Downloads a PDF paper from arxiv.org. Demonstrates single download operation.
                 "headers": {},
                 "method": "GET",
                 "credentials": "omit",
-                "url": "https://arxiv.org/pdf/\"{{paper_id}}\""
+                "url": "https://arxiv.org/pdf/{{paper_id}}"
             },
-            "filename": "\"{{paper_id}}\".pdf"
+            "filename": "{{paper_id}}.pdf"
         }
     ],
     "incognito": true,
@@ -193,7 +193,7 @@ Searches the MA Secretary of State corporate database. Demonstrates full UI auto
     {
       "type": "input_text",
       "selector": "input[name='ctl00$MainContent$txtEntityName']",
-      "text": "\"{{entity_name}}\"",
+      "text": "{{entity_name}}",
       "clear": true
     },
     {
@@ -262,7 +262,7 @@ Fetches newest bets from Polymarket API. Demonstrates optional integer parameter
                 },
                 "method": "GET",
                 "credentials": "include",
-                "url": "https://gamma-api.polymarket.com/events/pagination?limit=\"{{limit}}\"&active=true&archived=false&closed=false&order=startDate&ascending=false&offset=\"{{offset}}\"&exclude_tag_id=100639&exclude_tag_id=102169"
+                "url": "https://gamma-api.polymarket.com/events/pagination?limit={{limit}}&active=true&archived=false&closed=false&order=startDate&ascending=false&offset={{offset}}&exclude_tag_id=100639&exclude_tag_id=102169"
             },
             "session_storage_key": "newest_polymarket_events"
         },
