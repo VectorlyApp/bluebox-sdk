@@ -1,4 +1,4 @@
-# pyproject.toml for bluebox-sdk
+# pyproject.toml
 
 [build-system]
 requires = ["hatchling"]
@@ -47,7 +47,10 @@ dependencies = [
     "beautifulsoup4>=4.14.2",
     "pylint>=3.0.0",
     "pytest>=8.3.5",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
     "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -77,4 +80,11 @@ include = [
     "README.md",
     "LICENSE",
     "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::pytest.PytestConfigWarning",
 ]

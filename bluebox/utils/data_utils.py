@@ -21,9 +21,10 @@ import logging
 import os
 import re
 import time
+from collections import defaultdict
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 from urllib.parse import urlparse
 
 import tldextract
@@ -35,21 +36,29 @@ from bluebox.utils.logger import get_logger
 logger = get_logger(name=__name__)
 
 
-def load_data(file_path: Path) -> Union[dict, list]:
+def load_data(file_path: Path) -> dict | list:
     """
     Load data from a file.
     Raises:
         UnsupportedFileFormat: If the file is of an unsupported type.
     Args:
-        file_path (str): Path to the JSON file.
+        file_path: Path to the JSON or JSONL file.
     Returns:
-        Union[dict, list]: Data contained in file.
+        dict | list: Data contained in file. JSONL files return a list of parsed objects.
     """
     file_path_str = str(file_path)
     if file_path_str.endswith(".json"):
         with open(file_path_str, mode="r", encoding="utf-8") as data_file:
-            json_data = json.load(data_file)
-            return json_data
+            return json.load(data_file)
+
+    if file_path_str.endswith(".jsonl"):
+        records: list[Any] = []
+        with open(file_path_str, mode="r", encoding="utf-8") as data_file:
+            for line in data_file:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+        return records
 
     raise UnsupportedFileFormat(f"No support for provided file type: {file_path_str}.")
 
@@ -108,26 +117,30 @@ def get_text_from_html(html: str) -> str:
     """
     Sanitize the HTML data.
     """
-    
-    # Use the built-in html parser for robustness
+    # use the built-in html parser for robustness
     soup = BeautifulSoup(html, "html.parser")
 
-    # Remove non-visible elements
+    # remove non-visible elements
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
-    # Get visible text
+    # get visible text
     text = soup.get_text(separator="\n")
 
-    # Normalize whitespace
+    # normalize whitespace
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
     clean_text = "\n".join(chunk for chunk in chunks if chunk)
     
-    # Remove ALL consecutive newlines - replace any sequence of 2+ newlines with single newline
-    # Handle both \n and \r\n line endings
-    clean_text = re.sub(r'[\r\n]+', '\n', clean_text)
-    # Remove leading and trailing whitespace
+    # remove ALL consecutive newlines - replace any sequence of 2+ newlines with single newline
+    # handle both \n and \r\n line endings
+    clean_text = re.sub(
+        pattern=r'[\r\n]+',
+        repl='\n',
+        string=clean_text,
+    )
+
+    # remove leading and trailing whitespace
     clean_text = clean_text.strip()
 
     return clean_text
@@ -480,3 +493,75 @@ def build_transaction_dir(url: str, ts_ms: int, output_dir: str) -> str:
     dir_path = os.path.join(output_dir, dir_name)
     os.makedirs(dir_path, exist_ok=True)
     return dir_path
+
+
+def extract_object_schema(data: Any) -> dict[str, Any]:
+    """
+    Extract schema/structure from nested JSON data.
+
+    Recursively processes nested data and returns a schema with explicit type
+    information at every level. Useful for understanding the shape of large
+    JSON responses.
+
+    Args:
+        data: Any data structure (dict, list, or primitive).
+
+    Returns:
+        Schema dict with _type, _count, and nested structure.
+
+    Example:
+        >>> data = [{"id": 1, "name": "a"}, {"id": 2}]
+        >>> extract_object_schema(data)
+        {"_type": "list", "_count": 2, "_items": {"_type": "dict", "id": ..., "name": ...}}
+    """
+
+    def walk(value: Any) -> dict[str, Any]:
+        if isinstance(value, dict):
+            node: dict[str, Any] = {"_type": "dict"}
+            for k, v in value.items():
+                node[k] = walk(v)
+            return node
+
+        if isinstance(value, list):
+            node = {"_type": "list", "_count": len(value)}
+            if not value:
+                node["_items"] = {}
+                return node
+
+            merged: dict[str, list[Any]] = defaultdict(list)
+            for item in value:
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        merged[k].append(v)
+
+            if not merged:
+                node["_items"] = {"_type": "scalar"}
+                return node
+
+            items_schema: dict[str, Any] = {"_type": "dict"}
+            for k, vals in merged.items():
+                items_schema[k] = merge(vals)
+            node["_items"] = items_schema
+            return node
+
+        return {"_type": "scalar", "_count": 1}
+
+    def merge(values: list[Any]) -> dict[str, Any]:
+        if all(isinstance(v, dict) for v in values):
+            merged: dict[str, list[Any]] = defaultdict(list)
+            for d in values:
+                for k, v in d.items():
+                    merged[k].append(v)
+
+            node: dict[str, Any] = {"_type": "dict", "_count": len(values)}
+            for k, vals in merged.items():
+                node[k] = merge(vals)
+            return node
+
+        if all(isinstance(v, list) for v in values):
+            flattened = [x for lst in values for x in lst]
+            return walk(flattened)
+
+        return {"_type": "scalar", "_count": len(values)}
+
+    return walk(data)

@@ -5,7 +5,7 @@
   <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-10b981?style=for-the-badge&logo=apache&logoColor=white" /></a>
 </p>
 
-# bluebox-sdk
+# bluebox-sdk 🟦
 
 REVERSE ENGINEER ANY WEB APP! ⚡️
 
@@ -30,7 +30,7 @@ Welcome to Vectorly's Bluebox... **No API? No Problem!**
 
 ## What is a *Routine*?
 
-> A **Routine** is a portable automation recipe that captures how to perform a specific task in any web app.
+> A [**Routine**](https://vectorly.app/docs/routines/overview) is a portable automation recipe that captures how to perform a specific task in any web app.
 
 Define once. Reuse everywhere. Automate anything you can do in a browser.
 
@@ -299,7 +299,7 @@ The quickstart script will:
 
 **Note:** The quickstart script is included in the repository. If you installed from PyPI, you can download it from the [GitHub repository](https://github.com/VectorlyApp/bluebox/blob/main/quickstart.py).
 
-## Guide Agent Terminal (Interactive Mode) 💬
+## Guide Agent Terminal (Interactive Mode)
 
 For iterative routine development, debugging, and more complex workflows, use the Guide Agent terminal app. It provides a full chat interface with an LLM-powered agent that can help you create, edit, and refine routines interactively.
 

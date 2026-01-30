@@ -10,16 +10,15 @@ Contains:
 - execute(): Run a routine with parameters
 """
 
-from typing import Optional, Dict, Any
-from pathlib import Path
+from typing import Any
 from openai import OpenAI
 
-from ..config import Config
-from ..utils.exceptions import ApiKeyNotFoundError
-from .monitor import BrowserMonitor
-from .discovery import RoutineDiscovery, RoutineDiscoveryResult
-from .execution import RoutineExecutor
-from ..data_models.routine.routine import Routine
+from bluebox.config import Config
+from bluebox.utils.exceptions import ApiKeyNotFoundError
+from bluebox.sdk.monitor import BrowserMonitor
+from bluebox.sdk.discovery import RoutineDiscovery, RoutineDiscoveryResult
+from bluebox.sdk.execution import RoutineExecutor
+from bluebox.data_models.routine.routine import Routine
 
 
 class Bluebox:
@@ -48,7 +47,7 @@ class Bluebox:
     
     def __init__(
         self,
-        openai_api_key: Optional[str] = None,
+        openai_api_key: str | None = None,
         remote_debugging_address: str = "http://127.0.0.1:9222",
         llm_model: str = "gpt-5.1",
     ):
@@ -77,8 +76,8 @@ class Bluebox:
         output_dir: str = "./cdp_captures",
         url: str = "about:blank",
         incognito: bool = True,
-        block_patterns: Optional[list[str]] = None,
-        capture_resources: Optional[set] = None,
+        block_patterns: list[str] | None = None,
+        capture_resources: set | None = None,
         **kwargs
     ) -> BrowserMonitor:
         """
@@ -111,7 +110,7 @@ class Bluebox:
         task: str,
         cdp_captures_dir: str = "./cdp_captures",
         output_dir: str = "./routine_discovery_output",
-        llm_model: Optional[str] = None,
+        llm_model: str | None = None,
     ) -> RoutineDiscoveryResult:
         """
         Discover a routine from captured browser data.
@@ -137,11 +136,11 @@ class Bluebox:
     def execute_routine(
         self,
         routine: Routine,
-        parameters: Dict[str, Any],
+        parameters: dict[str, Any],
         timeout: float = 180.0,
         close_tab_when_done: bool = True,
         tab_id: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute a routine with given parameters.
         
