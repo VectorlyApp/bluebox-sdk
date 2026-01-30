@@ -367,6 +367,16 @@ class TestSearchEntriesByTerms:
         results_upper = search_store.search_entries_by_terms(["NYC"])
         assert len(results_lower) == len(results_upper)
 
+    def test_unique_terms_found_counts_each_term_once(self, search_store: NetworkDataStore) -> None:
+        """unique_terms_found counts each term only once, not per occurrence."""
+        # Search with terms that may appear multiple times in same entry
+        results = search_store.search_entries_by_terms(["price", "train"])
+        for r in results:
+            # unique_terms_found should be at most the number of search terms
+            assert r["unique_terms_found"] <= 2
+            # total_hits can be greater (multiple occurrences of same term)
+            assert r["total_hits"] >= r["unique_terms_found"]
+
 
 # --- Host Stats Tests ---
 
