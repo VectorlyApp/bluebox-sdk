@@ -11,11 +11,17 @@ Two roles:
 from __future__ import annotations
 
 import re
+import time
 from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
 from bluebox.agents.specialists.abstract_specialist import AbstractSpecialist
+from bluebox.cdp.connection import (
+    cdp_new_tab,
+    create_cdp_helpers,
+    dispose_context,
+)
 from bluebox.data_models.dom import DOMSnapshotEvent
 from bluebox.data_models.llms.interaction import (
     Chat,
@@ -23,7 +29,8 @@ from bluebox.data_models.llms.interaction import (
     EmittedMessage,
 )
 from bluebox.data_models.llms.vendors import OpenAIModel
-from bluebox.llms.infra.network_data_store import NetworkDataStore
+from bluebox.llms.infra.js_data_store import JSDataStore
+from bluebox.utils.js_utils import generate_js_evaluate_wrapper_js
 from bluebox.utils.llm_utils import token_optimized
 from bluebox.utils.logger import get_logger
 
@@ -72,16 +79,22 @@ DANGEROUS_PATTERNS: list[str] = [
 
 IIFE_PATTERN = r'^\s*\(\s*(async\s+)?(function\s*\([^)]*\)\s*\{|\(\)\s*=>\s*\{).+\}\s*\)\s*\(\s*\)\s*;?\s*$'
 
+# Max line length before emitting a readability warning
+_MAX_LINE_LENGTH = 200
+
 
 def _validate_js(js_code: str) -> list[str]:
     """
     Validate JS code, returning list of errors (empty = valid).
 
+    Errors are hard failures; warnings (prefixed with "WARNING:") are soft
+    suggestions that don't block submission.
+
     Args:
         js_code: The JavaScript code to validate.
 
     Returns:
-        A list of errors (empty = valid).
+        A list of errors/warnings (empty = valid).
     """
     errors: list[str] = []
     if not js_code or not js_code.strip():
@@ -96,6 +109,20 @@ def _validate_js(js_code: str) -> list[str]:
     for pattern in DANGEROUS_PATTERNS:
         if re.search(pattern, js_code, flags=re.MULTILINE):
             errors.append(f"Blocked pattern detected: {pattern}")
+
+    # Readability check — soft warning, not a blocking error
+    # Find the IIFE body (between outermost { and })
+    first_brace = js_code.find("{")
+    last_brace = js_code.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        body = js_code[first_brace + 1:last_brace]
+        for line in body.split("\n"):
+            if len(line) > _MAX_LINE_LENGTH:
+                errors.append(
+                    f"WARNING: Line exceeds {_MAX_LINE_LENGTH} chars. "
+                    "Please reformat with proper line breaks and indentation for readability."
+                )
+                break  # one warning is enough
 
     return errors
 
@@ -121,6 +148,12 @@ All JavaScript code you write MUST:
 - Return a value using `return` (the return value is captured)
 - Optionally store results in sessionStorage via `session_storage_key`
 
+## Code Formatting
+
+- Write readable, well-formatted JavaScript. Never write extremely long single-line IIFEs.
+- Use proper indentation (2 spaces), line breaks between statements, and descriptive variable names.
+- Each statement should be on its own line. Complex expressions should be broken across lines.
+
 ## Blocked Patterns
 
 The following are NOT allowed in your JavaScript code:
@@ -136,6 +169,7 @@ The following are NOT allowed in your JavaScript code:
 - **get_dom_snapshot**: Get DOM snapshot (latest by default)
 - **validate_js_code**: Dry-run validation of JS code
 - **submit_js_code**: Submit final validated JS code
+- **execute_js_in_browser**: Test your JavaScript code against the live website. Navigates to the URL and executes your IIFE, returning the result and any console output. Use this to verify your code works before submitting.
 
 ## Guidelines
 
@@ -165,16 +199,23 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
 - Blocked: eval, fetch, XMLHttpRequest, WebSocket, sendBeacon, addEventListener, MutationObserver, IntersectionObserver, window.close
 - Use `return` to produce output; optionally use `session_storage_key` for cross-operation data
 
+## Code Formatting
+
+- Write readable, well-formatted JavaScript. Never write extremely long single-line IIFEs.
+- Use proper indentation (2 spaces), line breaks between statements, and descriptive variable names.
+- Each statement should be on its own line. Complex expressions should be broken across lines.
+
 ## When finalize tools are available
 
 - **submit_js_code**: Submit your final validated JavaScript code
 - **finalize_failure**: Report that the task cannot be accomplished with JS
+- **execute_js_in_browser**: Test your JavaScript code against the live website before submitting
 """
 
     def __init__(
         self,
         emit_message_callable: Callable[[EmittedMessage], None],
-        js_data_store: NetworkDataStore | None = None,
+        js_data_store: JSDataStore | None = None,
         dom_snapshots: list[DOMSnapshotEvent] | None = None,
         persist_chat_callable: Callable[[Chat], Chat] | None = None,
         persist_chat_thread_callable: Callable[[ChatThread], ChatThread] | None = None,
@@ -182,9 +223,11 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
         llm_model: OpenAIModel = OpenAIModel.GPT_5_1,
         chat_thread: ChatThread | None = None,
         existing_chats: list[Chat] | None = None,
+        remote_debugging_address: str | None = None,
     ) -> None:
         self._js_data_store = js_data_store
         self._dom_snapshots = dom_snapshots or []
+        self._remote_debugging_address = remote_debugging_address
 
         # autonomous result state
         self._js_result: JSCodeResult | None = None
@@ -201,9 +244,10 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
         )
 
         logger.debug(
-            "JSSpecialist initialized: js_data_store=%s, dom_snapshots=%d",
+            "JSSpecialist initialized: js_data_store=%s, dom_snapshots=%d, browser=%s",
             "yes" if js_data_store else "no",
             len(self._dom_snapshots),
+            "yes" if remote_debugging_address else "no",
         )
 
     ## Abstract method implementations
@@ -215,7 +259,7 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
             stats = self._js_data_store.stats
             context_parts.append(
                 f"\n\n## JS Files Context\n"
-                f"- Total JS files: {stats.total_requests}\n"
+                f"- Total JS files: {stats.total_files}\n"
                 f"- Unique URLs: {stats.unique_urls}\n"
             )
 
@@ -237,7 +281,7 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
             stats = self._js_data_store.stats
             context_parts.append(
                 f"\n\n## JS Files Context\n"
-                f"- Total JS files: {stats.total_requests}\n"
+                f"- Total JS files: {stats.total_files}\n"
             )
 
         if self._dom_snapshots:
@@ -341,6 +385,35 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
                 },
             )
 
+        # execute_js_in_browser (only if browser available)
+        if self._remote_debugging_address:
+            self.llm_client.register_tool(
+                name="execute_js_in_browser",
+                description=(
+                    "Test JavaScript code against the live website. "
+                    "Navigates to the URL and executes your IIFE, returning the result and any console output. "
+                    "Use this to verify your code works before submitting."
+                ),
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "URL to navigate to first (or empty string to skip navigation).",
+                        },
+                        "js_code": {
+                            "type": "string",
+                            "description": "IIFE JavaScript code to execute.",
+                        },
+                        "timeout_seconds": {
+                            "type": "number",
+                            "description": "Max execution time in seconds (default 5.0).",
+                        },
+                    },
+                    "required": ["url", "js_code"],
+                },
+            )
+
     def _register_finalize_tools(self) -> None:
         if self._finalize_tools_registered:
             return
@@ -412,6 +485,8 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
             return self._tool_submit_js_code(tool_arguments)
         if tool_name == "finalize_failure":
             return self._tool_finalize_failure(tool_arguments)
+        if tool_name == "execute_js_in_browser":
+            return self._tool_execute_js_in_browser(tool_arguments)
 
         return {"error": f"Unknown tool: {tool_name}"}
 
@@ -442,10 +517,22 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
     def _tool_validate_js_code(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
         js_code = tool_arguments.get("js_code", "")
         errors = _validate_js(js_code)
-        if errors:
+
+        # Separate hard errors from warnings
+        hard_errors = [e for e in errors if not e.startswith("WARNING:")]
+        warnings = [e for e in errors if e.startswith("WARNING:")]
+
+        if hard_errors:
             return {
                 "valid": False,
-                "errors": errors,
+                "errors": hard_errors,
+                "warnings": warnings,
+            }
+        if warnings:
+            return {
+                "valid": True,
+                "warnings": warnings,
+                "message": "Code passes validation but has formatting warnings. Consider reformatting.",
             }
         return {
             "valid": True,
@@ -461,7 +548,7 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
         if not terms:
             return {"error": "No search terms provided"}
 
-        results = self._js_data_store.search_entries_by_terms(terms, top_n=20)
+        results = self._js_data_store.search_by_terms(terms, top_n=20)
         if not results:
             return {"message": "No matching JS files found", "terms_searched": len(terms)}
 
@@ -480,13 +567,11 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
         if not request_id:
             return {"error": "request_id is required"}
 
-        entry = self._js_data_store.get_entry(request_id)
+        entry = self._js_data_store.get_file(request_id)
         if not entry:
             return {"error": f"Entry {request_id} not found"}
 
-        content = entry.response_body
-        if content and len(content) > 10000:
-            content = content[:10000] + f"\n... (truncated, {len(entry.response_body)} total chars)"
+        content = self._js_data_store.get_file_content(request_id)
 
         return {
             "request_id": request_id,
@@ -532,8 +617,10 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
 
         # Validate the code
         errors = _validate_js(js_code)
-        if errors:
-            return {"error": "Validation failed", "errors": errors}
+        # Only block on hard errors, not warnings
+        hard_errors = [e for e in errors if not e.startswith("WARNING:")]
+        if hard_errors:
+            return {"error": "Validation failed", "errors": hard_errors}
 
         # Store result
         self._js_result = JSCodeResult(
@@ -571,3 +658,126 @@ Given a task, write IIFE JavaScript code that accomplishes it in the browser con
             "message": "JavaScript task marked as failed",
             "result": self._js_failure.model_dump(),
         }
+
+    @token_optimized
+    def _tool_execute_js_in_browser(self, tool_arguments: dict[str, Any]) -> dict[str, Any]:
+        """Navigate to a URL and execute JS code via CDP, returning the result."""
+        if not self._remote_debugging_address:
+            return {"error": "No browser connection configured"}
+
+        url = tool_arguments.get("url", "")
+        js_code = tool_arguments.get("js_code", "")
+        timeout_seconds = tool_arguments.get("timeout_seconds", 5.0)
+
+        # Validate JS first
+        errors = _validate_js(js_code)
+        hard_errors = [e for e in errors if not e.startswith("WARNING:")]
+        if hard_errors:
+            return {"error": "Validation failed", "errors": hard_errors}
+
+        overall_timeout = timeout_seconds + 5.0
+        deadline = time.time() + overall_timeout
+
+        target_id = None
+        browser_context_id = None
+        browser_ws = None
+
+        try:
+            # Open new incognito tab
+            target_id, browser_context_id, browser_ws = cdp_new_tab(
+                self._remote_debugging_address,
+                incognito=True,
+                url="about:blank",
+            )
+
+            send_cmd, _, recv_until = create_cdp_helpers(browser_ws)
+
+            # Attach to target with flattened session
+            attach_id = send_cmd(
+                "Target.attachToTarget",
+                {"targetId": target_id, "flatten": True},
+            )
+            attach_reply = recv_until(lambda m: m.get("id") == attach_id, deadline)
+            if "error" in attach_reply:
+                return {"error": f"Failed to attach: {attach_reply['error']}"}
+            session_id = attach_reply["result"]["sessionId"]
+
+            # Enable Page and Runtime domains
+            page_id = send_cmd("Page.enable", session_id=session_id)
+            recv_until(lambda m: m.get("id") == page_id, deadline)
+            runtime_id = send_cmd("Runtime.enable", session_id=session_id)
+            recv_until(lambda m: m.get("id") == runtime_id, deadline)
+
+            # Navigate if URL provided
+            if url:
+                nav_id = send_cmd(
+                    "Page.navigate",
+                    {"url": url},
+                    session_id=session_id,
+                )
+                recv_until(lambda m: m.get("id") == nav_id, deadline)
+
+                # Wait for page load
+                try:
+                    recv_until(
+                        lambda m: m.get("method") == "Page.loadEventFired",
+                        deadline,
+                    )
+                except TimeoutError:
+                    return {"error": "Page load timed out", "url": url}
+
+            # Wrap JS in evaluate wrapper (captures console.log, etc.)
+            wrapped_js = generate_js_evaluate_wrapper_js(js_code)
+
+            # Execute via Runtime.evaluate
+            eval_id = send_cmd(
+                "Runtime.evaluate",
+                {
+                    "expression": wrapped_js,
+                    "returnByValue": True,
+                    "awaitPromise": True,
+                },
+                session_id=session_id,
+            )
+            eval_reply = recv_until(lambda m: m.get("id") == eval_id, deadline)
+
+            if "error" in eval_reply:
+                return {"error": f"Runtime.evaluate error: {eval_reply['error']}"}
+
+            # Parse the result
+            result_obj = eval_reply.get("result", {}).get("result", {})
+            value = result_obj.get("value", {})
+
+            if isinstance(value, dict):
+                return {
+                    "result": value.get("result"),
+                    "console_logs": value.get("console_logs", []),
+                    "error": value.get("execution_error"),
+                    "storage_error": value.get("storage_error"),
+                }
+
+            return {"result": value, "console_logs": [], "error": None}
+
+        except TimeoutError:
+            return {"error": "Operation timed out"}
+        except Exception as e:
+            logger.error("execute_js_in_browser failed: %s", e)
+            return {"error": f"Browser execution failed: {e}"}
+        finally:
+            # Cleanup: close target and dispose context
+            if browser_ws:
+                try:
+                    if target_id:
+                        send_cmd_cleanup, _, _ = create_cdp_helpers(browser_ws)
+                        send_cmd_cleanup("Target.closeTarget", {"targetId": target_id})
+                except Exception:
+                    pass
+                try:
+                    browser_ws.close()
+                except Exception:
+                    pass
+            if browser_context_id and self._remote_debugging_address:
+                try:
+                    dispose_context(self._remote_debugging_address, browser_context_id)
+                except Exception:
+                    pass

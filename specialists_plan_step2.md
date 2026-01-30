@@ -30,7 +30,7 @@ A thin wrapper around `NetworkDataStore` specialized for JavaScript files. The J
 - `search_by_url(pattern: str) -> list[NetworkTransactionEvent]` — glob match on URL
 - `list_files() -> list[dict]` — summary of all JS files (request_id, url, size)
 
-**Why not just subclass NetworkDataStore?** NetworkDataStore's `__init__` applies `_is_relevant_entry` which *excludes* JS files. We need the opposite filter. Composition or a standalone class with shared utility methods is cleaner.
+**Why not just subclass NetworkDataStore?** NetworkDataStore's `__init__` applies `_is_relevant_entry` which *excludes* JS files. We need the opposite filter. Composition or a standalone class with shared utility methods is cleaner. We can expect the JS files to be put in a separate file (per the file_event_writer.py).
 
 ---
 
